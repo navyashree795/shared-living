@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "Shared Living",
+    "slug": "shared-living",
+    "version": "1.0.0",
+    "plugins": [
+      "expo-web-browser"
+    ]
+  }
+}
