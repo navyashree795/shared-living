@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import * as AuthSession from 'expo-auth-session';
 import { GoogleAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebaseConfig';
 
@@ -12,19 +14,27 @@ export default function LoginScreen() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Initialize the Expo Google Auth request
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    // TODO: Replace with your Web Client ID from Google Cloud Console (APIs & Services -> Credentials)
-    // Even if you are on Android/iOS in Expo Go, use the Web Client ID for proxy auth!
-    webClientId: '362366255638-4fhqghs0c6cp9j0mcfovd2uf8173ckqr.apps.googleusercontent.com',
-  });
+  // Build the correct redirect URI for Expo Go (uses the Expo auth proxy)
+  const redirectUri = AuthSession.makeRedirectUri({ useProxy: true });
 
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    // Use the ID from your "Web Application" client in Google Cloud Console
+    webClientId: '362366255638-4fhqghs0c6cp9j0mcfovd2uf8173ckqr.apps.googleusercontent.com',
+
+    // Use the ID from your "Android" client (the one with your SHA-1)
+    androidClientId: '362366255638-q2b0nftkhnrte1858hf8guqnb6verqjk.apps.googleusercontent.com',
+
+    // This matches the 'scheme' in your app.json
+    redirectUri: AuthSession.makeRedirectUri({
+      scheme: 'shared-living',
+    }),
+  });
   // Listen to the response from Google
   useEffect(() => {
     if (response?.type === 'success') {
       const { id_token } = response.params;
       const credential = GoogleAuthProvider.credential(id_token);
-      
+
       setLoading(true);
       signInWithCredential(auth, credential)
         .then((userCredential) => {
@@ -60,7 +70,7 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        
+
         {/* App Branding */}
         <View style={styles.header}>
           <Text style={styles.title}>Shared Living</Text>
@@ -72,9 +82,9 @@ export default function LoginScreen() {
           <View style={styles.card}>
             <Text style={styles.welcomeText}>Welcome back,</Text>
             <Text style={styles.emailText}>{user.email}</Text>
-            
-            <TouchableOpacity 
-              style={styles.logoutButton} 
+
+            <TouchableOpacity
+              style={styles.logoutButton}
               onPress={() => auth.signOut()}
             >
               <Text style={styles.logoutButtonText}>Sign Out</Text>
@@ -83,11 +93,11 @@ export default function LoginScreen() {
         ) : (
           <View style={styles.card}>
             <Text style={styles.callToAction}>Get Started Today</Text>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               disabled={!request}
               style={styles.googleButton}
-              onPress={() => promptAsync()}
+              onPress={() => promptAsync({ useProxy: true })}
             >
               {/* Note: In a real app, use the official Google 'G' logo image here */}
               <View style={styles.googleIconPlaceholder}>
@@ -95,7 +105,7 @@ export default function LoginScreen() {
               </View>
               <Text style={styles.googleButtonText}>Continue with Google</Text>
             </TouchableOpacity>
-            
+
             <Text style={styles.termsText}>
               By signing in, you agree to our Terms of Service and Privacy Policy.
             </Text>

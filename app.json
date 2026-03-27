@@ -2,9 +2,14 @@
   "expo": {
     "name": "Shared Living",
     "slug": "shared-living",
-    "version": "1.0.0",
-    "plugins": [
-      "expo-web-browser"
-    ]
+    "scheme": "shared-living",
+    "android": {
+      "package": "com.jeevan0714.sharedliving"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e89eedb3-cef7-4ea2-a1bc-dcae5de76407"
+      }
+    }
   }
 }
