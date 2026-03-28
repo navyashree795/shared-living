@@ -1,62 +1,76 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import * as AuthSession from 'expo-auth-session';
-import { GoogleAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  onAuthStateChanged,
+  sendPasswordResetEmail
+} from 'firebase/auth';
 import { auth } from '../firebaseConfig';
-
-// Ensure WebBrowser is ready to handle the auth redirect
-WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  // Build the correct redirect URI for Expo Go (uses the Expo auth proxy)
-  const redirectUri = AuthSession.makeRedirectUri({ useProxy: true });
-
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    // Use the ID from your "Web Application" client in Google Cloud Console
-    webClientId: '362366255638-4fhqghs0c6cp9j0mcfovd2uf8173ckqr.apps.googleusercontent.com',
-
-    // Use the ID from your "Android" client (the one with your SHA-1)
-    androidClientId: '362366255638-q2b0nftkhnrte1858hf8guqnb6verqjk.apps.googleusercontent.com',
-
-    // This matches the 'scheme' in your app.json
-    redirectUri: AuthSession.makeRedirectUri({
-      scheme: 'shared-living',
-    }),
-  });
-  // Listen to the response from Google
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      const credential = GoogleAuthProvider.credential(id_token);
-
-      setLoading(true);
-      signInWithCredential(auth, credential)
-        .then((userCredential) => {
-          // Successfully signed in with Firebase
-          console.log("Logged in with Firebase:", userCredential.user.email);
-        })
-        .catch(error => {
-          console.error("Firebase Login Error", error);
-          Alert.alert("Authentication Failed", error.message);
-          setLoading(false);
-        });
-    }
-  }, [response]);
-
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
   // Auth State Listener to see if a user is currently logged in
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      setLoading(false); // Stop loading if state is resolved
+      setLoading(false);
     });
     return unsubscribe;
   }, []);
+
+  const handleAuth = async () => {
+    if (!email || !password) {
+      Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (isSignUp) {
+        await createUserWithEmailAndPassword(auth, email, password);
+        Alert.alert("Success", "Account created successfully!");
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (error) {
+      console.error("Auth Error:", error.code, error.message);
+      let errorMessage = error.message; // Use the raw message as fallback for debugging
+
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMessage = "Invalid email or password.";
+      } else if (error.code === 'auth/email-already-in-use') {
+        errorMessage = "An account with this email already exists.";
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = "The email address is not valid.";
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = "Password should be at least 6 characters.";
+      } else if (error.code === 'auth/operation-not-allowed') {
+        errorMessage = "Email/Password sign-in is not enabled in your Firebase Console. Please enable it in Authentication > Sign-in method.";
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = "Network error. Please check your internet connection.";
+      }
+      
+      Alert.alert("Authentication Failed", errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = () => {
+    if (!email) {
+      Alert.alert("Reset Password", "Please enter your email address first.");
+      return;
+    }
+    sendPasswordResetEmail(auth, email)
+      .then(() => Alert.alert("Success", "Password reset email sent!"))
+      .catch(error => Alert.alert("Error", error.message));
+  };
 
   if (loading) {
     return (
@@ -69,50 +83,103 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.content}>
 
-        {/* App Branding */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Shared Living</Text>
-          <Text style={styles.subtitle}>Manage household tasks seamlessly together.</Text>
-        </View>
+            {/* App Branding */}
+            <View style={styles.header}>
+              <Text style={styles.title}>Shared Living</Text>
+              <Text style={styles.subtitle}>Manage household tasks seamlessly together.</Text>
+            </View>
 
-        {/* Auth Section */}
-        {user ? (
-          <View style={styles.card}>
-            <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.emailText}>{user.email}</Text>
+            {/* Auth Section */}
+            {user ? (
+              <View style={styles.card}>
+                <Text style={styles.welcomeText}>Welcome back,</Text>
+                <Text style={styles.emailText}>{user.email}</Text>
 
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={() => auth.signOut()}
-            >
-              <Text style={styles.logoutButtonText}>Sign Out</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.card}>
-            <Text style={styles.callToAction}>Get Started Today</Text>
-
-            <TouchableOpacity
-              disabled={!request}
-              style={styles.googleButton}
-              onPress={() => promptAsync({ useProxy: true })}
-            >
-              {/* Note: In a real app, use the official Google 'G' logo image here */}
-              <View style={styles.googleIconPlaceholder}>
-                <Text style={styles.googleIconText}>G</Text>
+                <TouchableOpacity
+                  style={styles.logoutButton}
+                  onPress={() => auth.signOut()}
+                >
+                  <Text style={styles.logoutButtonText}>Sign Out</Text>
+                </TouchableOpacity>
               </View>
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
-            </TouchableOpacity>
+            ) : (
+              <View style={styles.card}>
+                <Text style={styles.callToAction}>{isSignUp ? 'Create Account' : 'Welcome Back'}</Text>
 
-            <Text style={styles.termsText}>
-              By signing in, you agree to our Terms of Service and Privacy Policy.
-            </Text>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Email Address</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="name@example.com"
+                    placeholderTextColor="#666"
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                  />
+                </View>
+
+                <View style={[styles.inputContainer, { marginBottom: 12 }]}>
+                  <Text style={styles.label}>Password</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Your password"
+                    placeholderTextColor="#666"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                  />
+                </View>
+
+                {!isSignUp && (
+                  <TouchableOpacity 
+                    style={styles.forgotPassword} 
+                    onPress={handleForgotPassword}
+                  >
+                    <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={handleAuth}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>
+                      {isSignUp ? 'Sign Up' : 'Sign In'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.toggleButton} 
+                  onPress={() => setIsSignUp(!isSignUp)}
+                >
+                  <Text style={styles.toggleText}>
+                    {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+                    <Text style={styles.toggleLink}>{isSignUp ? 'Sign In' : 'Sign Up'}</Text>
+                  </Text>
+                </TouchableOpacity>
+
+                <Text style={styles.termsText}>
+                  By continuing, you agree to our Terms of Service and Privacy Policy.
+                </Text>
+              </View>
+            )}
+
           </View>
-        )}
-
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -122,15 +189,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0A0A0A', // Premium dark mode background
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
+  },
+  content: {
+    paddingHorizontal: 24,
+    paddingVertical: 40,
     alignItems: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 60,
+    marginBottom: 40,
   },
   title: {
     fontSize: 36,
@@ -149,9 +219,8 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     backgroundColor: '#1C1C1E',
-    borderRadius: 24,
-    padding: 32,
-    alignItems: 'center',
+    borderRadius: 28,
+    padding: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
@@ -161,53 +230,79 @@ const styles = StyleSheet.create({
     borderColor: '#2C2C2E',
   },
   callToAction: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: '#FFF',
     marginBottom: 24,
+    textAlign: 'center',
   },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+  inputContainer: {
+    marginBottom: 20,
+    width: '100%',
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#A0A0A0',
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  input: {
+    backgroundColor: '#2C2C2E',
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 100, // Pill shaped
-    width: '100%',
+    color: '#FFFFFF',
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#3A3A3C',
+  },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: 24,
+  },
+  forgotPasswordText: {
+    color: '#4285F4',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  primaryButton: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
     marginBottom: 20,
   },
-  googleIconPlaceholder: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#4285F4',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  googleIconText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  googleButtonText: {
+  primaryButtonText: {
     color: '#000',
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-    textAlign: 'center',
-    paddingRight: 36, // Balance the icon width
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  toggleButton: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  toggleText: {
+    color: '#A0A0A0',
+    fontSize: 15,
+  },
+  toggleLink: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   termsText: {
     fontSize: 12,
     color: '#6e6e73',
     textAlign: 'center',
     lineHeight: 18,
+    marginTop: 8,
   },
   welcomeText: {
     fontSize: 18,
