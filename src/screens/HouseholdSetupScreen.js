@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, updateDoc, setDoc, query, collection, where, getDocs, arrayUnion } from 'firebase/firestore';
 
