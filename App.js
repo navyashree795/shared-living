@@ -58,19 +58,17 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar style="light" />
       <NavigationContainer linking={linking}>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {!user ? (
-            <Stack.Screen name="Login" component={LoginScreen} />
-          ) : (
-            <>
-              <Stack.Screen name="HouseholdSelection" component={HouseholdSelectionScreen} />
-              <Stack.Screen name="HouseholdSetup" component={HouseholdSetupScreen} />
-              <Stack.Screen name="Dashboard" component={DashboardScreen} />
-              <Stack.Screen name="Grocery" component={GroceryScreen} />
-              <Stack.Screen name="Expenses" component={ExpenseScreen} />
-              <Stack.Screen name="Chores" component={ChoresScreen} />
-            </>
-          )}
+        <Stack.Navigator
+          screenOptions={{ headerShown: false }}
+          initialRouteName={user ? 'HouseholdSelection' : 'Login'}
+        >
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="HouseholdSelection" component={HouseholdSelectionScreen} />
+          <Stack.Screen name="HouseholdSetup" component={HouseholdSetupScreen} />
+          <Stack.Screen name="Dashboard" component={DashboardScreen} />
+          <Stack.Screen name="Grocery" component={GroceryScreen} />
+          <Stack.Screen name="Expenses" component={ExpenseScreen} />
+          <Stack.Screen name="Chores" component={ChoresScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

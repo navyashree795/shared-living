@@ -10,8 +10,7 @@ import {
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 
-export default function LoginScreen() {
-  const [user, setUser] = useState(null);
+export default function LoginScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,8 +24,9 @@ export default function LoginScreen() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
+      if (currentUser) {
+        navigation.replace('HouseholdSelection');
+      }
     });
     return unsubscribe;
   }, []);
@@ -100,18 +100,9 @@ export default function LoginScreen() {
       .catch(error => Alert.alert("Error", error.message));
   };
 
-  if (loading) {
-    return (
-      <View className="flex-1 bg-background justify-center items-center">
-        <ActivityIndicator size="large" color="#4F46E5" />
-        <Text className="mt-4 text-textMuted text-base font-medium">Authenticating...</Text>
-      </View>
-    );
-  }
-
   return (
     <SafeAreaView className="flex-1 bg-background">
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
       >
@@ -126,112 +117,97 @@ export default function LoginScreen() {
               </Text>
             </View>
 
-            {/* Auth Section */}
-            {user ? (
-              <View className="w-full bg-white rounded-3xl p-8 shadow-sm border border-border items-center">
-                <Text className="text-lg text-textMuted mb-1 font-medium">Welcome back,</Text>
-                <Text className="text-xl text-textMain font-bold mb-8">{user.email}</Text>
+            <View className="w-full bg-white rounded-3xl p-6 shadow-sm border border-border">
+              <Text className="text-2xl font-black text-textMain mb-6 text-center tracking-tight">
+                {isSignUp ? 'Create Account' : 'Welcome Back'}
+              </Text>
 
-                <TouchableOpacity
-                  className="bg-secondary px-8 py-3 rounded-full border border-primary/20"
-                  onPress={() => auth.signOut()}
-                >
-                  <Text className="text-primary text-base font-bold">Sign Out</Text>
-                </TouchableOpacity>
+              <View className="mb-4">
+                <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Email Address</Text>
+                <TextInput
+                  className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
+                  placeholder="name@example.com"
+                  placeholderTextColor="#9CA3AF"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
               </View>
-            ) : (
-              <View className="w-full bg-white rounded-3xl p-6 shadow-sm border border-border">
-                <Text className="text-2xl font-black text-textMain mb-6 text-center tracking-tight">
-                  {isSignUp ? 'Create Account' : 'Welcome Back'}
-                </Text>
 
-                <View className="mb-4">
-                  <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Email Address</Text>
-                  <TextInput
-                    className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
-                    placeholder="name@example.com"
-                    placeholderTextColor="#9CA3AF"
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                  />
-                </View>
+              {isSignUp && (
+                <>
+                  <View className="mb-4">
+                    <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Phone Number</Text>
+                    <TextInput
+                      className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
+                      placeholder="+1 (555) 000-0000"
+                      placeholderTextColor="#9CA3AF"
+                      value={phoneNumber}
+                      onChangeText={setPhoneNumber}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                  <View className="mb-4">
+                    <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Username</Text>
+                    <TextInput
+                      className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
+                      placeholder="unique_username"
+                      placeholderTextColor="#9CA3AF"
+                      value={username}
+                      onChangeText={setUsername}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </>
+              )}
 
-                {isSignUp && (
-                  <>
-                    <View className="mb-4">
-                      <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Phone Number</Text>
-                      <TextInput
-                        className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
-                        placeholder="+1 (555) 000-0000"
-                        placeholderTextColor="#9CA3AF"
-                        value={phoneNumber}
-                        onChangeText={setPhoneNumber}
-                        keyboardType="phone-pad"
-                      />
-                    </View>
-                    <View className="mb-4">
-                      <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Username</Text>
-                      <TextInput
-                        className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
-                        placeholder="unique_username"
-                        placeholderTextColor="#9CA3AF"
-                        value={username}
-                        onChangeText={setUsername}
-                        autoCapitalize="none"
-                      />
-                    </View>
-                  </>
-                )}
+              <View className="mb-2">
+                <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Password</Text>
+                <TextInput
+                  className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
+                  placeholder="Your password"
+                  placeholderTextColor="#9CA3AF"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                />
+              </View>
 
-                <View className="mb-2">
-                  <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Password</Text>
-                  <TextInput
-                    className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
-                    placeholder="Your password"
-                    placeholderTextColor="#9CA3AF"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                  />
-                </View>
-
-                {!isSignUp && (
-                  <TouchableOpacity className="self-end mb-6" onPress={handleForgotPassword}>
-                    <Text className="text-primary text-sm font-bold">Forgot password?</Text>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                  className="bg-primary py-4 rounded-xl items-center justify-center shadow-sm shadow-primary/50 mb-5 mt-4"
-                  onPress={handleAuth}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <Text className="text-white text-lg font-bold">
-                      {isSignUp ? 'Sign Up' : 'Sign In'}
-                    </Text>
-                  )}
+              {!isSignUp && (
+                <TouchableOpacity className="self-end mb-6" onPress={handleForgotPassword}>
+                  <Text className="text-primary text-sm font-bold">Forgot password?</Text>
                 </TouchableOpacity>
+              )}
 
-                <TouchableOpacity 
-                  className="py-2 items-center mb-4"
-                  onPress={() => setIsSignUp(!isSignUp)}
-                >
-                  <Text className="text-textMuted text-base font-medium">
-                    {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
-                    <Text className="text-primary font-bold">{isSignUp ? 'Sign In' : 'Sign Up'}</Text>
+              <TouchableOpacity
+                className="bg-primary py-4 rounded-xl items-center justify-center shadow-sm shadow-primary/50 mb-5 mt-4"
+                onPress={handleAuth}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text className="text-white text-lg font-bold">
+                    {isSignUp ? 'Sign Up' : 'Sign In'}
                   </Text>
-                </TouchableOpacity>
+                )}
+              </TouchableOpacity>
 
-                <Text className="text-xs text-textMuted text-center leading-5 px-4">
-                  By continuing, you agree to our Terms of Service and Privacy Policy.
+              <TouchableOpacity
+                className="py-2 items-center mb-4"
+                onPress={() => setIsSignUp(!isSignUp)}
+              >
+                <Text className="text-textMuted text-base font-medium">
+                  {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+                  <Text className="text-primary font-bold">{isSignUp ? 'Sign In' : 'Sign Up'}</Text>
                 </Text>
-              </View>
-            )}
+              </TouchableOpacity>
+
+              <Text className="text-xs text-textMuted text-center leading-5 px-4">
+                By continuing, you agree to our Terms of Service and Privacy Policy.
+              </Text>
+            </View>
 
           </View>
         </ScrollView>
