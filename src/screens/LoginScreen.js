@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   signInWithEmailAndPassword, 
@@ -7,15 +7,21 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail
 } from 'firebase/auth';
-import { auth } from '../firebaseConfig';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../firebaseConfig';
 
 export default function LoginScreen() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
-  // Auth State Listener to see if a user is currently logged in
+
+  const normalizePhone = (phone) => {
+    return phone.replace(/[^\d+]/g, '');
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -25,7 +31,7 @@ export default function LoginScreen() {
   }, []);
 
   const handleAuth = async () => {
-    if (!email || !password) {
+    if (!email || !password || (isSignUp && !phoneNumber)) {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
@@ -33,14 +39,21 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, "users", userCredential.user.uid), {
+          uid: userCredential.user.uid,
+          email: userCredential.user.email,
+          phoneNumber: normalizePhone(phoneNumber),
+          householdId: null,
+          createdAt: new Date().toISOString()
+        });
         Alert.alert("Success", "Account created successfully!");
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
     } catch (error) {
       console.error("Auth Error:", error.code, error.message);
-      let errorMessage = error.message; // Use the raw message as fallback for debugging
+      let errorMessage = error.message;
 
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
         errorMessage = "Invalid email or password.";
@@ -51,7 +64,7 @@ export default function LoginScreen() {
       } else if (error.code === 'auth/weak-password') {
         errorMessage = "Password should be at least 6 characters.";
       } else if (error.code === 'auth/operation-not-allowed') {
-        errorMessage = "Email/Password sign-in is not enabled in your Firebase Console. Please enable it in Authentication > Sign-in method.";
+        errorMessage = "Email/Password sign-in is not enabled in your Firebase Console.";
       } else if (error.code === 'auth/network-request-failed') {
         errorMessage = "Network error. Please check your internet connection.";
       }
@@ -74,51 +87,55 @@ export default function LoginScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#4285F4" />
-        <Text style={styles.loadingText}>Authenticating...</Text>
+      <View className="flex-1 bg-background justify-center items-center">
+        <ActivityIndicator size="large" color="#4F46E5" />
+        <Text className="mt-4 text-textMuted text-base font-medium">Authenticating...</Text>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView className="flex-1 bg-background">
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
+        className="flex-1"
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <View style={styles.content}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
+          <View className="px-6 py-10 items-center">
 
             {/* App Branding */}
-            <View style={styles.header}>
-              <Text style={styles.title}>Shared Living</Text>
-              <Text style={styles.subtitle}>Manage household tasks seamlessly together.</Text>
+            <View className="items-center mb-10">
+              <Text className="text-4xl font-extrabold text-primary mb-2 tracking-tight">Shared Living</Text>
+              <Text className="text-base text-textMuted text-center px-4 leading-6">
+                Manage your household tasks, expenses, and groceries seamlessly.
+              </Text>
             </View>
 
             {/* Auth Section */}
             {user ? (
-              <View style={styles.card}>
-                <Text style={styles.welcomeText}>Welcome back,</Text>
-                <Text style={styles.emailText}>{user.email}</Text>
+              <View className="w-full bg-white rounded-3xl p-8 shadow-sm border border-border items-center">
+                <Text className="text-lg text-textMuted mb-1 font-medium">Welcome back,</Text>
+                <Text className="text-xl text-textMain font-bold mb-8">{user.email}</Text>
 
                 <TouchableOpacity
-                  style={styles.logoutButton}
+                  className="bg-secondary px-8 py-3 rounded-full border border-primary/20"
                   onPress={() => auth.signOut()}
                 >
-                  <Text style={styles.logoutButtonText}>Sign Out</Text>
+                  <Text className="text-primary text-base font-bold">Sign Out</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.card}>
-                <Text style={styles.callToAction}>{isSignUp ? 'Create Account' : 'Welcome Back'}</Text>
+              <View className="w-full bg-white rounded-3xl p-6 shadow-sm border border-border">
+                <Text className="text-2xl font-black text-textMain mb-6 text-center tracking-tight">
+                  {isSignUp ? 'Create Account' : 'Welcome Back'}
+                </Text>
 
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Email Address</Text>
+                <View className="mb-4">
+                  <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Email Address</Text>
                   <TextInput
-                    style={styles.input}
+                    className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
                     placeholder="name@example.com"
-                    placeholderTextColor="#666"
+                    placeholderTextColor="#9CA3AF"
                     value={email}
                     onChangeText={setEmail}
                     autoCapitalize="none"
@@ -126,12 +143,26 @@ export default function LoginScreen() {
                   />
                 </View>
 
-                <View style={[styles.inputContainer, { marginBottom: 12 }]}>
-                  <Text style={styles.label}>Password</Text>
+                {isSignUp && (
+                  <View className="mb-4">
+                    <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Phone Number</Text>
+                    <TextInput
+                      className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
+                      placeholder="+1 (555) 000-0000"
+                      placeholderTextColor="#9CA3AF"
+                      value={phoneNumber}
+                      onChangeText={setPhoneNumber}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                )}
+
+                <View className="mb-2">
+                  <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Password</Text>
                   <TextInput
-                    style={styles.input}
+                    className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
                     placeholder="Your password"
-                    placeholderTextColor="#666"
+                    placeholderTextColor="#9CA3AF"
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry
@@ -139,39 +170,36 @@ export default function LoginScreen() {
                 </View>
 
                 {!isSignUp && (
-                  <TouchableOpacity 
-                    style={styles.forgotPassword} 
-                    onPress={handleForgotPassword}
-                  >
-                    <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+                  <TouchableOpacity className="self-end mb-6" onPress={handleForgotPassword}>
+                    <Text className="text-primary text-sm font-bold">Forgot password?</Text>
                   </TouchableOpacity>
                 )}
 
                 <TouchableOpacity
-                  style={styles.primaryButton}
+                  className="bg-primary py-4 rounded-xl items-center justify-center shadow-sm shadow-primary/50 mb-5 mt-4"
                   onPress={handleAuth}
                   disabled={loading}
                 >
                   {loading ? (
                     <ActivityIndicator color="#FFF" />
                   ) : (
-                    <Text style={styles.primaryButtonText}>
+                    <Text className="text-white text-lg font-bold">
                       {isSignUp ? 'Sign Up' : 'Sign In'}
                     </Text>
                   )}
                 </TouchableOpacity>
 
                 <TouchableOpacity 
-                  style={styles.toggleButton} 
+                  className="py-2 items-center mb-4"
                   onPress={() => setIsSignUp(!isSignUp)}
                 >
-                  <Text style={styles.toggleText}>
+                  <Text className="text-textMuted text-base font-medium">
                     {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
-                    <Text style={styles.toggleLink}>{isSignUp ? 'Sign In' : 'Sign Up'}</Text>
+                    <Text className="text-primary font-bold">{isSignUp ? 'Sign In' : 'Sign Up'}</Text>
                   </Text>
                 </TouchableOpacity>
 
-                <Text style={styles.termsText}>
+                <Text className="text-xs text-textMuted text-center leading-5 px-4">
                   By continuing, you agree to our Terms of Service and Privacy Policy.
                 </Text>
               </View>
@@ -183,154 +211,3 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0A0A0A', // Premium dark mode background
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingVertical: 40,
-    alignItems: 'center',
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#A0A0A0',
-    textAlign: 'center',
-    paddingHorizontal: 20,
-    lineHeight: 24,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: '#1C1C1E',
-    borderRadius: 28,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: '#2C2C2E',
-  },
-  callToAction: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFF',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  inputContainer: {
-    marginBottom: 20,
-    width: '100%',
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#A0A0A0',
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-  input: {
-    backgroundColor: '#2C2C2E',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    color: '#FFFFFF',
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#3A3A3C',
-  },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginBottom: 24,
-  },
-  forgotPasswordText: {
-    color: '#4285F4',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  primaryButton: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-    marginBottom: 20,
-  },
-  primaryButtonText: {
-    color: '#000',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  toggleButton: {
-    paddingVertical: 10,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  toggleText: {
-    color: '#A0A0A0',
-    fontSize: 15,
-  },
-  toggleLink: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  termsText: {
-    fontSize: 12,
-    color: '#6e6e73',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginTop: 8,
-  },
-  welcomeText: {
-    fontSize: 18,
-    color: '#A0A0A0',
-    marginBottom: 4,
-  },
-  emailText: {
-    fontSize: 20,
-    color: '#FFFFFF',
-    fontWeight: '600',
-    marginBottom: 24,
-  },
-  logoutButton: {
-    backgroundColor: '#303033',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 100,
-    borderWidth: 1,
-    borderColor: '#404044',
-  },
-  logoutButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  loadingText: {
-    marginTop: 16,
-    color: '#A0A0A0',
-    fontSize: 16,
-  }
-});
