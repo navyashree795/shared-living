@@ -1,37 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { auth, db } from '../firebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc, arrayRemove } from 'firebase/firestore';
 
 const NAV_ITEMS = [
   {
     name: 'Grocery',
     icon: 'shopping-cart',
-    color: '#10B981', // Emerald green
-    bg: '#ECFDF5',    // Very light emerald
+    color: '#111827', // Black
+    bg: '#FFFFFF',    // White
     subtitle: 'Shared shopping list',
   },
   {
     name: 'Expenses',
     icon: 'receipt-long',
-    color: '#4F46E5', // Indigo
-    bg: '#EEF2FF',    // Very light indigo
+    color: '#111827', // Black
+    bg: '#FFFFFF',    // White
     subtitle: 'Split bills & balances',
   },
   {
     name: 'Chores',
     icon: 'cleaning-services',
-    color: '#F59E0B', // Amber
-    bg: '#FFFBEB',    // Very light amber
+    color: '#111827', // Black
+    bg: '#FFFFFF',    // White
     subtitle: 'Assign household tasks',
   },
 ];
 
-export default function DashboardScreen({ navigation, householdId, householdData }) {
+export default function DashboardScreen({ navigation, route }) {
+  const { householdId, householdData: initialData } = route.params || {};
   const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [isMembersModalVisible, setIsMembersModalVisible] = useState(false);
   const [userData, setUserData] = useState(null);
+  const [householdData, setHouseholdData] = useState(initialData || null);
+  const [memberProfiles, setMemberProfiles] = useState({});
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -45,7 +50,59 @@ export default function DashboardScreen({ navigation, householdId, householdData
     fetchUserData();
   }, []);
 
+  useEffect(() => {
+    if (!householdId) return;
+    const unsub = onSnapshot(doc(db, 'households', householdId), (snap) => {
+      if (snap.exists()) setHouseholdData({ id: snap.id, ...snap.data() });
+    });
+    return unsub;
+  }, [householdId]);
+
+  useEffect(() => {
+    const fetchMemberProfiles = async () => {
+      const m = householdData?.members || [];
+      const profiles = {};
+      for (const uid of m) {
+        try {
+          const snap = await getDoc(doc(db, 'users', uid));
+          if (snap.exists()) profiles[uid] = snap.data();
+        } catch (e) {
+          console.error("Error fetching member profile:", e);
+        }
+      }
+      setMemberProfiles(profiles);
+    };
+    fetchMemberProfiles();
+  }, [householdData?.members]);
+
   const members = householdData?.members || [];
+  const isOwner = householdData?.createdBy === auth.currentUser?.uid;
+
+  const handleRemoveMember = async (memberUid) => {
+    const profile = memberProfiles[memberUid];
+    const name = profile?.username ? `@${profile.username}` : (profile?.email || 'this member');
+    
+    Alert.alert(
+      "Remove Member",
+      `Are you sure you want to remove ${name} from the household?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Remove", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await updateDoc(doc(db, 'households', householdId), {
+                members: arrayRemove(memberUid)
+              });
+            } catch (e) {
+              Alert.alert("Error", "Could not remove member: " + e.message);
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const handleNav = (screenName) => {
     navigation.navigate(screenName, { householdId, members });
@@ -66,46 +123,47 @@ export default function DashboardScreen({ navigation, householdId, householdData
         </View>
       </View>
 
-      {/* Invite Code Chip */}
-      <View className="flex-row items-center gap-1 bg-white rounded-full px-4 py-2 self-start mb-8 border border-border shadow-sm">
-        <MaterialIcons name="vpn-key" size={14} color="#6B7280" />
-        <Text className="text-textMuted text-sm">Invite Code: </Text>
-        <Text className="text-primary text-sm font-extrabold tracking-widest">
-          {householdData?.inviteCode || '...'}
+      {/* Members Chip */}
+      <TouchableOpacity 
+        onPress={() => setIsMembersModalVisible(true)}
+        className="flex-row items-center gap-2 bg-white rounded-full px-4 py-1.5 self-start mb-10 border border-border shadow-sm"
+      >
+        <MaterialIcons name="people" size={14} color="#6B7280" />
+        <Text className="text-textMain text-[11px] font-bold">
+          {members.length} Member{members.length !== 1 ? 's' : ''}
         </Text>
-        <Text className="text-textMuted text-sm ml-1">
-          · {members.length} member{members.length !== 1 ? 's' : ''}
-        </Text>
-      </View>
+      </TouchableOpacity>
 
       {/* Feature Cards */}
-      <View className="flex-1 gap-4">
+      <View className="flex-1 gap-6 items-center">
         {NAV_ITEMS.map(item => (
           <TouchableOpacity
             key={item.name}
-            className="flex-1 rounded-3xl p-6 border justify-start shadow-sm"
-            style={{ backgroundColor: item.bg, borderColor: `${item.color}30` }}
+            className="w-[88%] rounded-[32px] p-6 border justify-start shadow-sm"
+            style={{ backgroundColor: item.bg, borderColor: '#F3F4F6' }}
             onPress={() => handleNav(item.name)}
             activeOpacity={0.7}
           >
             <View 
-              className="w-14 h-14 rounded-2xl items-center justify-center mb-4"
-              style={{ backgroundColor: `${item.color}20` }}
+              className="w-12 h-12 rounded-2xl items-center justify-center mb-4"
+              style={{ backgroundColor: '#F9FAFB' }}
             >
-              <MaterialIcons name={item.icon} size={32} color={item.color} />
+              <MaterialIcons name={item.icon} size={28} color={item.color} />
             </View>
-            <Text className="text-2xl font-extrabold mb-1" style={{ color: item.color }}>
+            <Text className="text-xl font-bold mb-1" style={{ color: item.color }}>
               {item.name}
             </Text>
-            <Text className="text-base font-medium" style={{ color: `${item.color}90` }}>
+            <Text className="text-sm font-medium text-textMuted">
               {item.subtitle}
             </Text>
-            <MaterialIcons 
-              name="arrow-forward" 
-              size={20} 
-              color={`${item.color}80`} 
-              style={{ marginTop: 12 }} 
-            />
+            <View className="flex-row items-center mt-3">
+               <Text className="text-xs font-bold text-textMuted tracking-widest mr-1">OPEN</Text>
+               <MaterialIcons 
+                name="arrow-forward" 
+                size={14} 
+                color="#9CA3AF" 
+              />
+            </View>
           </TouchableOpacity>
         ))}
       </View>
@@ -119,16 +177,32 @@ export default function DashboardScreen({ navigation, householdId, householdData
               <View className="mt-10 mb-6">
                 <View className="w-16 h-16 rounded-full bg-primary justify-center items-center mb-4 shadow-md">
                   <Text className="text-white text-2xl font-extrabold">
-                    {auth.currentUser?.email?.charAt(0).toUpperCase()}
+                    {(userData?.username || auth.currentUser?.email)?.charAt(0).toUpperCase()}
                   </Text>
                 </View>
-                <Text className="text-textMain text-lg font-bold mb-1">
+                <Text className="text-textMain text-lg font-bold mb-0.5">
+                  {userData?.username ? `@${userData.username}` : 'User'}
+                </Text>
+                <Text className="text-textMuted text-sm mb-1">
                   {auth.currentUser?.email}
                 </Text>
-                <Text className="text-textMuted text-sm">
+                <Text className="text-textMuted text-xs font-medium">
                   {userData?.phoneNumber || 'No phone added'}
                 </Text>
               </View>
+
+              <View className="h-[1px] bg-border my-5" />
+
+              {/* Selection Menu */}
+              <TouchableOpacity
+                className="flex-row items-center py-3 gap-3"
+                onPress={() => { setIsMenuVisible(false); navigation.navigate('HouseholdSelection'); }}
+              >
+                <View className="w-10 h-10 rounded-xl bg-secondary items-center justify-center">
+                   <MaterialIcons name="swap-horiz" size={22} color="#4F46E5" />
+                </View>
+                <Text className="text-primary text-base font-bold">Switch Household</Text>
+              </TouchableOpacity>
 
               <View className="h-[1px] bg-border my-5" />
 
@@ -137,10 +211,6 @@ export default function DashboardScreen({ navigation, householdId, householdData
               <View className="flex-row items-center gap-3 py-2">
                 <MaterialIcons name="home" size={20} color="#6B7280" />
                 <Text className="text-textMain text-base font-medium">{householdData?.name}</Text>
-              </View>
-              <View className="flex-row items-center gap-3 py-2">
-                <MaterialIcons name="vpn-key" size={20} color="#6B7280" />
-                <Text className="text-textMain text-base font-medium">{householdData?.inviteCode}</Text>
               </View>
               <View className="flex-row items-center gap-3 py-2">
                 <MaterialIcons name="people" size={20} color="#6B7280" />
@@ -160,6 +230,106 @@ export default function DashboardScreen({ navigation, householdId, householdData
                 <Text className="text-danger text-base font-bold">Sign Out</Text>
               </TouchableOpacity>
             </SafeAreaView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Members Modal */}
+      <Modal visible={isMembersModalVisible} transparent animationType="fade" onRequestClose={() => setIsMembersModalVisible(false)}>
+        <TouchableOpacity className="flex-1 bg-black/60 items-center justify-center px-6" activeOpacity={1} onPress={() => setIsMembersModalVisible(false)}>
+          <View className="w-full bg-white rounded-[40px] p-8 shadow-2xl">
+            <View className="flex-row justify-between items-center mb-6">
+              <View>
+                <Text className="text-2xl font-black text-textMain tracking-tight">Household Team</Text>
+                <Text className="text-textMuted text-[10px] font-bold tracking-widest mt-1 uppercase">
+                  {members.length} members total
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsMembersModalVisible(false)} className="bg-background p-2 rounded-full border border-border">
+                <MaterialIcons name="close" size={20} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Invite Section */}
+            <View className="mb-8 gap-4">
+              <Text className="text-textMuted text-[10px] font-bold tracking-widest uppercase">Invite New Members</Text>
+              
+              {/* Box 1: Invite Code */}
+              <View className="bg-secondary/40 rounded-[24px] p-5 border border-primary/5 flex-row items-center justify-between">
+                <View>
+                  <Text className="text-[10px] text-textMuted font-bold uppercase mb-1">Invite Code</Text>
+                  <Text className="text-2xl font-black text-primary tracking-widest uppercase">{householdData?.inviteCode}</Text>
+                </View>
+                <TouchableOpacity 
+                   onPress={async () => {
+                     if (householdData?.inviteCode) {
+                       await Clipboard.setStringAsync(householdData.inviteCode);
+                       Alert.alert("Copied", "Invite code copied to clipboard!");
+                     }
+                   }}
+                   className="bg-primary px-5 py-3 rounded-2xl shadow-sm shadow-primary/20"
+                >
+                  <Text className="text-white font-bold text-xs uppercase tracking-wider">Copy</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Box 2: Invite Link */}
+              <View className="bg-secondary/40 rounded-[24px] p-5 border border-primary/5 flex-row items-center justify-between">
+                <View className="flex-1 mr-4">
+                  <Text className="text-[10px] text-textMuted font-bold uppercase mb-1">Join Link</Text>
+                  <Text className="text-[11px] text-textMain font-medium" numberOfLines={1}>
+                    shared-living://join?code={householdData?.inviteCode}
+                  </Text>
+                </View>
+                <TouchableOpacity 
+                   onPress={async () => {
+                     await Share.share({
+                       message: `Join my household on Shared Living! Click here: shared-living://join?code=${householdData?.inviteCode}`,
+                     });
+                   }}
+                   className="bg-white px-5 py-3 rounded-2xl border border-border shadow-sm"
+                >
+                  <Text className="text-textMain font-bold text-xs uppercase tracking-wider">Share</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <ScrollView className="max-h-[60%]" showsVerticalScrollIndicator={false}>
+              {members.map(uid => {
+                const profile = memberProfiles[uid];
+                const displayName = profile?.username ? `@${profile.username}` : (profile?.email?.split('@')[0] || '...');
+                const initial = (profile?.username || profile?.email || '?').charAt(0).toUpperCase();
+                const isMe = uid === auth.currentUser?.uid;
+
+                return (
+                  <View key={uid} className="flex-row items-center mb-5 last:mb-0">
+                    <View className={`w-14 h-14 rounded-2xl items-center justify-center border-2 ${isMe ? 'border-primary bg-primary/10' : 'border-border bg-white'} shadow-sm mr-4`}>
+                      <Text className={`font-bold text-lg ${isMe ? 'text-primary' : 'text-textMain'}`}>{initial}</Text>
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-base font-bold text-textMain">
+                        {isMe ? 'You' : displayName} {uid === householdData?.createdBy && <Text className="text-primary text-[10px] font-black tracking-widest ml-1 uppercase">(Owner)</Text>}
+                      </Text>
+                      <Text className="text-xs text-textMuted font-medium">{profile?.email}</Text>
+                    </View>
+                    {isMe ? (
+                       <View className="bg-success/10 px-2 py-1 rounded-md border border-success/20">
+                          <Text className="text-success text-[10px] font-bold uppercase">Online</Text>
+                       </View>
+                    ) : (
+                       isOwner && (
+                         <TouchableOpacity 
+                           onPress={() => handleRemoveMember(uid)}
+                           className="w-10 h-10 rounded-xl bg-danger/10 items-center justify-center border border-danger/20"
+                         >
+                           <MaterialIcons name="person-remove" size={18} color="#EF4444" />
+                         </TouchableOpacity>
+                       )
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>

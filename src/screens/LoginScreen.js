@@ -7,7 +7,7 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 
 export default function LoginScreen() {
@@ -16,6 +16,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [username, setUsername] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
 
   const normalizePhone = (phone) => {
@@ -31,7 +32,7 @@ export default function LoginScreen() {
   }, []);
 
   const handleAuth = async () => {
-    if (!email || !password || (isSignUp && !phoneNumber)) {
+    if (!email || !password || (isSignUp && (!phoneNumber || !username))) {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
@@ -39,14 +40,28 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       if (isSignUp) {
+        const lowerUsername = username.trim().toLowerCase();
+        // Check username uniqueness
+        const usernameSnap = await getDoc(doc(db, "usernames", lowerUsername));
+        if (usernameSnap.exists()) {
+          Alert.alert("Error", "Username is already taken. Please choose another one.");
+          setLoading(false);
+          return;
+        }
+
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         await setDoc(doc(db, "users", userCredential.user.uid), {
           uid: userCredential.user.uid,
           email: userCredential.user.email,
+          username: lowerUsername,
           phoneNumber: normalizePhone(phoneNumber),
           householdId: null,
           createdAt: new Date().toISOString()
         });
+        
+        // Reserve username
+        await setDoc(doc(db, "usernames", lowerUsername), { uid: userCredential.user.uid });
+        
         Alert.alert("Success", "Account created successfully!");
       } else {
         await signInWithEmailAndPassword(auth, email, password);
@@ -144,17 +159,30 @@ export default function LoginScreen() {
                 </View>
 
                 {isSignUp && (
-                  <View className="mb-4">
-                    <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Phone Number</Text>
-                    <TextInput
-                      className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
-                      placeholder="+1 (555) 000-0000"
-                      placeholderTextColor="#9CA3AF"
-                      value={phoneNumber}
-                      onChangeText={setPhoneNumber}
-                      keyboardType="phone-pad"
-                    />
-                  </View>
+                  <>
+                    <View className="mb-4">
+                      <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Phone Number</Text>
+                      <TextInput
+                        className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
+                        placeholder="+1 (555) 000-0000"
+                        placeholderTextColor="#9CA3AF"
+                        value={phoneNumber}
+                        onChangeText={setPhoneNumber}
+                        keyboardType="phone-pad"
+                      />
+                    </View>
+                    <View className="mb-4">
+                      <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Username</Text>
+                      <TextInput
+                        className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
+                        placeholder="unique_username"
+                        placeholderTextColor="#9CA3AF"
+                        value={username}
+                        onChangeText={setUsername}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                  </>
                 )}
 
                 <View className="mb-2">

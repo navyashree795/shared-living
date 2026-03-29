@@ -7,16 +7,29 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import {
-  collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp
+  collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, getDoc
 } from 'firebase/firestore';
 
 export default function GroceryScreen({ route, navigation }) {
   const { householdId } = route.params;
   const [items, setItems] = useState([]);
   const [newItem, setNewItem] = useState('');
+  const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const fetchUserData = async () => {
+      if (auth.currentUser) {
+        try {
+          const snap = await getDoc(doc(db, 'users', auth.currentUser.uid));
+          if (snap.exists()) setUserData(snap.data());
+        } catch (e) {
+          console.error("Error fetching user data:", e);
+        }
+      }
+    };
+    fetchUserData();
+
     const q = query(
       collection(db, 'households', householdId, 'groceries'),
       orderBy('createdAt', 'desc')
@@ -37,7 +50,7 @@ export default function GroceryScreen({ route, navigation }) {
       await addDoc(collection(db, 'households', householdId, 'groceries'), {
         name,
         done: false,
-        addedBy: auth.currentUser?.email || 'Unknown',
+        addedBy: userData?.username ? `@${userData.username}` : (auth.currentUser?.email || 'Unknown'),
         createdAt: serverTimestamp(),
       });
     } catch (e) {

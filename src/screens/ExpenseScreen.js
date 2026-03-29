@@ -49,6 +49,7 @@ export default function ExpenseScreen({ route, navigation }) {
   const getMemberName = (uid) => {
     if (uid === auth.currentUser?.uid) return 'You';
     const profile = memberProfiles[uid];
+    if (profile?.username) return `@${profile.username}`;
     return profile?.email?.split('@')[0] || 'Member';
   };
 
