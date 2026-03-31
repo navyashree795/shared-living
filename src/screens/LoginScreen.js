@@ -7,10 +7,12 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail
 } from 'firebase/auth';
+import { useNavigation } from '@react-navigation/native';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 
-export default function LoginScreen({ navigation }) {
+export default function LoginScreen() {
+  const navigation = useNavigation();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

@@ -20,30 +20,16 @@ import ChoresScreen from './src/screens/ChoresScreen';
 
 const Stack = createNativeStackNavigator();
 
-const prefix = Linking.createURL('/');
-
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  const linking = {
-    prefixes: [prefix, 'shared-living://'],
-    config: {
-      screens: {
-        HouseholdSetup: 'join',
-      },
-    },
-  };
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
     });
-
-    return () => {
-      unsubscribeAuth();
-    };
+    return () => unsubscribeAuth();
   }, []);
 
   if (loading) {
@@ -56,11 +42,10 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
-      <NavigationContainer linking={linking}>
+      <NavigationContainer>
         <Stack.Navigator
           screenOptions={{ headerShown: false }}
-          initialRouteName={user ? 'HouseholdSelection' : 'Login'}
+          initialRouteName={user ? "HouseholdSelection" : "Login"}
         >
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="HouseholdSelection" component={HouseholdSelectionScreen} />

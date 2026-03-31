@@ -19,11 +19,15 @@ export default function HouseholdSetupScreen({ navigation, route }) {
   }, [activeTab]);
 
   useEffect(() => {
+    if (route.params?.activeTab) {
+      setActiveTab(route.params.activeTab);
+    }
     if (route.params?.code) {
       setInviteCodeInput(route.params.code);
       setActiveTab('join');
+      handleJoinHousehold(route.params.code);
     }
-  }, [route.params?.code]);
+  }, [route.params]);
 
   const fetchInvites = async () => {
     if (!auth.currentUser) return;
@@ -76,7 +80,7 @@ export default function HouseholdSetupScreen({ navigation, route }) {
       }, { merge: true });
 
       Alert.alert("Success", "Household created successfully!");
-      navigation.navigate('Dashboard', { 
+      navigation.replace('Dashboard', { 
         householdId, 
         householdData: { id: householdId, name: householdName, inviteCode: code, members: [user.uid] } 
       });
@@ -87,14 +91,15 @@ export default function HouseholdSetupScreen({ navigation, route }) {
     setLoading(false);
   };
 
-  const handleJoinHousehold = async () => {
-    if (!inviteCodeInput.trim() || inviteCodeInput.length !== 6) {
+  const handleJoinHousehold = async (overrideCode) => {
+    const codeToUse = typeof overrideCode === 'string' ? overrideCode : inviteCodeInput.trim();
+    if (!codeToUse || codeToUse.length !== 6) {
       Alert.alert("Error", "Please enter a valid 6-character code.");
       return;
     }
     setLoading(true);
     try {
-      const code = inviteCodeInput.toUpperCase();
+      const code = codeToUse.toUpperCase();
       const user = auth.currentUser;
       
       const q = query(collection(db, "households"), where("inviteCode", "==", code));
@@ -118,7 +123,7 @@ export default function HouseholdSetupScreen({ navigation, route }) {
       }, { merge: true });
       
       Alert.alert("Success", `Joined ${householdDoc.data().name}!`);
-      navigation.navigate('Dashboard', { 
+      navigation.replace('Dashboard', { 
         householdId, 
         householdData: { id: householdId, ...householdDoc.data() } 
       });
@@ -147,7 +152,7 @@ export default function HouseholdSetupScreen({ navigation, route }) {
       });
 
       Alert.alert("Success", "Welcome to your new household!");
-      navigation.navigate('Dashboard', { householdId });
+      navigation.replace('Dashboard', { householdId });
     } catch (error) {
       console.error("Error accepting invite:", error);
       Alert.alert("Error", "Failed to accept invite.");
@@ -224,7 +229,13 @@ export default function HouseholdSetupScreen({ navigation, route }) {
                   placeholder="6-CHAR CODE"
                   placeholderTextColor="#9CA3AF"
                   value={inviteCodeInput}
-                  onChangeText={setInviteCodeInput}
+                  onChangeText={(text) => {
+                    const upperText = text.toUpperCase();
+                    setInviteCodeInput(upperText);
+                    if (upperText.trim().length === 6) {
+                      handleJoinHousehold(upperText);
+                    }
+                  }}
                   autoCapitalize="characters"
                   maxLength={6}
                 />

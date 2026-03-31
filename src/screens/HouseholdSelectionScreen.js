@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
-export default function HouseholdSelectionScreen({ navigation }) {
+export default function HouseholdSelectionScreen({ navigation, route }) {
   const [households, setHouseholds] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,7 +30,7 @@ export default function HouseholdSelectionScreen({ navigation }) {
   }, []);
 
   const handleSelect = (hh) => {
-    navigation.navigate('Dashboard', { householdId: hh.id, householdData: hh });
+    navigation.replace('Dashboard', { householdId: hh.id, householdData: hh });
   };
 
   const renderItem = ({ item }) => (
@@ -63,9 +63,22 @@ export default function HouseholdSelectionScreen({ navigation }) {
 
   return (
     <SafeAreaView className="flex-1 bg-background px-6">
-      <View className="mt-8 mb-10">
-        <Text className="text-4xl font-black text-textMain tracking-tighter">My Projects</Text>
-        <Text className="text-textMuted text-base font-medium mt-1">Select a household to continue</Text>
+      <View className="mt-8 mb-10 flex-row justify-between items-start">
+        <View>
+          <Text className="text-4xl font-black text-textMain tracking-tighter">My Projects</Text>
+          <Text className="text-textMuted text-base font-medium mt-1">Select a household to continue</Text>
+        </View>
+        <TouchableOpacity 
+          onPress={() => {
+            Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+              { text: "Cancel", style: "cancel" },
+              { text: "Sign Out", style: "destructive", onPress: () => auth.signOut() }
+            ]);
+          }}
+          className="bg-danger/10 p-3 rounded-2xl border border-danger/20"
+        >
+          <MaterialIcons name="logout" size={24} color="#EF4444" />
+        </TouchableOpacity>
       </View>
 
       <FlatList

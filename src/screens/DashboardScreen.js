@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, Share } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, Share, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { auth, db } from '../firebaseConfig';
-import { doc, getDoc, onSnapshot, updateDoc, arrayRemove } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc, arrayRemove, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const NAV_ITEMS = [
   {
@@ -30,13 +31,16 @@ const NAV_ITEMS = [
   },
 ];
 
-export default function DashboardScreen({ navigation, route }) {
+export default function DashboardScreen({ route }) {
+  const navigation = useNavigation();
   const { householdId, householdData: initialData } = route.params || {};
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isMembersModalVisible, setIsMembersModalVisible] = useState(false);
   const [userData, setUserData] = useState(null);
   const [householdData, setHouseholdData] = useState(initialData || null);
   const [memberProfiles, setMemberProfiles] = useState({});
+  const [inviteInput, setInviteInput] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -106,6 +110,64 @@ export default function DashboardScreen({ navigation, route }) {
 
   const handleNav = (screenName) => {
     navigation.navigate(screenName, { householdId, members });
+  };
+
+  const handleSendInvite = async () => {
+    const input = inviteInput.trim().toLowerCase();
+    if (!input) {
+      Alert.alert("Error", "Please enter an email or username.");
+      return;
+    }
+    setInviteLoading(true);
+    try {
+      const isEmail = input.includes('@');
+      let targetUid = null;
+      
+      if (isEmail) {
+        const q = query(collection(db, "users"), where("email", "==", input));
+        const snap = await getDocs(q);
+        if (!snap.empty) targetUid = snap.docs[0].id;
+      } else {
+        const snap = await getDoc(doc(db, "usernames", input));
+        if (snap.exists()) targetUid = snap.data().uid;
+      }
+
+      if (!targetUid) {
+        Alert.alert("Error", "User not found. Please check the email or username.");
+        setInviteLoading(false);
+        return;
+      }
+
+      if (members.includes(targetUid)) {
+        Alert.alert("Notice", "This user is already a member of the household.");
+        setInviteLoading(false);
+        return;
+      }
+
+      const invitesRef = collection(db, "users", targetUid, "invites");
+      const existingQ = query(invitesRef, where("householdId", "==", householdId), where("status", "==", "pending"));
+      const existingSnap = await getDocs(existingQ);
+      if (!existingSnap.empty) {
+        Alert.alert("Notice", "An invitation is already pending for this user.");
+        setInviteLoading(false);
+        return;
+      }
+
+      await addDoc(invitesRef, {
+        householdId,
+        householdName: householdData.name,
+        inviterEmail: userData?.email || auth.currentUser?.email || "Someone",
+        status: "pending",
+        createdAt: serverTimestamp()
+      });
+
+      Alert.alert("Success", "Invitation sent successfully!");
+      setInviteInput('');
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Error", "Failed to send invitation.");
+    }
+    setInviteLoading(false);
   };
 
   return (
@@ -196,7 +258,7 @@ export default function DashboardScreen({ navigation, route }) {
               {/* Selection Menu */}
               <TouchableOpacity
                 className="flex-row items-center py-3 gap-3"
-                onPress={() => { setIsMenuVisible(false); navigation.navigate('HouseholdSelection'); }}
+                onPress={() => { setIsMenuVisible(false); navigation.replace('HouseholdSelection'); }}
               >
                 <View className="w-10 h-10 rounded-xl bg-secondary items-center justify-center">
                    <MaterialIcons name="swap-horiz" size={22} color="#4F46E5" />
@@ -291,6 +353,28 @@ export default function DashboardScreen({ navigation, route }) {
                 >
                   <Text className="text-textMain font-bold text-xs uppercase tracking-wider">Share</Text>
                 </TouchableOpacity>
+              </View>
+
+              {/* Box 3: Invite by Email/Username */}
+              <View className="bg-secondary/40 rounded-[24px] p-5 border border-primary/5 mt-2">
+                <Text className="text-[10px] text-textMuted font-bold uppercase mb-3">Send Invite via App</Text>
+                <View className="flex-row items-center gap-3">
+                  <TextInput
+                    className="flex-1 bg-white rounded-xl px-4 py-3 text-textMain text-sm border border-border"
+                    placeholder="Email or Username"
+                    placeholderTextColor="#9CA3AF"
+                    value={inviteInput}
+                    onChangeText={setInviteInput}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity 
+                    onPress={handleSendInvite}
+                    disabled={inviteLoading}
+                    className="bg-primary px-5 py-3 rounded-xl shadow-sm shadow-primary/20 items-center justify-center min-w-[80px]"
+                  >
+                    {inviteLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text className="text-white font-bold text-xs uppercase tracking-wider">Send</Text>}
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 
