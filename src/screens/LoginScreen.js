@@ -1,18 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  onAuthStateChanged,
   sendPasswordResetEmail
 } from 'firebase/auth';
-import { useNavigation } from '@react-navigation/native';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 
 export default function LoginScreen() {
-  const navigation = useNavigation();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -24,15 +21,6 @@ export default function LoginScreen() {
     return phone.replace(/[^\d+]/g, '');
   };
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser) {
-        navigation.replace('HouseholdSelection');
-      }
-    });
-    return unsubscribe;
-  }, []);
-
   const handleAuth = async () => {
     if (!email || !password || (isSignUp && (!phoneNumber || !username))) {
       Alert.alert("Error", "Please fill in all fields");
@@ -43,6 +31,7 @@ export default function LoginScreen() {
     try {
       if (isSignUp) {
         const lowerUsername = username.trim().toLowerCase();
+        
         // Check username uniqueness
         const usernameSnap = await getDoc(doc(db, "usernames", lowerUsername));
         if (usernameSnap.exists()) {
@@ -64,15 +53,20 @@ export default function LoginScreen() {
         // Reserve username
         await setDoc(doc(db, "usernames", lowerUsername), { uid: userCredential.user.uid });
         
+        // No navigation needed here! App.js will detect the new user and route automatically.
         Alert.alert("Success", "Account created successfully!");
+        
       } else {
+        // Sign In
         await signInWithEmailAndPassword(auth, email, password);
+        // No navigation needed here either!
       }
     } catch (error) {
       console.error("Auth Error:", error.code, error.message);
       let errorMessage = error.message;
 
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+      // Updated to handle modern Firebase error codes
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
         errorMessage = "Invalid email or password.";
       } else if (error.code === 'auth/email-already-in-use') {
         errorMessage = "An account with this email already exists.";
@@ -80,8 +74,6 @@ export default function LoginScreen() {
         errorMessage = "The email address is not valid.";
       } else if (error.code === 'auth/weak-password') {
         errorMessage = "Password should be at least 6 characters.";
-      } else if (error.code === 'auth/operation-not-allowed') {
-        errorMessage = "Email/Password sign-in is not enabled in your Firebase Console.";
       } else if (error.code === 'auth/network-request-failed') {
         errorMessage = "Network error. Please check your internet connection.";
       }

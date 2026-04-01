@@ -3,31 +3,32 @@ import { View, Text, TouchableOpacity, TextInput, Alert, ActivityIndicator, Keyb
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
-import { doc, getDoc, updateDoc, setDoc, query, collection, where, getDocs, arrayUnion } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, query, collection, where, getDocs, arrayUnion } from 'firebase/firestore';
 
 export default function HouseholdSetupScreen({ navigation, route }) {
-  const [activeTab, setActiveTab] = useState('create'); // 'create', 'join', 'invites'
+  // 1. Calculate the initial state directly from routing parameters BEFORE the first render.
+  // This completely stops the React Navigation context from crashing during screen transitions.
+  const initialTab = route.params?.code ? 'join' : (route.params?.activeTab || 'create');
+
+  const [activeTab, setActiveTab] = useState(initialTab); 
   const [householdName, setHouseholdName] = useState('');
-  const [inviteCodeInput, setInviteCodeInput] = useState('');
+  const [inviteCodeInput, setInviteCodeInput] = useState(route.params?.code || '');
   const [loading, setLoading] = useState(false);
   const [invites, setInvites] = useState([]);
 
+  // 2. Safe, run-once useEffect for handling automatic deep-link joining
+  useEffect(() => {
+    if (route.params?.code) {
+      handleJoinHousehold(route.params.code);
+    }
+  }, []); // <-- The empty array guarantees this only fires once when the screen first mounts
+
+  // 3. Keep the invites fetcher attached to the activeTab state
   useEffect(() => {
     if (activeTab === 'invites') {
       fetchInvites();
     }
   }, [activeTab]);
-
-  useEffect(() => {
-    if (route.params?.activeTab) {
-      setActiveTab(route.params.activeTab);
-    }
-    if (route.params?.code) {
-      setInviteCodeInput(route.params.code);
-      setActiveTab('join');
-      handleJoinHousehold(route.params.code);
-    }
-  }, [route.params]);
 
   const fetchInvites = async () => {
     if (!auth.currentUser) return;
