@@ -2,9 +2,29 @@
   "expo": {
     "name": "Shared Living",
     "slug": "shared-living",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "scheme": "shared-living",
+    "ios": {
+      "supportsTablet": true
+    },
     "android": {
-      "package": "com.jeevan0714.sharedliving"
+      "package": "com.jeevan0714.sharedliving",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "extra": {
       "eas": {

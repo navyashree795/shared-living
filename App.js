@@ -45,20 +45,25 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar style="auto" />
       <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator 
+          screenOptions={{ headerShown: false }}
+          initialRouteName={user ? "HouseholdSelection" : "Login"}
+        >
           {user ? (
-            // ONLY rendered if the user is logged in
-            <>
+            // AUTHENTICATED: Main App Flow
+            <Stack.Group>
               <Stack.Screen name="HouseholdSelection" component={HouseholdSelectionScreen} />
               <Stack.Screen name="HouseholdSetup" component={HouseholdSetupScreen} />
               <Stack.Screen name="Dashboard" component={DashboardScreen} />
               <Stack.Screen name="Grocery" component={GroceryScreen} />
               <Stack.Screen name="Expenses" component={ExpenseScreen} />
               <Stack.Screen name="Chores" component={ChoresScreen} />
-            </>
+            </Stack.Group>
           ) : (
-            // ONLY rendered if the user is NOT logged in
-            <Stack.Screen name="Login" component={LoginScreen} />
+            // UNAUTHENTICATED: Auth Flow
+            <Stack.Group>
+              <Stack.Screen name="Login" component={LoginScreen} />
+            </Stack.Group>
           )}
         </Stack.Navigator>
       </NavigationContainer>

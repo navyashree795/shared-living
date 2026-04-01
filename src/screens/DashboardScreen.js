@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, Share, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, onSnapshot, updateDoc, arrayRemove, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -31,8 +31,9 @@ const NAV_ITEMS = [
   },
 ];
 
-export default function DashboardScreen({ route }) {
+export default function DashboardScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { householdId, householdData: initialData } = route.params || {};
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isMembersModalVisible, setIsMembersModalVisible] = useState(false);

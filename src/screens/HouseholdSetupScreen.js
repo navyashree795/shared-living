@@ -2,10 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { auth, db } from '../firebaseConfig';
 import { doc, updateDoc, setDoc, query, collection, where, getDocs, arrayUnion } from 'firebase/firestore';
 
-export default function HouseholdSetupScreen({ navigation, route }) {
+export default function HouseholdSetupScreen() {
+  const navigation = useNavigation();
+  const route = useRoute();
+
   // 1. Calculate the initial state directly from routing parameters BEFORE the first render.
   // This completely stops the React Navigation context from crashing during screen transitions.
   const initialTab = route.params?.code ? 'join' : (route.params?.activeTab || 'create');
@@ -81,11 +85,16 @@ export default function HouseholdSetupScreen({ navigation, route }) {
       }, { merge: true });
 
       Alert.alert("Success", "Household created successfully!");
-      navigation.replace('Dashboard', { 
-        householdId, 
-        householdData: { id: householdId, name: householdName, inviteCode: code, members: [user.uid] } 
-      });
+      
+      // Delay navigation slightly to ensure state is committed
+      setTimeout(() => {
+        navigation.replace('Dashboard', { 
+          householdId, 
+          householdData: { id: householdId, name: householdName, inviteCode: code, members: [user.uid] } 
+        });
+      }, 0);
     } catch (error) {
+
       console.error("DEBUG: Error in handleCreateHousehold:", error);
       Alert.alert("Error", `Failed to create household: ${error.message}`);
     }
@@ -124,11 +133,16 @@ export default function HouseholdSetupScreen({ navigation, route }) {
       }, { merge: true });
       
       Alert.alert("Success", `Joined ${householdDoc.data().name}!`);
-      navigation.replace('Dashboard', { 
-        householdId, 
-        householdData: { id: householdId, ...householdDoc.data() } 
-      });
+      
+      // Delay navigation slightly to ensure state is committed
+      setTimeout(() => {
+        navigation.replace('Dashboard', { 
+          householdId, 
+          householdData: { id: householdId, ...householdDoc.data() } 
+        });
+      }, 0);
     } catch (error) {
+
       console.error("DEBUG: Error in handleJoinHousehold:", error);
       Alert.alert("Error", `Failed to join household: ${error.message}`);
     }
@@ -153,8 +167,13 @@ export default function HouseholdSetupScreen({ navigation, route }) {
       });
 
       Alert.alert("Success", "Welcome to your new household!");
-      navigation.replace('Dashboard', { householdId });
+      
+      // Delay navigation slightly to ensure state is committed
+      setTimeout(() => {
+        navigation.replace('Dashboard', { householdId });
+      }, 0);
     } catch (error) {
+
       console.error("Error accepting invite:", error);
       Alert.alert("Error", "Failed to accept invite.");
     }
