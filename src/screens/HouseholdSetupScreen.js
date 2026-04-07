@@ -1,56 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import {
+  View, Text, TouchableOpacity, TextInput, Alert,
+  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
 import { auth, db } from '../firebaseConfig';
-import { doc, updateDoc, setDoc, query, collection, where, getDocs, arrayUnion } from 'firebase/firestore';
+import {
+  doc, setDoc, updateDoc, query, collection,
+  where, getDocs, arrayUnion,
+} from 'firebase/firestore';
 
-export default function HouseholdSetupScreen() {
-  const navigation = useNavigation();
-  const route = useRoute();
-
-  // 1. Calculate the initial state directly from routing parameters BEFORE the first render.
-  // This completely stops the React Navigation context from crashing during screen transitions.
-  const initialTab = route.params?.code ? 'join' : (route.params?.activeTab || 'create');
-
-  const [activeTab, setActiveTab] = useState(initialTab); 
+export default function HouseholdSetupScreen({ navigation, route }) {
+  const initialTab = route.params?.activeTab || 'create';
+  const [activeTab, setActiveTab] = useState(initialTab); // 'create' | 'join'
+  
   const [householdName, setHouseholdName] = useState('');
   const [inviteCodeInput, setInviteCodeInput] = useState(route.params?.code || '');
   const [loading, setLoading] = useState(false);
-  const [invites, setInvites] = useState([]);
 
-  // 2. Safe, run-once useEffect for handling automatic deep-link joining
+  // ─── Auto-join from deep link ─────────────────────────────────────────────
   useEffect(() => {
     if (route.params?.code) {
+      setActiveTab('join');
       handleJoinHousehold(route.params.code);
     }
-  }, []); // <-- The empty array guarantees this only fires once when the screen first mounts
-
-  // 3. Keep the invites fetcher attached to the activeTab state
-  useEffect(() => {
-    if (activeTab === 'invites') {
-      fetchInvites();
-    }
-  }, [activeTab]);
-
-  const fetchInvites = async () => {
-    if (!auth.currentUser) return;
-    setLoading(true);
-    try {
-      const invitesRef = collection(db, "users", auth.currentUser.uid, "invites");
-      const q = query(invitesRef, where("status", "==", "pending"));
-      const querySnapshot = await getDocs(q);
-      const fetchedInvites = [];
-      querySnapshot.forEach((doc) => {
-        fetchedInvites.push({ id: doc.id, ...doc.data() });
-      });
-      setInvites(fetchedInvites);
-    } catch (error) {
-      console.error("Error fetching invites:", error);
-    }
-    setLoading(false);
-  };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const generateInviteCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -86,7 +61,6 @@ export default function HouseholdSetupScreen() {
 
       Alert.alert("Success", "Household created successfully!");
       
-      // Delay navigation slightly to ensure state is committed
       setTimeout(() => {
         navigation.replace('Dashboard', { 
           householdId, 
@@ -94,8 +68,7 @@ export default function HouseholdSetupScreen() {
         });
       }, 0);
     } catch (error) {
-
-      console.error("DEBUG: Error in handleCreateHousehold:", error);
+      console.error("Error in handleCreateHousehold:", error);
       Alert.alert("Error", `Failed to create household: ${error.message}`);
     }
     setLoading(false);
@@ -104,122 +77,81 @@ export default function HouseholdSetupScreen() {
   const handleJoinHousehold = async (overrideCode) => {
     const codeToUse = typeof overrideCode === 'string' ? overrideCode : inviteCodeInput.trim();
     if (!codeToUse || codeToUse.length !== 6) {
-      Alert.alert("Error", "Please enter a valid 6-character code.");
+      Alert.alert('Error', 'Please enter a valid 6-character code.');
       return;
     }
     setLoading(true);
     try {
       const code = codeToUse.toUpperCase();
       const user = auth.currentUser;
-      
-      const q = query(collection(db, "households"), where("inviteCode", "==", code));
-      const querySnapshot = await getDocs(q);
-      
-      if (querySnapshot.empty) {
-        Alert.alert("Error", "No household found with this code.");
+
+      const q = query(
+        collection(db, 'households'),
+        where('inviteCode', '==', code),
+      );
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        Alert.alert('Error', 'No household found with this code.');
         setLoading(false);
         return;
       }
-      
-      const householdDoc = querySnapshot.docs[0];
+
+      const householdDoc = snap.docs[0];
       const householdId = householdDoc.id;
-      
-      await updateDoc(doc(db, "households", householdId), {
-        members: arrayUnion(user.uid)
+
+      await updateDoc(doc(db, 'households', householdId), {
+        members: arrayUnion(user.uid),
       });
-      
-      await setDoc(doc(db, "users", user.uid), {
-        householdId: householdId
-      }, { merge: true });
-      
-      Alert.alert("Success", `Joined ${householdDoc.data().name}!`);
-      
-      // Delay navigation slightly to ensure state is committed
+
+      await setDoc(
+        doc(db, 'users', user.uid),
+        { householdId },
+        { merge: true },
+      );
+
+      Alert.alert('Success', `Joined ${householdDoc.data().name}!`);
+
       setTimeout(() => {
-        navigation.replace('Dashboard', { 
-          householdId, 
-          householdData: { id: householdId, ...householdDoc.data() } 
+        navigation.replace('Dashboard', {
+          householdId,
+          householdData: { id: householdId, ...householdDoc.data() },
         });
       }, 0);
     } catch (error) {
-
-      console.error("DEBUG: Error in handleJoinHousehold:", error);
-      Alert.alert("Error", `Failed to join household: ${error.message}`);
-    }
-    setLoading(false);
-  };
-
-  const handleAcceptInvite = async (inviteId, householdId) => {
-    setLoading(true);
-    try {
-      const user = auth.currentUser;
-      
-      await updateDoc(doc(db, "households", householdId), {
-        members: arrayUnion(user.uid)
-      });
-      
-      await setDoc(doc(db, "users", user.uid), {
-        householdId: householdId
-      }, { merge: true });
-
-      await updateDoc(doc(db, "users", user.uid, "invites", inviteId), {
-        status: "accepted"
-      });
-
-      Alert.alert("Success", "Welcome to your new household!");
-      
-      // Delay navigation slightly to ensure state is committed
-      setTimeout(() => {
-        navigation.replace('Dashboard', { householdId });
-      }, 0);
-    } catch (error) {
-
-      console.error("Error accepting invite:", error);
-      Alert.alert("Error", "Failed to accept invite.");
+      console.error('handleJoinHousehold error:', error);
+      Alert.alert('Error', `Failed to join household: ${error.message}`);
     }
     setLoading(false);
   };
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }} keyboardShouldPersistTaps="handled">
-          
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        className="flex-1"
+      >
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header */}
           <View className="items-center mb-10">
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => navigation.goBack()}
               className="absolute left-0 top-0 p-2"
             >
               <MaterialIcons name="arrow-back" size={24} color="#4F46E5" />
             </TouchableOpacity>
             <Text className="text-3xl font-extrabold text-primary mb-2">Setup</Text>
-            <Text className="text-base text-textMuted text-center">Let's get you set up with a household.</Text>
+            <Text className="text-base text-textMuted text-center">
+              Create a new household or join an existing one.
+            </Text>
           </View>
 
           <View className="bg-white rounded-3xl p-6 border border-border shadow-sm">
-            {/* Tabs */}
-            <View className="flex-row bg-background rounded-2xl p-1.5 mb-8 border border-border">
-              <TouchableOpacity 
-                className={`flex-1 py-3 items-center rounded-xl ${activeTab === 'create' ? 'bg-primary shadow-sm shadow-primary/30' : ''}`}
-                onPress={() => setActiveTab('create')}
-              >
-                <Text className={`font-bold ${activeTab === 'create' ? 'text-white' : 'text-textMuted'}`}>Create</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                className={`flex-1 py-3 items-center rounded-xl ${activeTab === 'join' ? 'bg-primary shadow-sm shadow-primary/30' : ''}`}
-                onPress={() => setActiveTab('join')}
-              >
-                <Text className={`font-bold ${activeTab === 'join' ? 'text-white' : 'text-textMuted'}`}>Join</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                className={`flex-1 py-3 items-center rounded-xl ${activeTab === 'invites' ? 'bg-primary shadow-sm shadow-primary/30' : ''}`}
-                onPress={() => setActiveTab('invites')}
-              >
-                <Text className={`font-bold ${activeTab === 'invites' ? 'text-white' : 'text-textMuted'}`}>Invites</Text>
-              </TouchableOpacity>
-            </View>
 
-            {/* Create Tab Content */}
+            {/* ── Create Tab ──────────────────────────────────────────── */}
             {activeTab === 'create' && (
               <View className="mb-4">
                 <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Household Name</Text>
@@ -240,7 +172,7 @@ export default function HouseholdSetupScreen() {
               </View>
             )}
 
-            {/* Join Tab Content */}
+            {/* ── Join Tab ──────────────────────────────────────────── */}
             {activeTab === 'join' && (
               <View className="mb-4">
                 <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Invite Code</Text>
@@ -259,47 +191,22 @@ export default function HouseholdSetupScreen() {
                   autoCapitalize="characters"
                   maxLength={6}
                 />
-                <TouchableOpacity 
+                <TouchableOpacity
                   className="bg-primary py-4 rounded-xl items-center justify-center shadow-sm shadow-primary/50"
-                  onPress={handleJoinHousehold} 
+                  onPress={handleJoinHousehold}
                   disabled={loading}
                 >
-                  {loading ? <ActivityIndicator color="#FFF" /> : <Text className="text-white text-base font-bold">Join Household</Text>}
+                  {loading
+                    ? <ActivityIndicator color="#FFF" />
+                    : <Text className="text-white text-base font-bold">Join Household</Text>
+                  }
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* Invites Tab Content */}
-            {activeTab === 'invites' && (
-              <View className="mb-4">
-                {loading ? (
-                  <ActivityIndicator size="large" color="#4F46E5" className="my-6" />
-                ) : invites.length === 0 ? (
-                  <View className="py-8 items-center">
-                    <Text className="text-textMuted text-base font-medium">No pending invitations.</Text>
-                  </View>
-                ) : (
-                  invites.map((invite) => (
-                    <View key={invite.id} className="bg-background p-5 rounded-2xl mb-3 border border-border flex-row items-center justify-between shadow-sm">
-                      <View className="flex-1 pr-4">
-                        <Text className="text-textMain text-sm leading-5">
-                          <Text className="font-extrabold">{invite.inviterEmail}</Text> invited you to <Text className="font-extrabold text-primary">{invite.householdName}</Text>
-                        </Text>
-                      </View>
-                      <TouchableOpacity 
-                        className="bg-success px-4 py-2.5 rounded-xl shadow-sm shadow-success/40"
-                        onPress={() => handleAcceptInvite(invite.id, invite.householdId)}
-                      >
-                        <Text className="text-white font-bold text-sm">Accept</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))
-                )}
-              </View>
-            )}
-
-            <TouchableOpacity 
-              className="mt-6 py-4 items-center" 
+            {/* Sign Out */}
+            <TouchableOpacity
+              className="mt-4 py-4 items-center"
               onPress={() => auth.signOut()}
             >
               <Text className="text-danger text-base font-bold">Sign Out</Text>

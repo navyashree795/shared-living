@@ -31,17 +31,13 @@ const NAV_ITEMS = [
   },
 ];
 
-export default function DashboardScreen() {
-  const navigation = useNavigation();
-  const route = useRoute();
+export default function DashboardScreen({ navigation, route }) {
   const { householdId, householdData: initialData } = route.params || {};
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isMembersModalVisible, setIsMembersModalVisible] = useState(false);
   const [userData, setUserData] = useState(null);
   const [householdData, setHouseholdData] = useState(initialData || null);
   const [memberProfiles, setMemberProfiles] = useState({});
-  const [inviteInput, setInviteInput] = useState('');
-  const [inviteLoading, setInviteLoading] = useState(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -113,63 +109,7 @@ export default function DashboardScreen() {
     navigation.navigate(screenName, { householdId, members });
   };
 
-  const handleSendInvite = async () => {
-    const input = inviteInput.trim().toLowerCase();
-    if (!input) {
-      Alert.alert("Error", "Please enter an email or username.");
-      return;
-    }
-    setInviteLoading(true);
-    try {
-      const isEmail = input.includes('@');
-      let targetUid = null;
-      
-      if (isEmail) {
-        const q = query(collection(db, "users"), where("email", "==", input));
-        const snap = await getDocs(q);
-        if (!snap.empty) targetUid = snap.docs[0].id;
-      } else {
-        const snap = await getDoc(doc(db, "usernames", input));
-        if (snap.exists()) targetUid = snap.data().uid;
-      }
 
-      if (!targetUid) {
-        Alert.alert("Error", "User not found. Please check the email or username.");
-        setInviteLoading(false);
-        return;
-      }
-
-      if (members.includes(targetUid)) {
-        Alert.alert("Notice", "This user is already a member of the household.");
-        setInviteLoading(false);
-        return;
-      }
-
-      const invitesRef = collection(db, "users", targetUid, "invites");
-      const existingQ = query(invitesRef, where("householdId", "==", householdId), where("status", "==", "pending"));
-      const existingSnap = await getDocs(existingQ);
-      if (!existingSnap.empty) {
-        Alert.alert("Notice", "An invitation is already pending for this user.");
-        setInviteLoading(false);
-        return;
-      }
-
-      await addDoc(invitesRef, {
-        householdId,
-        householdName: householdData.name,
-        inviterEmail: userData?.email || auth.currentUser?.email || "Someone",
-        status: "pending",
-        createdAt: serverTimestamp()
-      });
-
-      Alert.alert("Success", "Invitation sent successfully!");
-      setInviteInput('');
-    } catch (e) {
-      console.error(e);
-      Alert.alert("Error", "Failed to send invitation.");
-    }
-    setInviteLoading(false);
-  };
 
   return (
     <SafeAreaView className="flex-1 bg-background px-6">
@@ -354,28 +294,6 @@ export default function DashboardScreen() {
                 >
                   <Text className="text-textMain font-bold text-xs uppercase tracking-wider">Share</Text>
                 </TouchableOpacity>
-              </View>
-
-              {/* Box 3: Invite by Email/Username */}
-              <View className="bg-secondary/40 rounded-[24px] p-5 border border-primary/5 mt-2">
-                <Text className="text-[10px] text-textMuted font-bold uppercase mb-3">Send Invite via App</Text>
-                <View className="flex-row items-center gap-3">
-                  <TextInput
-                    className="flex-1 bg-white rounded-xl px-4 py-3 text-textMain text-sm border border-border"
-                    placeholder="Email or Username"
-                    placeholderTextColor="#9CA3AF"
-                    value={inviteInput}
-                    onChangeText={setInviteInput}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity 
-                    onPress={handleSendInvite}
-                    disabled={inviteLoading}
-                    className="bg-primary px-5 py-3 rounded-xl shadow-sm shadow-primary/20 items-center justify-center min-w-[80px]"
-                  >
-                    {inviteLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text className="text-white font-bold text-xs uppercase tracking-wider">Send</Text>}
-                  </TouchableOpacity>
-                </View>
               </View>
             </View>
 
