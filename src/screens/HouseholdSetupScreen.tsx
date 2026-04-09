@@ -4,17 +4,20 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
 import ScreenHeader from '../components/ScreenHeader';
 import { auth, db } from '../firebaseConfig';
 import {
   doc, setDoc, updateDoc, query, collection,
   where, getDocs, arrayUnion,
 } from 'firebase/firestore';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../types';
 
-export default function HouseholdSetupScreen({ navigation, route }) {
+type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdSetup'>;
+
+export default function HouseholdSetupScreen({ navigation, route }: Props) {
   const initialTab = route.params?.activeTab || 'create';
-  const [activeTab, setActiveTab] = useState(initialTab); // 'create' | 'join'
+  const [activeTab, setActiveTab] = useState<'create' | 'join'>(initialTab);
   
   const [householdName, setHouseholdName] = useState('');
   const [inviteCodeInput, setInviteCodeInput] = useState(route.params?.code || '');
@@ -45,16 +48,20 @@ export default function HouseholdSetupScreen({ navigation, route }) {
     setLoading(true);
     try {
       const user = auth.currentUser;
+      if (!user) throw new Error("No user logged in");
+      
       const code = generateInviteCode();
       const householdId = `hh_${Date.now()}_${code}`;
 
-      await setDoc(doc(db, "households", householdId), {
+      const householdData = {
         name: householdName,
         inviteCode: code,
         members: [user.uid],
         createdBy: user.uid,
         createdAt: new Date().toISOString()
-      });
+      };
+
+      await setDoc(doc(db, "households", householdId), householdData);
 
       await setDoc(doc(db, "users", user.uid), {
         householdId: householdId
@@ -65,17 +72,17 @@ export default function HouseholdSetupScreen({ navigation, route }) {
       setTimeout(() => {
         navigation.replace('Dashboard', { 
           householdId, 
-          householdData: { id: householdId, name: householdName, inviteCode: code, members: [user.uid] } 
+          householdData: { id: householdId, ...householdData } 
         });
       }, 0);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in handleCreateHousehold:", error);
       Alert.alert("Error", `Failed to create household: ${error.message}`);
     }
     setLoading(false);
   };
 
-  const handleJoinHousehold = async (overrideCode) => {
+  const handleJoinHousehold = async (overrideCode?: string) => {
     const codeToUse = typeof overrideCode === 'string' ? overrideCode : inviteCodeInput.trim();
     if (!codeToUse || codeToUse.length !== 6) {
       Alert.alert('Error', 'Please enter a valid 6-character code.');
@@ -85,6 +92,7 @@ export default function HouseholdSetupScreen({ navigation, route }) {
     try {
       const code = codeToUse.toUpperCase();
       const user = auth.currentUser;
+      if (!user) throw new Error("No user logged in");
 
       const q = query(
         collection(db, 'households'),
@@ -116,10 +124,10 @@ export default function HouseholdSetupScreen({ navigation, route }) {
       setTimeout(() => {
         navigation.replace('Dashboard', {
           householdId,
-          householdData: { id: householdId, ...householdDoc.data() },
+          householdData: { id: householdId, ...householdDoc.data() } as any,
         });
       }, 0);
-    } catch (error) {
+    } catch (error: any) {
       console.error('handleJoinHousehold error:', error);
       Alert.alert('Error', `Failed to join household: ${error.message}`);
     }
@@ -187,7 +195,7 @@ export default function HouseholdSetupScreen({ navigation, route }) {
                 />
                 <TouchableOpacity
                   className="bg-primary py-4 rounded-xl items-center justify-center shadow-sm shadow-primary/50"
-                  onPress={handleJoinHousehold}
+                  onPress={() => handleJoinHousehold()}
                   disabled={loading}
                 >
                   {loading

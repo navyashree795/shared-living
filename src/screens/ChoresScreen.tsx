@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  ActivityIndicator, Alert, Modal, ScrollView
+  ActivityIndicator, Alert, ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -11,13 +11,23 @@ import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import SlideModal from '../components/SlideModal';
 import {
-  collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, getDoc
+  collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp
 } from 'firebase/firestore';
+import { logActivity } from '../utils/activityUtils';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList, Chore } from '../types';
 
-export default function ChoresScreen({ route, navigation }) {
+type Props = NativeStackScreenProps<RootStackParamList, 'Chores'>;
+
+export default function ChoresScreen({ route, navigation }: Props) {
   const { householdId, members } = route.params;
-  const [chores, setChores] = useState([]);
-  const { memberProfiles, getMemberName } = useHouseholdMembers(members);
+  const [chores, setChores] = useState<Chore[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [choreTitle, setChoreTitle] = useState('');
+  const [assignedTo, setAssignedTo] = useState<string>(auth.currentUser?.uid || '');
+  
+  const { getMemberName } = useHouseholdMembers(members);
 
   useEffect(() => {
     const q = query(
@@ -25,18 +35,15 @@ export default function ChoresScreen({ route, navigation }) {
       orderBy('createdAt', 'desc')
     );
     const unsub = onSnapshot(q, (snap) => {
-      setChores(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setChores(snap.docs.map(d => ({ id: d.id, ...d.data() } as Chore)));
       setLoading(false);
     });
     return unsub;
   }, [householdId]);
 
-
-
   const handleAddChore = async () => {
     if (!choreTitle.trim()) { Alert.alert('Error', 'Please enter a chore name.'); return; }
     try {
-      console.log(`Adding chore to households/${householdId}/chores`);
       await addDoc(collection(db, 'households', householdId, 'chores'), {
         title: choreTitle.trim(),
         assignedToUid: assignedTo,
@@ -44,31 +51,39 @@ export default function ChoresScreen({ route, navigation }) {
         createdByUid: auth.currentUser?.uid,
         createdAt: serverTimestamp(),
       });
+      logActivity(householdId, 'chore_add', choreTitle.trim());
       setChoreTitle(''); setAssignedTo(auth.currentUser?.uid || '');
       setIsModalVisible(false);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Chore Add Error:', e);
       Alert.alert('Error', 'Could not add chore. ' + e.message);
     }
   };
 
-  const handleToggleDone = async (chore) => {
+  const handleToggleDone = async (chore: Chore) => {
     try {
-      console.log(`Updating chore households/${householdId}/chores/${chore.id}`);
+      const isFinishing = !chore.done;
       await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
-        done: !chore.done,
+        done: isFinishing,
       });
+      if (isFinishing) {
+        logActivity(householdId, 'chore_done', chore.title);
+      }
     } catch (e) {
       console.error('Chore Toggle Error:', e);
       Alert.alert('Error', 'Could not update chore.');
     }
   };
 
-  const handleDelete = async (choreId) => {
+  const handleDelete = async (choreId: string) => {
     Alert.alert('Delete Chore', 'Remove this chore?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        await deleteDoc(doc(db, 'households', householdId, 'chores', choreId));
+        try {
+          await deleteDoc(doc(db, 'households', householdId, 'chores', choreId));
+        } catch (e) {
+          Alert.alert('Error', 'Could not delete chore.');
+        }
       }}
     ]);
   };
@@ -76,7 +91,7 @@ export default function ChoresScreen({ route, navigation }) {
   const pending = chores.filter(c => !c.done);
   const done = chores.filter(c => c.done);
 
-  const renderChore = ({ item }) => (
+  const renderChore = ({ item }: { item: Chore }) => (
     <View className="flex-row items-center bg-white rounded-2xl p-4 mb-3 border border-border shadow-sm">
       <TouchableOpacity className="mr-3" onPress={() => handleToggleDone(item)}>
         {item.done
@@ -107,7 +122,7 @@ export default function ChoresScreen({ route, navigation }) {
     <SafeAreaView className="flex-1 bg-background">
       {/* Header */}
       <ScreenHeader 
-        navigation={navigation} 
+        navigation={navigation as any} 
         title="Chores" 
         rightIcon="add" 
         rightIconColor="#D97706"
@@ -141,15 +156,13 @@ export default function ChoresScreen({ route, navigation }) {
           renderItem={renderChore}
           contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
           ListHeaderComponent={
-            chores.length > 0 && <Text className="text-textMuted text-xs font-bold tracking-widest mb-3 ml-1">TASKS</Text>
+            chores.length > 0 ? <Text className="text-textMuted text-xs font-bold tracking-widest mb-3 ml-1">TASKS</Text> : null
           }
           ListEmptyComponent={
             <EmptyState 
               icon="cleaning-services" 
               title="No chores assigned" 
               description="Your home is spotless! Tap the + button to assign new tasks."
-              iconBg="bg-warning/10"
-              iconColor="#D97706"
             />
           }
         />

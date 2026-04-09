@@ -8,8 +8,12 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../types';
 
-export default function LoginScreen() {
+type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
+
+export default function LoginScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,7 +21,7 @@ export default function LoginScreen() {
   const [username, setUsername] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
 
-  const normalizePhone = (phone) => {
+  const normalizePhone = (phone: string) => {
     return phone.replace(/[^\d+]/g, '');
   };
 
@@ -61,7 +65,7 @@ export default function LoginScreen() {
         await signInWithEmailAndPassword(auth, email, password);
         // No navigation needed here either!
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Auth Error:", error.code, error.message);
       let errorMessage = error.message;
 

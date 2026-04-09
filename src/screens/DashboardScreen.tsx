@@ -1,69 +1,96 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, Share } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
+import { useUser } from '../context/UserContext';
 import { useHouseholdMembers } from '../hooks/useHouseholdMembers';
 import SlideModal from '../components/SlideModal';
 import * as Clipboard from 'expo-clipboard';
-import { doc, getDoc, onSnapshot, updateDoc, arrayRemove } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, arrayRemove, collection, query, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { getActivityConfig } from '../utils/activityUtils';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList, Household, Activity } from '../types';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
 const NAV_ITEMS = [
   {
-    name: 'Grocery',
-    icon: 'shopping-cart',
+    name: 'Grocery' as const,
+    icon: 'shopping-cart' as const,
     color: '#111827',
     bg: '#FFFFFF',
     subtitle: 'Shared shopping list',
   },
   {
-    name: 'Expenses',
-    icon: 'receipt-long',
+    name: 'Expenses' as const,
+    icon: 'receipt-long' as const,
     color: '#111827',
     bg: '#FFFFFF',
     subtitle: 'Split bills & balances',
   },
   {
-    name: 'Chores',
-    icon: 'cleaning-services',
+    name: 'Chores' as const,
+    icon: 'cleaning-services' as const,
     color: '#111827',
     bg: '#FFFFFF',
     subtitle: 'Assign household tasks',
   },
+  {
+    name: 'Chat' as const,
+    icon: 'chat' as const,
+    color: '#111827',
+    bg: '#FFFFFF',
+    subtitle: 'Discuss with roommates',
+  },
 ];
 
-export default function DashboardScreen({ navigation, route }) {
-  const { householdId, householdData: initialData } = route.params || {};
+export default function DashboardScreen({ navigation, route }: Props) {
+  const { householdId, householdData: initialData } = route.params;
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isMembersModalVisible, setIsMembersModalVisible] = useState(false);
-  const [userData, setUserData] = useState(null);
-  const [householdData, setHouseholdData] = useState(initialData || null);
+  const { profile: userData } = useUser();
+  const [householdData, setHouseholdData] = useState<Household | null>(initialData || null);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const { memberProfiles } = useHouseholdMembers(householdData?.members);
-
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (auth.currentUser) {
-        try {
-          const snap = await getDoc(doc(db, 'users', auth.currentUser.uid));
-          if (snap.exists()) setUserData(snap.data());
-        } catch {}
-      }
-    };
-    fetchUserData();
-  }, []);
 
   useEffect(() => {
     if (!householdId) return;
     const unsub = onSnapshot(doc(db, 'households', householdId), (snap) => {
-      if (snap.exists()) setHouseholdData({ id: snap.id, ...snap.data() });
+      if (snap.exists()) setHouseholdData({ id: snap.id, ...snap.data() } as Household);
     });
     return unsub;
   }, [householdId]);
 
+  useEffect(() => {
+    if (!householdId) return;
+    const q = query(
+      collection(db, 'households', householdId, 'activities'),
+      orderBy('createdAt', 'desc'),
+      limit(10)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setActivities(snap.docs.map(d => ({ id: d.id, ...d.data() } as Activity)));
+    });
+    return unsub;
+  }, [householdId]);
+
+  const formatTime = (timestamp: Timestamp | null) => {
+    if (!timestamp) return 'Just now';
+    const date = timestamp.toDate();
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  };
+
   const members = householdData?.members || [];
   const isOwner = householdData?.createdBy === auth.currentUser?.uid;
 
-  const handleRemoveMember = async (memberUid) => {
+  const handleRemoveMember = async (memberUid: string) => {
     const profile = memberProfiles[memberUid];
     const name = profile?.username ? `@${profile.username}` : (profile?.email || 'this member');
     
@@ -80,7 +107,7 @@ export default function DashboardScreen({ navigation, route }) {
               await updateDoc(doc(db, 'households', householdId), {
                 members: arrayRemove(memberUid)
               });
-            } catch (e) {
+            } catch (e: any) {
               Alert.alert("Error", "Could not remove member: " + e.message);
             }
           }
@@ -89,7 +116,7 @@ export default function DashboardScreen({ navigation, route }) {
     );
   };
 
-  const handleNav = (screenName) => {
+  const handleNav = (screenName: 'Grocery' | 'Expenses' | 'Chores' | 'Chat') => {
     navigation.navigate(screenName, { householdId, members });
   };
 
@@ -147,7 +174,7 @@ export default function DashboardScreen({ navigation, route }) {
       </Modal>
 
       {/* Header */}
-      <View className="flex-row items-center mt-2 mb-6">
+      <View className="flex-row items-center mt-2 mb-8">
         <TouchableOpacity onPress={() => setIsMenuVisible(true)} className="mr-4 p-1">
           <MaterialIcons name="menu" size={28} color="#111827" />
         </TouchableOpacity>
@@ -159,10 +186,58 @@ export default function DashboardScreen({ navigation, route }) {
         </View>
       </View>
 
+      {/* Activity Feed */}
+      <View className="mb-10">
+        <View className="flex-row justify-between items-center mb-4">
+          <Text className="text-textMuted text-[10px] font-bold tracking-[2px] uppercase ml-1">What's Happening</Text>
+          <div className="w-1.5 h-1.5 rounded-full bg-success" />
+        </View>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          className="flex-row"
+          contentContainerStyle={{ paddingRight: 24 }}
+        >
+          {activities.length === 0 ? (
+            <View className="bg-white rounded-3xl p-5 border border-border border-dashed items-center justify-center w-[200px]">
+              <Text className="text-textMuted text-[11px] font-medium">No recent activities</Text>
+            </View>
+          ) : (
+            activities.map(act => {
+              const config = getActivityConfig(act.type);
+              return (
+                <View 
+                  key={act.id} 
+                  className="bg-white rounded-[28px] p-4 mr-4 border border-border shadow-sm flex-row items-center w-[230px]"
+                >
+                  <View 
+                    style={{ backgroundColor: `${config.color}15` }}
+                    className="w-10 h-10 rounded-full items-center justify-center mr-3"
+                  >
+                    <MaterialIcons name={config.icon as any} size={20} color={config.color} />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-textMain text-xs font-bold leading-tight" numberOfLines={1}>
+                      {act.userName}
+                    </Text>
+                    <Text className="text-textMuted text-[10px] font-medium leading-tight mt-0.5" numberOfLines={1}>
+                      {config.label} {act.title}
+                    </Text>
+                    <Text className="text-[#9CA3AF] text-[9px] font-bold mt-1.5 uppercase">
+                      {formatTime(act.createdAt)}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      </View>
+
       {/* Members Chip */}
       <TouchableOpacity 
         onPress={() => setIsMembersModalVisible(true)}
-        className="flex-row items-center gap-2 bg-white rounded-full px-4 py-1.5 self-start mb-10 border border-border shadow-sm"
+        className="flex-row items-center gap-2 bg-white rounded-full px-4 py-1.5 self-start mb-8 border border-border shadow-sm"
       >
         <MaterialIcons name="people" size={14} color="#6B7280" />
         <Text className="text-textMain text-[11px] font-bold">
@@ -171,16 +246,16 @@ export default function DashboardScreen({ navigation, route }) {
       </TouchableOpacity>
 
       {/* Feature Cards */}
-      <View className="flex-1 gap-6 items-center">
+      <View className="flex-1 gap-5 items-center">
         {NAV_ITEMS.map(item => (
           <TouchableOpacity
             key={item.name}
-            className="w-[90%] rounded-[32px] p-6 border justify-start shadow-sm bg-white border-gray-100"
+            className="w-[92%] rounded-[32px] p-6 border justify-start shadow-sm bg-white border-gray-100"
             onPress={() => handleNav(item.name)}
             activeOpacity={0.7}
           >
             <View className="w-12 h-12 rounded-2xl items-center justify-center mb-4 bg-gray-50">
-              <MaterialIcons name={item.icon} size={28} color={item.color} />
+              <MaterialIcons name={item.icon as any} size={28} color={item.color} />
             </View>
             <Text className="text-xl font-bold text-textMain mb-1">{item.name}</Text>
             <Text className="text-sm font-medium text-textMuted">{item.subtitle}</Text>

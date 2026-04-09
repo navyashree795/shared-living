@@ -6,9 +6,13 @@ import { auth, db } from '../firebaseConfig';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList, Household } from '../types';
 
-export default function HouseholdSelectionScreen({ navigation, route }) {
-  const [households, setHouseholds] = useState([]);
+type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdSelection'>;
+
+export default function HouseholdSelectionScreen({ navigation }: Props) {
+  const [households, setHouseholds] = useState<Household[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,7 +25,7 @@ export default function HouseholdSelectionScreen({ navigation, route }) {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      setHouseholds(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setHouseholds(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Household)));
       setLoading(false);
     }, (err) => {
       console.error("Error fetching households:", err);
@@ -31,11 +35,11 @@ export default function HouseholdSelectionScreen({ navigation, route }) {
     return unsub;
   }, []);
 
-  const handleSelect = (hh) => {
+  const handleSelect = (hh: Household) => {
     navigation.replace('Dashboard', { householdId: hh.id, householdData: hh });
   };
 
-  const renderItem = ({ item }) => (
+  const renderItem = ({ item }: { item: Household }) => (
     <TouchableOpacity 
       onPress={() => handleSelect(item)}
       activeOpacity={0.7}

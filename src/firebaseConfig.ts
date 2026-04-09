@@ -3,14 +3,14 @@ import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Configuration extracted from the user's Firebase console screenshot
+// Configuration extracted from environment variables for security
 const firebaseConfig = {
-  apiKey: "AIzaSyCnp_SZ0uT16bOSqeGP_bxPhQ2TPQR4GlM",
-  authDomain: "shared-living-app.firebaseapp.com",
-  projectId: "shared-living-app",
-  storageBucket: "shared-living-app.firebasestorage.app",
-  messagingSenderId: "362366255638",
-  appId: "1:362366255638:web:89e4a7c00f5aedbc60ab37"
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID
 };
 
 // Initialize Firebase App

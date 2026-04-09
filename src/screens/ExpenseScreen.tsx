@@ -1,0 +1,341 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View, Text, FlatList, TextInput, TouchableOpacity,
+  ActivityIndicator, Alert, Modal, ScrollView
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
+import { auth, db } from '../firebaseConfig';
+import { useHouseholdMembers } from '../hooks/useHouseholdMembers';
+import ScreenHeader from '../components/ScreenHeader';
+import EmptyState from '../components/EmptyState';
+import SlideModal from '../components/SlideModal';
+import {
+  collection, addDoc, onSnapshot, query, orderBy, serverTimestamp
+} from 'firebase/firestore';
+import { logActivity } from '../utils/activityUtils';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList, Expense } from '../types';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'Expenses'>;
+
+export default function ExpenseScreen({ route, navigation }: Props) {
+  const { householdId, members } = route.params;
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { getMemberName } = useHouseholdMembers(members);
+
+  // General States
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isSettleModalVisible, setIsSettleModalVisible] = useState(false);
+
+  // Expense States
+  const [title, setTitle] = useState('');
+  const [amount, setAmount] = useState('');
+  const [splitWith, setSplitWith] = useState<string[]>([]);
+
+  // Settlement States
+  const [settleAmount, setSettleAmount] = useState('');
+  const [settleToUid, setSettleToUid] = useState('');
+
+  useEffect(() => {
+    const q = query(
+      collection(db, 'households', householdId, 'expenses'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense)));
+      setLoading(false);
+    });
+    return unsub;
+  }, [householdId]);
+
+  const handleAddExpense = async () => {
+    const parsed = parseFloat(amount);
+    if (!title.trim() || isNaN(parsed) || parsed <= 0) {
+      Alert.alert('Error', 'Please enter a valid title and amount.');
+      return;
+    }
+    const paidByUid = auth.currentUser?.uid;
+    const allSplit = splitWith.length > 0 ? splitWith : (members || []);
+    try {
+      await addDoc(collection(db, 'households', householdId, 'expenses'), {
+        type: 'expense',
+        title: title.trim(),
+        amount: parsed,
+        paidByUid,
+        splitWith: allSplit,
+        perPerson: parsed / allSplit.length,
+        createdAt: serverTimestamp(),
+      });
+      logActivity(householdId, 'expense_add', title.trim(), parsed);
+      setTitle(''); setAmount(''); setSplitWith([]);
+      setIsModalVisible(false);
+    } catch (e) {
+      Alert.alert('Error', 'Could not add expense.');
+    }
+  };
+
+  const handleAddSettlement = async () => {
+    const parsed = parseFloat(settleAmount);
+    if (isNaN(parsed) || parsed <= 0 || !settleToUid) {
+      Alert.alert('Error', 'Please enter a valid amount and recipient.');
+      return;
+    }
+    try {
+      await addDoc(collection(db, 'households', householdId, 'expenses'), {
+        type: 'payment',
+        amount: parsed,
+        fromPaidUid: auth.currentUser?.uid,
+        toReceivedUid: settleToUid,
+        createdAt: serverTimestamp(),
+      });
+      logActivity(householdId, 'payment_add', getMemberName(settleToUid), parsed);
+      setSettleAmount(''); setSettleToUid('');
+      setIsSettleModalVisible(false);
+    } catch (e) {
+      Alert.alert('Error', 'Could not record settlement.');
+    }
+  };
+
+  const calculateBalances = () => {
+    const b: Record<string, number> = {};
+    (members || []).forEach(uid => { b[uid] = 0; });
+    expenses.forEach(exp => {
+      if (!exp.type || exp.type === 'expense') {
+        const share = exp.perPerson || (exp.amount / (exp.splitWith?.length || 1));
+        (exp.splitWith || []).forEach(uid => {
+          if (uid !== exp.paidByUid) {
+            b[uid] = (b[uid] || 0) - share;
+            if (exp.paidByUid) {
+              b[exp.paidByUid] = (b[exp.paidByUid] || 0) + share;
+            }
+          }
+        });
+      } else if (exp.type === 'payment') {
+        if (exp.fromPaidUid && exp.toReceivedUid) {
+          b[exp.fromPaidUid] = (b[exp.fromPaidUid] || 0) + exp.amount;
+          b[exp.toReceivedUid] = (b[exp.toReceivedUid] || 0) - exp.amount;
+        }
+      }
+    });
+    return b;
+  };
+
+  const balances = calculateBalances();
+
+  const renderExpense = ({ item }: { item: Expense }) => {
+    const isPayment = item.type === 'payment';
+    
+    return (
+      <View className={`flex-row items-center rounded-2xl p-4 mb-3 border shadow-sm ${isPayment ? 'bg-secondary/20 border-primary/20' : 'bg-white border-border'}`}>
+        <View className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${isPayment ? 'bg-primary/20' : 'bg-secondary'}`}>
+           <MaterialIcons name={isPayment ? "payment" : "receipt-long"} size={20} color={isPayment ? "#4F46E5" : "#6B7280"} />
+        </View>
+        <View className="flex-1">
+          <Text className="text-textMain text-base font-bold">
+            {isPayment ? 'Debt Settlement' : item.title}
+          </Text>
+          <Text className="text-textMuted text-xs font-medium mt-1">
+            {isPayment 
+              ? `${getMemberName(item.fromPaidUid || '')} paid ${getMemberName(item.toReceivedUid || '')}`
+              : `${getMemberName(item.paidByUid || '')} paid • split ${item.splitWith?.length || 1} ways`
+            }
+          </Text>
+        </View>
+        <View className="items-end pl-2 border-l border-border/50">
+          <Text className={`text-lg font-extrabold pb-0.5 ${isPayment ? 'text-primary' : 'text-textMain'}`}>
+            ₹{item.amount.toFixed(2)}
+          </Text>
+          {!isPayment && (
+            <Text className="text-textMuted text-[10px] font-bold tracking-wide">
+              ₹{(item.perPerson || 0).toFixed(2)} /EACH
+            </Text>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const toggleSplit = (uid: string) => {
+    setSplitWith(prev =>
+      prev.includes(uid) ? prev.filter(u => u !== uid) : [...prev, uid]
+    );
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-background">
+      {/* Header */}
+      <ScreenHeader 
+        navigation={navigation as any} 
+        title="Expenses" 
+        rightIcon="add" 
+        onRightPress={() => setIsModalVisible(true)} 
+      />
+
+      <TouchableOpacity 
+        onPress={() => setIsSettleModalVisible(true)}
+        className="mx-6 flex-row items-center justify-center bg-primary rounded-2xl py-3 px-4 mb-6 shadow-md shadow-primary/20"
+      >
+        <MaterialIcons name="done-all" size={20} color="#FFF" />
+        <Text className="text-white font-bold ml-2">Settle Up Balances</Text>
+      </TouchableOpacity>
+
+      {/* Balance Summary */}
+      <View className="mx-6 bg-white rounded-3xl p-6 mb-6 shadow-sm border border-border">
+        <Text className="text-textMuted text-xs font-bold tracking-widest mb-4">BALANCES</Text>
+        {Object.entries(balances).map(([uid, amount]) => (
+          <View key={uid} className="flex-row justify-between mb-3 last:mb-0">
+            <Text className="text-textMain text-sm font-bold">{getMemberName(uid)}</Text>
+            <Text className={`text-base font-extrabold ${amount >= 0 ? 'text-success' : 'text-danger'}`}>
+              {amount >= 0 ? '+' : ''}₹{Math.abs(amount).toFixed(2)}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color="#4F46E5" className="mt-10" />
+      ) : (
+        <FlatList
+          data={expenses}
+          keyExtractor={i => i.id}
+          renderItem={renderExpense}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
+          ListHeaderComponent={
+            expenses.length > 0 ? <Text className="text-textMuted text-xs font-bold tracking-widest mb-3 ml-1">TRANSACTIONS</Text> : null
+          }
+          ListEmptyComponent={
+            <EmptyState 
+              icon="receipt-long" 
+              title="No expenses yet" 
+              description="Tap the + button above to log your first shared bill."
+            />
+          }
+        />
+      )}
+
+      {/* Add Expense Modal */}
+      <SlideModal
+        visible={isModalVisible}
+        onClose={() => setIsModalVisible(false)}
+        title="Add Expense"
+      >
+        <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
+          <Text className="text-textMuted text-sm font-bold mb-2 ml-1">What was it for?</Text>
+          <TextInput 
+            className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border mb-5" 
+            placeholder="e.g. Groceries, Netflix" 
+            placeholderTextColor="#9CA3AF"
+            value={title} 
+            onChangeText={setTitle} 
+          />
+          
+          <Text className="text-textMuted text-sm font-bold mb-2 ml-1">Total Amount (₹)</Text>
+          <TextInput 
+            className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base font-bold border border-border" 
+            placeholder="0.00" 
+            placeholderTextColor="#9CA3AF"
+            value={amount} 
+            onChangeText={setAmount} 
+            keyboardType="decimal-pad" 
+          />
+        </View>
+
+        <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
+          <Text className="text-textMuted text-xs font-bold tracking-widest mb-4">SELECTION (TAP TO TOGGLE)</Text>
+          {(members || []).map(uid => {
+            const isSelected = splitWith.length === 0 || splitWith.includes(uid);
+            return (
+              <TouchableOpacity 
+                key={uid} 
+                className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-secondary/40 border-primary/30' : 'bg-background border-border'} `}
+                onPress={() => toggleSplit(uid)}
+              >
+                <MaterialIcons
+                  name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
+                  size={24} 
+                  color={isSelected ? '#4F46E5' : '#9CA3AF'}
+                />
+                <Text className={`text-base font-bold ml-3 ${isSelected ? 'text-primary' : 'text-textMuted'}`}>
+                  {getMemberName(uid)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <TouchableOpacity 
+          className="bg-primary rounded-2xl py-4 items-center shadow-lg shadow-primary/30 mb-8" 
+          onPress={handleAddExpense}
+        >
+          <Text className="text-white font-bold text-lg">Split Expense</Text>
+        </TouchableOpacity>
+      </SlideModal>
+
+      {/* Settle Up Modal */}
+      <SlideModal
+        visible={isSettleModalVisible}
+        onClose={() => setIsSettleModalVisible(false)}
+        title="Settle Up"
+      >
+        <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
+          <Text className="text-textMuted text-sm font-bold mb-4 ml-1">Recording a payment you made</Text>
+          
+          <Text className="text-textMuted text-xs font-bold tracking-widest mb-2 ml-1">WHO DID YOU PAY?</Text>
+          {(members || []).filter(u => u !== auth.currentUser?.uid).map(uid => {
+            const isSelected = settleToUid === uid;
+            const balance = balances[uid] || 0;
+            return (
+              <TouchableOpacity 
+                key={uid} 
+                className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-primary/5 border-primary/30' : 'bg-background border-border'} `}
+                onPress={() => {
+                  setSettleToUid(uid);
+                  // Auto-suggest the amount if you owe them
+                  const myBalance = balances[auth.currentUser?.uid || ''] || 0;
+                  if (myBalance < 0) {
+                    setSettleAmount(Math.abs(myBalance).toFixed(0));
+                  }
+                }}
+              >
+                <MaterialIcons
+                  name={isSelected ? 'radio-button-checked' : 'radio-button-unchecked'}
+                  size={24} 
+                  color={isSelected ? '#4F46E5' : '#9CA3AF'}
+                />
+                <View className="flex-1 ml-3">
+                  <Text className={`text-base font-bold ${isSelected ? 'text-primary' : 'text-textMain'}`}>
+                    {getMemberName(uid)}
+                  </Text>
+                  <Text className="text-[10px] text-textMuted font-medium uppercase">
+                    {balance > 0 ? `They are owed ₹${balance.toFixed(0)}` : `They owe ₹${Math.abs(balance).toFixed(0)}`}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+
+          <View className="h-[1px] bg-border my-5" />
+
+          <Text className="text-textMuted text-sm font-bold mb-2 ml-1">Amount Settled (₹)</Text>
+          <TextInput 
+            className="bg-background rounded-xl px-4 py-4 text-textMain text-xl font-black border border-border" 
+            placeholder="0" 
+            placeholderTextColor="#9CA3AF"
+            value={settleAmount} 
+            onChangeText={setSettleAmount} 
+            keyboardType="decimal-pad" 
+          />
+        </View>
+
+        <TouchableOpacity 
+          className="bg-success rounded-2xl py-4 items-center shadow-lg shadow-success/30 mb-8" 
+          onPress={handleAddSettlement}
+        >
+          <Text className="text-white font-bold text-lg">Record Payment</Text>
+        </TouchableOpacity>
+      </SlideModal>
+    </SafeAreaView>
+  );
+}
