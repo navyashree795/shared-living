@@ -6,6 +6,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
+import { useHouseholdMembers } from '../hooks/useHouseholdMembers';
+import ScreenHeader from '../components/ScreenHeader';
+import EmptyState from '../components/EmptyState';
+import SlideModal from '../components/SlideModal';
 import {
   collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, getDoc
 } from 'firebase/firestore';
@@ -13,25 +17,7 @@ import {
 export default function ChoresScreen({ route, navigation }) {
   const { householdId, members } = route.params;
   const [chores, setChores] = useState([]);
-  const [memberProfiles, setMemberProfiles] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [choreTitle, setChoreTitle] = useState('');
-  const [assignedTo, setAssignedTo] = useState(auth.currentUser?.uid || '');
-
-  useEffect(() => {
-    const fetchProfiles = async () => {
-      const profiles = {};
-      for (const uid of (members || [])) {
-        try {
-          const snap = await getDoc(doc(db, 'users', uid));
-          if (snap.exists()) profiles[uid] = snap.data();
-        } catch {}
-      }
-      setMemberProfiles(profiles);
-    };
-    fetchProfiles();
-  }, [members]);
+  const { memberProfiles, getMemberName } = useHouseholdMembers(members);
 
   useEffect(() => {
     const q = query(
@@ -45,12 +31,7 @@ export default function ChoresScreen({ route, navigation }) {
     return unsub;
   }, [householdId]);
 
-  const getMemberName = (uid) => {
-    if (uid === auth.currentUser?.uid) return 'You';
-    const profile = memberProfiles[uid];
-    if (profile?.username) return `@${profile.username}`;
-    return profile?.email?.split('@')[0] || 'Member';
-  };
+
 
   const handleAddChore = async () => {
     if (!choreTitle.trim()) { Alert.alert('Error', 'Please enter a chore name.'); return; }
@@ -125,18 +106,15 @@ export default function ChoresScreen({ route, navigation }) {
   return (
     <SafeAreaView className="flex-1 bg-background">
       {/* Header */}
-      <View className="flex-row items-center justify-between px-6 pt-4 pb-6">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="p-2 -ml-2 bg-white rounded-full border border-border shadow-sm">
-          <MaterialIcons name="arrow-back" size={24} color="#111827" />
-        </TouchableOpacity>
-        <Text className="flex-1 text-2xl font-extrabold text-textMain ml-4">Chores</Text>
-        <TouchableOpacity 
-          className="bg-warning/10 rounded-full w-10 h-10 items-center justify-center border border-warning/30"
-          onPress={() => setIsModalVisible(true)}
-        >
-          <MaterialIcons name="add" size={24} color="#D97706" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader 
+        navigation={navigation} 
+        title="Chores" 
+        rightIcon="add" 
+        rightIconColor="#D97706"
+        rightIconBg="bg-warning/10"
+        rightIconBorder="border-warning/30"
+        onRightPress={() => setIsModalVisible(true)} 
+      />
 
       {/* Stats row */}
       <View className="flex-row items-center gap-3 px-6 mb-6">
@@ -166,76 +144,64 @@ export default function ChoresScreen({ route, navigation }) {
             chores.length > 0 && <Text className="text-textMuted text-xs font-bold tracking-widest mb-3 ml-1">TASKS</Text>
           }
           ListEmptyComponent={
-            <View className="items-center mt-6 bg-white p-8 rounded-3xl border border-border border-dashed">
-              <View className="w-16 h-16 rounded-full bg-warning/10 items-center justify-center mb-4 border border-warning/20">
-                <MaterialIcons name="cleaning-services" size={32} color="#D97706" />
-              </View>
-              <Text className="text-textMain text-lg font-bold mb-1">No chores assigned</Text>
-              <Text className="text-textMuted text-sm text-center">Your home is spotless! Tap the + button to assign new tasks.</Text>
-            </View>
+            <EmptyState 
+              icon="cleaning-services" 
+              title="No chores assigned" 
+              description="Your home is spotless! Tap the + button to assign new tasks."
+              iconBg="bg-warning/10"
+              iconColor="#D97706"
+            />
           }
         />
       )}
 
       {/* Add Chore Modal */}
-      <Modal visible={isModalVisible} transparent animationType="slide">
-        <View className="flex-1 bg-black/50 justify-end">
-          <View className="bg-background rounded-t-[32px] p-6 max-h-[90%] shadow-2xl pb-10">
-            
-            <View className="flex-row justify-between items-center mb-6 pt-2">
-              <Text className="text-textMain text-2xl font-extrabold">Add Chore</Text>
-              <TouchableOpacity onPress={() => setIsModalVisible(false)} className="bg-white p-2 rounded-full border border-border shadow-sm">
-                <MaterialIcons name="close" size={20} color="#111827" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              
-              <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
-                <Text className="text-textMuted text-sm font-bold mb-2 ml-1">What needs to be done?</Text>
-                <TextInput 
-                  className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border" 
-                  placeholder="e.g. Taking out the trash" 
-                  placeholderTextColor="#9CA3AF"
-                  value={choreTitle} 
-                  onChangeText={setChoreTitle} 
-                />
-              </View>
-
-              <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
-                <Text className="text-textMuted text-xs font-bold tracking-widest mb-4">ASSIGN TO</Text>
-                {(members || []).map(uid => {
-                  const isSelected = assignedTo === uid;
-                  return (
-                    <TouchableOpacity 
-                      key={uid} 
-                      className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-warning/10 border-warning/30' : 'bg-background border-border'} `}
-                      onPress={() => setAssignedTo(uid)}
-                    >
-                      <MaterialIcons
-                        name={isSelected ? 'radio-button-checked' : 'radio-button-unchecked'}
-                        size={24} 
-                        color={isSelected ? '#D97706' : '#9CA3AF'}
-                      />
-                      <Text className={`text-base font-bold ml-3 ${isSelected ? 'text-warning' : 'text-textMuted'}`}>
-                        {getMemberName(uid)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <TouchableOpacity 
-                className="bg-warning rounded-2xl py-4 items-center shadow-lg shadow-warning/30 mb-8" 
-                onPress={handleAddChore}
-              >
-                <Text className="text-white font-bold text-lg">Assign Chore</Text>
-              </TouchableOpacity>
-              
-            </ScrollView>
-          </View>
+      <SlideModal
+        visible={isModalVisible}
+        onClose={() => setIsModalVisible(false)}
+        title="Add Chore"
+      >
+        <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
+          <Text className="text-textMuted text-sm font-bold mb-2 ml-1">What needs to be done?</Text>
+          <TextInput 
+            className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border" 
+            placeholder="e.g. Taking out the trash" 
+            placeholderTextColor="#9CA3AF"
+            value={choreTitle} 
+            onChangeText={setChoreTitle} 
+          />
         </View>
-      </Modal>
+
+        <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
+          <Text className="text-textMuted text-xs font-bold tracking-widest mb-4">ASSIGN TO</Text>
+          {(members || []).map(uid => {
+            const isSelected = assignedTo === uid;
+            return (
+              <TouchableOpacity 
+                key={uid} 
+                className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-warning/10 border-warning/30' : 'bg-background border-border'} `}
+                onPress={() => setAssignedTo(uid)}
+              >
+                <MaterialIcons
+                  name={isSelected ? 'radio-button-checked' : 'radio-button-unchecked'}
+                  size={24} 
+                  color={isSelected ? '#D97706' : '#9CA3AF'}
+                />
+                <Text className={`text-base font-bold ml-3 ${isSelected ? 'text-warning' : 'text-textMuted'}`}>
+                  {getMemberName(uid)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <TouchableOpacity 
+          className="bg-warning rounded-2xl py-4 items-center shadow-lg shadow-warning/30 mb-8" 
+          onPress={handleAddChore}
+        >
+          <Text className="text-white font-bold text-lg">Assign Chore</Text>
+        </TouchableOpacity>
+      </SlideModal>
     </SafeAreaView>
   );
 }

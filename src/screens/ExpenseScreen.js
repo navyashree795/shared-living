@@ -6,6 +6,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
+import { useHouseholdMembers } from '../hooks/useHouseholdMembers';
+import ScreenHeader from '../components/ScreenHeader';
+import EmptyState from '../components/EmptyState';
+import SlideModal from '../components/SlideModal';
 import {
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, getDoc, doc
 } from 'firebase/firestore';
@@ -13,26 +17,7 @@ import {
 export default function ExpenseScreen({ route, navigation }) {
   const { householdId, members } = route.params;
   const [expenses, setExpenses] = useState([]);
-  const [memberProfiles, setMemberProfiles] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [title, setTitle] = useState('');
-  const [amount, setAmount] = useState('');
-  const [splitWith, setSplitWith] = useState([]);
-
-  useEffect(() => {
-    const fetchProfiles = async () => {
-      const profiles = {};
-      for (const uid of (members || [])) {
-        try {
-          const snap = await getDoc(doc(db, 'users', uid));
-          if (snap.exists()) profiles[uid] = snap.data();
-        } catch {}
-      }
-      setMemberProfiles(profiles);
-    };
-    fetchProfiles();
-  }, [members]);
+  const { memberProfiles, getMemberName } = useHouseholdMembers(members);
 
   useEffect(() => {
     const q = query(
@@ -46,12 +31,7 @@ export default function ExpenseScreen({ route, navigation }) {
     return unsub;
   }, [householdId]);
 
-  const getMemberName = (uid) => {
-    if (uid === auth.currentUser?.uid) return 'You';
-    const profile = memberProfiles[uid];
-    if (profile?.username) return `@${profile.username}`;
-    return profile?.email?.split('@')[0] || 'Member';
-  };
+
 
   const handleAddExpense = async () => {
     const parsed = parseFloat(amount);
@@ -124,18 +104,12 @@ export default function ExpenseScreen({ route, navigation }) {
   return (
     <SafeAreaView className="flex-1 bg-background">
       {/* Header */}
-      <View className="flex-row items-center justify-between px-6 pt-4 pb-6">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="p-2 -ml-2 bg-white rounded-full border border-border shadow-sm">
-          <MaterialIcons name="arrow-back" size={24} color="#111827" />
-        </TouchableOpacity>
-        <Text className="text-2xl font-extrabold text-textMain ml-4">Expenses</Text>
-        <TouchableOpacity 
-          className="bg-primary/10 rounded-full w-10 h-10 items-center justify-center border border-primary/20 ml-auto"
-          onPress={() => setIsModalVisible(true)}
-        >
-          <MaterialIcons name="add" size={24} color="#4F46E5" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader 
+        navigation={navigation} 
+        title="Expenses" 
+        rightIcon="add" 
+        onRightPress={() => setIsModalVisible(true)} 
+      />
 
       {/* Balance Summary */}
       <View className="mx-6 bg-white rounded-3xl p-6 mb-6 shadow-sm border border-border">
@@ -162,86 +136,72 @@ export default function ExpenseScreen({ route, navigation }) {
             expenses.length > 0 && <Text className="text-textMuted text-xs font-bold tracking-widest mb-3 ml-1">TRANSACTIONS</Text>
           }
           ListEmptyComponent={
-            <View className="items-center mt-12 bg-white p-8 rounded-3xl border border-border border-dashed">
-              <View className="w-16 h-16 rounded-full bg-secondary items-center justify-center mb-4 border border-primary/10">
-                <MaterialIcons name="receipt-long" size={32} color="#4F46E5" />
-              </View>
-              <Text className="text-textMain text-lg font-bold mb-1">No expenses yet</Text>
-              <Text className="text-textMuted text-sm text-center">Tap the + button above to log your first shared bill.</Text>
-            </View>
+            <EmptyState 
+              icon="receipt-long" 
+              title="No expenses yet" 
+              description="Tap the + button above to log your first shared bill."
+            />
           }
         />
       )}
 
       {/* Add Expense Modal */}
-      <Modal visible={isModalVisible} transparent animationType="slide">
-        <View className="flex-1 bg-black/50 justify-end">
-          <View className="bg-background rounded-t-[32px] p-6 max-h-[90%] shadow-2xl pb-10">
-            
-            <View className="flex-row justify-between items-center mb-6 pt-2">
-              <Text className="text-textMain text-2xl font-extrabold">Add Expense</Text>
-              <TouchableOpacity onPress={() => setIsModalVisible(false)} className="bg-white p-2 rounded-full border border-border shadow-sm">
-                <MaterialIcons name="close" size={20} color="#111827" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              
-              <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
-                <Text className="text-textMuted text-sm font-bold mb-2 ml-1">What was it for?</Text>
-                <TextInput 
-                  className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border mb-5" 
-                  placeholder="e.g. Groceries, Netflix" 
-                  placeholderTextColor="#9CA3AF"
-                  value={title} 
-                  onChangeText={setTitle} 
-                />
-                
-                <Text className="text-textMuted text-sm font-bold mb-2 ml-1">Total Amount (₹)</Text>
-                <TextInput 
-                  className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base font-bold border border-border" 
-                  placeholder="0.00" 
-                  placeholderTextColor="#9CA3AF"
-                  value={amount} 
-                  onChangeText={setAmount} 
-                  keyboardType="decimal-pad" 
-                />
-              </View>
-
-              <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
-                <Text className="text-textMuted text-xs font-bold tracking-widest mb-4">SELECTION (TAP TO TOGGLE)</Text>
-                {(members || []).map(uid => {
-                  const isSelected = splitWith.length === 0 || splitWith.includes(uid);
-                  return (
-                    <TouchableOpacity 
-                      key={uid} 
-                      className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-secondary/40 border-primary/30' : 'bg-background border-border'} `}
-                      onPress={() => toggleSplit(uid)}
-                    >
-                      <MaterialIcons
-                        name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
-                        size={24} 
-                        color={isSelected ? '#4F46E5' : '#9CA3AF'}
-                      />
-                      <Text className={`text-base font-bold ml-3 ${isSelected ? 'text-primary' : 'text-textMuted'}`}>
-                        {getMemberName(uid)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <TouchableOpacity 
-                className="bg-primary rounded-2xl py-4 items-center shadow-lg shadow-primary/30 mb-8" 
-                onPress={handleAddExpense}
-              >
-                <Text className="text-white font-bold text-lg">Split Expense</Text>
-              </TouchableOpacity>
-              
-            </ScrollView>
-          </View>
+      <SlideModal
+        visible={isModalVisible}
+        onClose={() => setIsModalVisible(false)}
+        title="Add Expense"
+      >
+        <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
+          <Text className="text-textMuted text-sm font-bold mb-2 ml-1">What was it for?</Text>
+          <TextInput 
+            className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border mb-5" 
+            placeholder="e.g. Groceries, Netflix" 
+            placeholderTextColor="#9CA3AF"
+            value={title} 
+            onChangeText={setTitle} 
+          />
+          
+          <Text className="text-textMuted text-sm font-bold mb-2 ml-1">Total Amount (₹)</Text>
+          <TextInput 
+            className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base font-bold border border-border" 
+            placeholder="0.00" 
+            placeholderTextColor="#9CA3AF"
+            value={amount} 
+            onChangeText={setAmount} 
+            keyboardType="decimal-pad" 
+          />
         </View>
-      </Modal>
+
+        <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
+          <Text className="text-textMuted text-xs font-bold tracking-widest mb-4">SELECTION (TAP TO TOGGLE)</Text>
+          {(members || []).map(uid => {
+            const isSelected = splitWith.length === 0 || splitWith.includes(uid);
+            return (
+              <TouchableOpacity 
+                key={uid} 
+                className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-secondary/40 border-primary/30' : 'bg-background border-border'} `}
+                onPress={() => toggleSplit(uid)}
+              >
+                <MaterialIcons
+                  name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
+                  size={24} 
+                  color={isSelected ? '#4F46E5' : '#9CA3AF'}
+                />
+                <Text className={`text-base font-bold ml-3 ${isSelected ? 'text-primary' : 'text-textMuted'}`}>
+                  {getMemberName(uid)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <TouchableOpacity 
+          className="bg-primary rounded-2xl py-4 items-center shadow-lg shadow-primary/30 mb-8" 
+          onPress={handleAddExpense}
+        >
+          <Text className="text-white font-bold text-lg">Split Expense</Text>
+        </TouchableOpacity>
+      </SlideModal>
     </SafeAreaView>
   );
 }

@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import ScreenHeader from '../components/ScreenHeader';
+import EmptyState from '../components/EmptyState';
 
 export default function HouseholdSelectionScreen({ navigation, route }) {
   const [households, setHouseholds] = useState([]);
@@ -63,23 +65,22 @@ export default function HouseholdSelectionScreen({ navigation, route }) {
 
   return (
     <SafeAreaView className="flex-1 bg-background px-6">
-      <View className="mt-8 mb-10 flex-row justify-between items-start">
-        <View>
-          <Text className="text-4xl font-black text-textMain tracking-tighter">My Projects</Text>
-          <Text className="text-textMuted text-base font-medium mt-1">Select a household to continue</Text>
-        </View>
-        <TouchableOpacity 
-          onPress={() => {
-            Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-              { text: "Cancel", style: "cancel" },
-              { text: "Sign Out", style: "destructive", onPress: () => auth.signOut() }
-            ]);
-          }}
-          className="bg-danger/10 p-3 rounded-2xl border border-danger/20"
-        >
-          <MaterialIcons name="logout" size={24} color="#EF4444" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader 
+        navigation={navigation} 
+        title="My Projects" 
+        hideBack={true}
+        rightIcon="logout"
+        rightIconColor="#EF4444"
+        rightIconBg="bg-danger/10"
+        rightIconBorder="border-danger/20"
+        onRightPress={() => {
+          Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+            { text: "Cancel", style: "cancel" },
+            { text: "Sign Out", style: "destructive", onPress: () => auth.signOut() }
+          ]);
+        }}
+      />
+      <Text className="text-textMuted text-base font-medium px-6 mb-10 -mt-4">Select a household to continue</Text>
 
       <FlatList
         data={households}
@@ -88,15 +89,11 @@ export default function HouseholdSelectionScreen({ navigation, route }) {
         contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View className="items-center mt-12 bg-white p-10 rounded-[40px] border border-border border-dashed">
-            <View className="w-20 h-20 rounded-full bg-secondary items-center justify-center mb-6 border border-primary/10">
-               <MaterialIcons name="house-siding" size={40} color="#4F46E5" />
-            </View>
-            <Text className="text-xl font-bold text-textMain mb-2 text-center">No households joined</Text>
-            <Text className="text-textMuted text-sm text-center px-4 leading-5">
-              Create your own project or join an existing one using an invite code.
-            </Text>
-          </View>
+          <EmptyState 
+            icon="house-siding" 
+            title="No households joined" 
+            description="Create your own project or join an existing one using an invite code."
+          />
         }
       />
 

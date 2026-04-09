@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import ScreenHeader from '../components/ScreenHeader';
+import EmptyState from '../components/EmptyState';
 import { auth, db } from '../firebaseConfig';
 import {
   collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, getDoc
@@ -107,15 +109,11 @@ export default function GroceryScreen({ route, navigation }) {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
         
         {/* Header */}
-        <View className="flex-row items-center justify-between px-6 pt-4 pb-6">
-          <TouchableOpacity onPress={() => navigation.goBack()} className="p-2 -ml-2 bg-white rounded-full border border-border shadow-sm">
-            <MaterialIcons name="arrow-back" size={24} color="#111827" />
-          </TouchableOpacity>
-          <Text className="flex-1 text-2xl font-extrabold text-textMain ml-4">Grocery List</Text>
+        <ScreenHeader navigation={navigation} title="Grocery List">
           <View className="bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20">
              <Text className="text-primary font-bold text-xs tracking-wider">{pending.length} LEFT</Text>
           </View>
-        </View>
+        </ScreenHeader>
 
         {loading ? (
           <ActivityIndicator color="#4F46E5" className="mt-10" />
@@ -126,13 +124,11 @@ export default function GroceryScreen({ route, navigation }) {
             renderItem={renderItem}
             contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 130 }}
             ListEmptyComponent={
-              <View className="items-center mt-20">
-                <View className="w-20 h-20 rounded-full bg-secondary items-center justify-center mb-4 shadow-sm border border-primary/20">
-                  <MaterialIcons name="shopping-cart" size={40} color="#4F46E5" />
-                </View>
-                <Text className="text-lg font-bold text-textMain mb-1">Your list is empty!</Text>
-                <Text className="text-sm text-textMuted text-center px-8">Add your first item below so your roommates know what to buy.</Text>
-              </View>
+              <EmptyState 
+                icon="shopping-cart" 
+                title="Your list is empty!" 
+                description="Add your first item below so your roommates know what to buy."
+              />
             }
             ListHeaderComponent={done.length > 0 && pending.length > 0 ? (
               <Text className="text-textMuted text-xs font-bold tracking-widest my-3 ml-1">COMPLETED</Text>

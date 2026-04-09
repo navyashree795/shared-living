@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import ScreenHeader from '../components/ScreenHeader';
 import { auth, db } from '../firebaseConfig';
 import {
   doc, setDoc, updateDoc, query, collection,
@@ -135,15 +136,8 @@ export default function HouseholdSetupScreen({ navigation, route }) {
           contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
+          <ScreenHeader navigation={navigation} title={activeTab === 'join' ? 'Join Existing' : 'Create New'} />
           <View className="items-center mb-10">
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              className="absolute left-0 top-0 p-2"
-            >
-              <MaterialIcons name="arrow-back" size={24} color="#4F46E5" />
-            </TouchableOpacity>
-            <Text className="text-3xl font-extrabold text-primary mb-2">Setup</Text>
             <Text className="text-base text-textMuted text-center">
               Create a new household or join an existing one.
             </Text>

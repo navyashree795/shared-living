@@ -8,13 +8,17 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "scheme": "shared-living",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jeevan0714.sharedliving",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.jeevan0714.sharedliving",
@@ -28,14 +32,18 @@
     },
     "extra": {
       "eas": {
-        "projectId": "e89eedb3-cef7-4ea2-a1bc-dcae5de76407"
+        "projectId": "4ee025d3-8a00-4784-830b-8eb4db7d34dc"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/e89eedb3-cef7-4ea2-a1bc-dcae5de76407"
-    }
+      "url": "https://u.expo.dev/4ee025d3-8a00-4784-830b-8eb4db7d34dc",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "owner": "jeevan0714"
   }
 }
