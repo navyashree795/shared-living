@@ -20,10 +20,12 @@ import { RootStackParamList, Expense } from '../types';
 type Props = NativeStackScreenProps<RootStackParamList, 'Expenses'>;
 
 export default function ExpenseScreen({ route, navigation }: Props) {
-  const { householdId, members } = route.params;
+  console.log("ExpenseScreen rendering, params:", route.params);
+  const { householdId, members = [] } = route.params || {};
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
-  const { getMemberName } = useHouseholdMembers(members);
+  const householdMembers = useHouseholdMembers(members);
+  const getMemberName = householdMembers?.getMemberName || ((uid: string) => uid === auth.currentUser?.uid ? 'You' : 'Member');
 
   // General States
   const [isModalVisible, setIsModalVisible] = useState(false);

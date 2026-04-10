@@ -9,7 +9,6 @@ import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import { auth, db } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
-import { Lucide } from '@expo/vector-icons';
 import { logActivity } from '../utils/activityUtils';
 import {
   collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp
@@ -22,19 +21,19 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Grocery'>;
 interface Category {
   id: string;
   name: string;
-  icon: any;
+  icon: keyof typeof MaterialIcons.glyphMap;
   bg: string;
   text: string;
 }
 
 const CATEGORIES: Category[] = [
-  { id: 'produce', name: 'Fresh Produce', icon: 'leaf', bg: 'bg-[#EFFDF5]', text: 'text-[#059669]' },
-  { id: 'dairy', name: 'Dairy & Chilled', icon: 'milk', bg: 'bg-[#F0F9FF]', text: 'text-[#0284C7]' },
-  { id: 'meat', name: 'Meat & Seafood', icon: 'beef', bg: 'bg-[#FFF1F2]', text: 'text-[#E11D48]' },
-  { id: 'staples', name: 'Kitchen Staples', icon: 'wheat', bg: 'bg-[#FEFBE8]', text: 'text-[#CA8A04]' },
-  { id: 'essentials', name: 'Home Essentials', icon: 'sparkles', bg: 'bg-[#F5F3FF]', text: 'text-[#7C3AED]' },
-  { id: 'drinks', name: 'Drinks & Spirits', icon: 'glass-water', bg: 'bg-[#F1F5F9]', text: 'text-[#475569]' },
-  { id: 'misc', name: 'Miscellaneous', icon: 'package', bg: 'bg-[#F9FAFB]', text: 'text-[#6B7280]' },
+  { id: 'produce', name: 'Fresh Produce', icon: 'eco', bg: 'bg-[#EFFDF5]', text: 'text-[#059669]' },
+  { id: 'dairy', name: 'Dairy & Chilled', icon: 'coffee', bg: 'bg-[#F0F9FF]', text: 'text-[#0284C7]' },
+  { id: 'meat', name: 'Meat & Seafood', icon: 'restaurant', bg: 'bg-[#FFF1F2]', text: 'text-[#E11D48]' },
+  { id: 'staples', name: 'Kitchen Staples', icon: 'bakery-dining', bg: 'bg-[#FEFBE8]', text: 'text-[#CA8A04]' },
+  { id: 'essentials', name: 'Home Essentials', icon: 'auto-awesome', bg: 'bg-[#F5F3FF]', text: 'text-[#7C3AED]' },
+  { id: 'drinks', name: 'Drinks & Spirits', icon: 'local-bar', bg: 'bg-[#F1F5F9]', text: 'text-[#475569]' },
+  { id: 'misc', name: 'Miscellaneous', icon: 'inventory', bg: 'bg-[#F9FAFB]', text: 'text-[#6B7280]' },
 ];
 
 export default function GroceryScreen({ route, navigation }: Props) {
@@ -147,7 +146,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
         </TouchableOpacity>
         
         <View className={`${category.bg} w-10 h-10 rounded-xl items-center justify-center mr-3`}>
-          <Lucide name={category.icon} size={20} className={category.text} />
+          <MaterialIcons name={category.icon} size={20} className={category.text} />
         </View>
 
         <View className="flex-1">
@@ -234,7 +233,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
                 onPress={() => setSelectedCategory(cat)}
                 className={`flex-row items-center px-4 py-2 rounded-full mr-3 border ${selectedCategory.id === cat.id ? 'bg-primary border-primary' : 'bg-background border-border shadow-sm'}`}
               >
-                <Lucide 
+                <MaterialIcons 
                   name={cat.icon} 
                   size={14} 
                   color={selectedCategory.id === cat.id ? '#FFF' : '#6B7280'} 

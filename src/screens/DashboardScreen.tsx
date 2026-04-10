@@ -189,8 +189,8 @@ export default function DashboardScreen({ navigation, route }: Props) {
       {/* Activity Feed */}
       <View className="mb-10">
         <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-textMuted text-[10px] font-bold tracking-[2px] uppercase ml-1">What's Happening</Text>
-          <div className="w-1.5 h-1.5 rounded-full bg-success" />
+          <Text className="text-textMuted text-[10px] font-bold tracking-[2px] uppercase ml-1">{"What's Happening"}</Text>
+          <View className="w-1.5 h-1.5 rounded-full bg-success" />
         </View>
         <ScrollView 
           horizontal 
