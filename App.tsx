@@ -32,37 +32,37 @@ function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator 
-        screenOptions={{ headerShown: false }}
-        initialRouteName={user ? "HouseholdSelection" : "Login"}
-      >
-        {user ? (
-          <Stack.Group>
-            <Stack.Screen name="HouseholdSelection" component={HouseholdSelectionScreen} />
-            <Stack.Screen name="HouseholdSetup" component={HouseholdSetupScreen} />
-            <Stack.Screen name="Dashboard" component={DashboardScreen} />
-            <Stack.Screen name="Grocery" component={GroceryScreen} />
-            <Stack.Screen name="Expenses" component={ExpenseScreen} />
-            <Stack.Screen name="Chores" component={ChoresScreen} />
-            <Stack.Screen name="Chat" component={ChatScreen} />
-          </Stack.Group>
-        ) : (
-          <Stack.Group>
-            <Stack.Screen name="Login" component={LoginScreen} />
-          </Stack.Group>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <Stack.Navigator 
+      screenOptions={{ headerShown: false }}
+      initialRouteName={user ? "HouseholdSelection" : "Login"}
+    >
+      {user ? (
+        <Stack.Group>
+          <Stack.Screen name="HouseholdSelection" component={HouseholdSelectionScreen} />
+          <Stack.Screen name="HouseholdSetup" component={HouseholdSetupScreen} />
+          <Stack.Screen name="Dashboard" component={DashboardScreen} />
+          <Stack.Screen name="Grocery" component={GroceryScreen} />
+          <Stack.Screen name="Expenses" component={ExpenseScreen} />
+          <Stack.Screen name="Chores" component={ChoresScreen} />
+          <Stack.Screen name="Chat" component={ChatScreen} />
+        </Stack.Group>
+      ) : (
+        <Stack.Group>
+          <Stack.Screen name="Login" component={LoginScreen} />
+        </Stack.Group>
+      )}
+    </Stack.Navigator>
   );
 }
 
 export default function App() {
   return (
     <SafeAreaProvider>
-      <StatusBar style="auto" />
       <UserProvider>
-        <RootNavigator />
+        <NavigationContainer>
+          <StatusBar style="auto" />
+          <RootNavigator />
+        </NavigationContainer>
       </UserProvider>
     </SafeAreaProvider>
   );

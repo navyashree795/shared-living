@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView
@@ -14,7 +14,6 @@ import {
   collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp
 } from 'firebase/firestore';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList, GroceryItem } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Grocery'>;
@@ -28,33 +27,41 @@ interface Category {
 }
 
 const CATEGORIES: Category[] = [
-  { id: 'produce', name: 'Fresh Produce', icon: 'eco', bg: 'bg-[#EFFDF5]', color: '#059669' },
-  { id: 'dairy', name: 'Dairy & Chilled', icon: 'coffee', bg: 'bg-[#F0F9FF]', color: '#0284C7' },
-  { id: 'meat', name: 'Meat & Seafood', icon: 'restaurant', bg: 'bg-[#FFF1F2]', color: '#E11D48' },
-  { id: 'staples', name: 'Kitchen Staples', icon: 'bakery-dining', bg: 'bg-[#FEFBE8]', color: '#CA8A04' },
-  { id: 'essentials', name: 'Home Essentials', icon: 'auto-awesome', bg: 'bg-[#F5F3FF]', color: '#7C3AED' },
-  { id: 'drinks', name: 'Drinks & Spirits', icon: 'local-bar', bg: 'bg-[#F1F5F9]', color: '#475569' },
-  { id: 'misc', name: 'Miscellaneous', icon: 'inventory', bg: 'bg-[#F9FAFB]', color: '#6B7280' },
+  { id: 'produce', name: 'Fresh Produce', icon: 'eco', bg: '#EFFDF5', color: '#059669' },
+  { id: 'dairy', name: 'Dairy & Chilled', icon: 'coffee', bg: '#F0F9FF', color: '#0284C7' },
+  { id: 'meat', name: 'Meat & Seafood', icon: 'restaurant', bg: '#FFF1F2', color: '#E11D48' },
+  { id: 'staples', name: 'Kitchen Staples', icon: 'bakery-dining', bg: '#FEFBE8', color: '#CA8A04' },
+  { id: 'essentials', name: 'Home Essentials', icon: 'auto-awesome', bg: '#F5F3FF', color: '#7C3AED' },
+  { id: 'drinks', name: 'Drinks & Spirits', icon: 'local-bar', bg: '#F1F5F9', color: '#475569' },
+  { id: 'misc', name: 'Miscellaneous', icon: 'inventory', bg: '#F9FAFB', color: '#6B7280' },
 ];
 
-export default function GroceryScreen({ route }: Props) {
-  const navigation = useNavigation<Props['navigation']>();
+export default function GroceryScreen({ route, navigation }: Props) {
   const { householdId, members } = route.params;
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [newItem, setNewItem] = useState('');
   const [newQty, setNewQty] = useState('');
   const [newPrice, setNewPrice] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<Category>(CATEGORIES[0]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(CATEGORIES[0].id);
   const { profile: userData } = useUser();
   const [loading, setLoading] = useState(true);
 
+  const selectedCategory = useMemo(() => 
+    CATEGORIES.find(c => c.id === selectedCategoryId) || CATEGORIES[0],
+    [selectedCategoryId]
+  );
+
   useEffect(() => {
+    if (!householdId) return;
     const q = query(
       collection(db, 'households', householdId, 'groceries'),
       orderBy('createdAt', 'desc')
     );
     const unsub = onSnapshot(q, (snap) => {
       setItems(snap.docs.map(d => ({ id: d.id, ...d.data() } as GroceryItem)));
+      setLoading(false);
+    }, (err) => {
+      console.error("Grocery fetch error:", err);
       setLoading(false);
     });
     return unsub;
@@ -69,7 +76,7 @@ export default function GroceryScreen({ route }: Props) {
       await addDoc(collection(db, 'households', householdId, 'groceries'), {
         name,
         done: false,
-        category: selectedCategory.id,
+        category: selectedCategoryId,
         qty: newQty.trim(),
         price: priceNum,
         addedBy: userData?.username ? `@${userData.username}` : (auth.currentUser?.email || 'Unknown'),
@@ -82,41 +89,13 @@ export default function GroceryScreen({ route }: Props) {
     }
   };
 
-  const logAsExpense = async (item: GroceryItem) => {
-    try {
-      await addDoc(collection(db, 'households', householdId, 'expenses'), {
-        type: 'expense',
-        title: `Grocery: ${item.name}`,
-        amount: item.price,
-        paidByUid: auth.currentUser?.uid,
-        splitWith: members || [],
-        perPerson: item.price / (members?.length || 1),
-        createdAt: serverTimestamp(),
-      });
-      Alert.alert('Success', 'Logged to expenses!');
-    } catch (e) {
-      Alert.alert('Error', 'Failed to log expense.');
-    }
-  };
-
   const handleToggle = async (item: GroceryItem) => {
     try {
       const isFinishing = !item.done;
       await updateDoc(doc(db, 'households', householdId, 'groceries', item.id), {
         done: isFinishing,
       });
-
-      if (isFinishing && item.price > 0) {
-        logActivity(householdId, 'grocery_done', item.name);
-        Alert.alert(
-          'Add to Expenses?',
-          `You bought this for ₹${item.price}. Should we split this cost with the household?`,
-          [
-            { text: 'No', style: 'cancel' },
-            { text: 'Yes, Split It', onPress: () => logAsExpense(item) }
-          ]
-        );
-      } else if (isFinishing) {
+      if (isFinishing) {
         logActivity(householdId, 'grocery_done', item.name);
       }
     } catch (e) {
@@ -141,13 +120,14 @@ export default function GroceryScreen({ route }: Props) {
     return (
       <View className="flex-row items-center bg-white rounded-[24px] p-4 mb-3 border border-border shadow-sm">
         <TouchableOpacity className="mr-3" onPress={() => handleToggle(item)}>
-          {item.done
-            ? <MaterialIcons name="check-box" size={26} color="#10B981" />
-            : <MaterialIcons name="check-box-outline-blank" size={26} color="#9CA3AF" />
-          }
+          <MaterialIcons 
+            name={item.done ? "check-box" : "check-box-outline-blank"} 
+            size={26} 
+            color={item.done ? "#10B981" : "#9CA3AF"} 
+          />
         </TouchableOpacity>
         
-        <View className={`${category.bg} w-10 h-10 rounded-xl items-center justify-center mr-3`}>
+        <View style={{ backgroundColor: category.bg }} className="w-10 h-10 rounded-xl items-center justify-center mr-3">
           <MaterialIcons name={category.icon} size={20} color={category.color} />
         </View>
 
@@ -160,12 +140,6 @@ export default function GroceryScreen({ route }: Props) {
           </View>
           <View className="flex-row items-center mt-0.5">
             <Text className="text-[10px] text-textMuted font-bold uppercase tracking-widest">{category.name}</Text>
-            {item.price > 0 && (
-              <>
-                <Text className="text-textMuted text-[10px] mx-1.5">•</Text>
-                <Text className="text-success text-[10px] font-black tracking-widest uppercase">₹{item.price}</Text>
-              </>
-            )}
           </View>
         </View>
         <TouchableOpacity onPress={() => handleDelete(item.id)} className="p-2 ml-2">
@@ -179,7 +153,6 @@ export default function GroceryScreen({ route }: Props) {
     <SafeAreaView className="flex-1 bg-background">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
         
-        {/* Header */}
         <ScreenHeader navigation={navigation} title="Grocery List">
           <View className="bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20">
              <Text className="text-primary font-bold text-xs tracking-wider">{pending.length} LEFT</Text>
@@ -193,7 +166,7 @@ export default function GroceryScreen({ route }: Props) {
             data={[...pending, ...done]}
             keyExtractor={i => i.id}
             renderItem={renderItem}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 200 }}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 220 }}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <EmptyState 
@@ -202,51 +175,51 @@ export default function GroceryScreen({ route }: Props) {
                 description="Add your first item below so your roommates know what to buy."
               />
             }
-            ListHeaderComponent={done.length > 0 && pending.length > 0 ? (
-              <Text className="text-textMuted text-xs font-bold tracking-widest my-3 ml-1">COMPLETED</Text>
-            ) : null}
-            ListFooterComponent={done.length > 0 ? (
-              <TouchableOpacity
-                className="items-center p-4 mt-2 mb-6"
-                onPress={() => {
-                  Alert.alert('Clear Done', 'Remove all checked items?', [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Clear', style: 'destructive', onPress: () => done.forEach(i => handleDelete(i.id)) }
-                  ]);
-                }}
-              >
-                <Text className="text-danger font-bold text-sm">Clear completed ({done.length})</Text>
-              </TouchableOpacity>
-            ) : null}
           />
         )}
 
         {/* Add Input Area */}
-        <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-border shadow-2xl pb-8 pt-4">
-          {/* Category Picker */}
+        <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-border shadow-2xl pb-10 pt-4">
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false} 
             contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 16 }}
-            className="flex-row"
             keyboardShouldPersistTaps="handled"
           >
-            {CATEGORIES.map(cat => (
-              <TouchableOpacity
-                key={cat.id}
-                onPress={() => setSelectedCategory(cat)}
-                className={`flex-row items-center px-4 py-2 rounded-full mr-3 border ${selectedCategory.id === cat.id ? 'bg-primary border-primary' : 'bg-background border-border shadow-sm'}`}
-              >
-                <MaterialIcons 
-                  name={cat.icon} 
-                  size={14} 
-                  color={selectedCategory.id === cat.id ? '#FFF' : '#6B7280'} 
-                />
-                <Text className={`ml-2 text-xs font-bold ${selectedCategory.id === cat.id ? 'text-white' : 'text-textMuted'}`}>
-                  {cat.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {CATEGORIES.map(cat => {
+              const isActive = selectedCategoryId === cat.id;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  onPress={() => setSelectedCategoryId(cat.id)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 24,
+                    marginRight: 12,
+                    borderWidth: 1,
+                    borderColor: isActive ? '#4F46E5' : '#E5E7EB',
+                    backgroundColor: isActive ? '#4F46E5' : '#FFFFFF',
+                  }}
+                >
+                  <MaterialIcons 
+                    name={cat.icon} 
+                    size={14} 
+                    color={isActive ? '#FFF' : '#6B7280'} 
+                  />
+                  <Text style={{
+                    marginLeft: 8,
+                    fontSize: 12,
+                    fontWeight: 'bold',
+                    color: isActive ? '#FFFFFF' : '#6B7280',
+                  }}>
+                    {cat.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
 
           <View className="px-6 gap-3">
@@ -280,7 +253,7 @@ export default function GroceryScreen({ route }: Props) {
                 />
               </View>
               <TouchableOpacity 
-                className="bg-primary rounded-2xl w-14 h-14 items-center justify-center shadow-lg shadow-primary/40" 
+                className="bg-primary rounded-2xl w-14 h-14 items-center justify-center shadow-lg" 
                 onPress={handleAdd}
               >
                 <MaterialIcons name="add" size={32} color="#FFF" />
