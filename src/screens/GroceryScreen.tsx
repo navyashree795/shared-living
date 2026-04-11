@@ -14,6 +14,7 @@ import {
   collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp
 } from 'firebase/firestore';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList, GroceryItem } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Grocery'>;
@@ -23,20 +24,21 @@ interface Category {
   name: string;
   icon: keyof typeof MaterialIcons.glyphMap;
   bg: string;
-  text: string;
+  color: string;
 }
 
 const CATEGORIES: Category[] = [
-  { id: 'produce', name: 'Fresh Produce', icon: 'eco', bg: 'bg-[#EFFDF5]', text: 'text-[#059669]' },
-  { id: 'dairy', name: 'Dairy & Chilled', icon: 'coffee', bg: 'bg-[#F0F9FF]', text: 'text-[#0284C7]' },
-  { id: 'meat', name: 'Meat & Seafood', icon: 'restaurant', bg: 'bg-[#FFF1F2]', text: 'text-[#E11D48]' },
-  { id: 'staples', name: 'Kitchen Staples', icon: 'bakery-dining', bg: 'bg-[#FEFBE8]', text: 'text-[#CA8A04]' },
-  { id: 'essentials', name: 'Home Essentials', icon: 'auto-awesome', bg: 'bg-[#F5F3FF]', text: 'text-[#7C3AED]' },
-  { id: 'drinks', name: 'Drinks & Spirits', icon: 'local-bar', bg: 'bg-[#F1F5F9]', text: 'text-[#475569]' },
-  { id: 'misc', name: 'Miscellaneous', icon: 'inventory', bg: 'bg-[#F9FAFB]', text: 'text-[#6B7280]' },
+  { id: 'produce', name: 'Fresh Produce', icon: 'eco', bg: 'bg-[#EFFDF5]', color: '#059669' },
+  { id: 'dairy', name: 'Dairy & Chilled', icon: 'coffee', bg: 'bg-[#F0F9FF]', color: '#0284C7' },
+  { id: 'meat', name: 'Meat & Seafood', icon: 'restaurant', bg: 'bg-[#FFF1F2]', color: '#E11D48' },
+  { id: 'staples', name: 'Kitchen Staples', icon: 'bakery-dining', bg: 'bg-[#FEFBE8]', color: '#CA8A04' },
+  { id: 'essentials', name: 'Home Essentials', icon: 'auto-awesome', bg: 'bg-[#F5F3FF]', color: '#7C3AED' },
+  { id: 'drinks', name: 'Drinks & Spirits', icon: 'local-bar', bg: 'bg-[#F1F5F9]', color: '#475569' },
+  { id: 'misc', name: 'Miscellaneous', icon: 'inventory', bg: 'bg-[#F9FAFB]', color: '#6B7280' },
 ];
 
-export default function GroceryScreen({ route, navigation }: Props) {
+export default function GroceryScreen({ route }: Props) {
+  const navigation = useNavigation<Props['navigation']>();
   const { householdId, members } = route.params;
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [newItem, setNewItem] = useState('');
@@ -146,7 +148,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
         </TouchableOpacity>
         
         <View className={`${category.bg} w-10 h-10 rounded-xl items-center justify-center mr-3`}>
-          <MaterialIcons name={category.icon} size={20} className={category.text} />
+          <MaterialIcons name={category.icon} size={20} color={category.color} />
         </View>
 
         <View className="flex-1">
@@ -178,7 +180,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
         
         {/* Header */}
-        <ScreenHeader navigation={navigation as any} title="Grocery List">
+        <ScreenHeader navigation={navigation} title="Grocery List">
           <View className="bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20">
              <Text className="text-primary font-bold text-xs tracking-wider">{pending.length} LEFT</Text>
           </View>
@@ -191,7 +193,8 @@ export default function GroceryScreen({ route, navigation }: Props) {
             data={[...pending, ...done]}
             keyExtractor={i => i.id}
             renderItem={renderItem}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 130 }}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 200 }}
+            keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <EmptyState 
                 icon="shopping-cart" 
@@ -226,6 +229,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
             showsHorizontalScrollIndicator={false} 
             contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 16 }}
             className="flex-row"
+            keyboardShouldPersistTaps="handled"
           >
             {CATEGORIES.map(cat => (
               <TouchableOpacity

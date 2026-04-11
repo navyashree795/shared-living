@@ -29,21 +29,6 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "4ee025d3-8a00-4784-830b-8eb4db7d34dc"
-      }
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/4ee025d3-8a00-4784-830b-8eb4db7d34dc",
-      "enabled": true,
-      "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
-    },
-    "owner": "jeevan0714"
+    }
   }
 }

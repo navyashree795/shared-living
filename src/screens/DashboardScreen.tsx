@@ -186,86 +186,93 @@ export default function DashboardScreen({ navigation, route }: Props) {
         </View>
       </View>
 
-      {/* Activity Feed */}
-      <View className="mb-10">
-        <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-textMuted text-[10px] font-bold tracking-[2px] uppercase ml-1">{"What's Happening"}</Text>
-          <View className="w-1.5 h-1.5 rounded-full bg-success" />
-        </View>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          className="flex-row"
-          contentContainerStyle={{ paddingRight: 24 }}
-        >
-          {activities.length === 0 ? (
-            <View className="bg-white rounded-3xl p-5 border border-border border-dashed items-center justify-center w-[200px]">
-              <Text className="text-textMuted text-[11px] font-medium">No recent activities</Text>
-            </View>
-          ) : (
-            activities.map(act => {
-              const config = getActivityConfig(act.type);
-              return (
-                <View 
-                  key={act.id} 
-                  className="bg-white rounded-[28px] p-4 mr-4 border border-border shadow-sm flex-row items-center w-[230px]"
-                >
-                  <View 
-                    style={{ backgroundColor: `${config.color}15` }}
-                    className="w-10 h-10 rounded-full items-center justify-center mr-3"
-                  >
-                    <MaterialIcons name={config.icon as any} size={20} color={config.color} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-textMain text-xs font-bold leading-tight" numberOfLines={1}>
-                      {act.userName}
-                    </Text>
-                    <Text className="text-textMuted text-[10px] font-medium leading-tight mt-0.5" numberOfLines={1}>
-                      {config.label} {act.title}
-                    </Text>
-                    <Text className="text-[#9CA3AF] text-[9px] font-bold mt-1.5 uppercase">
-                      {formatTime(act.createdAt)}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })
-          )}
-        </ScrollView>
-      </View>
-
-      {/* Members Chip */}
-      <TouchableOpacity 
-        onPress={() => setIsMembersModalVisible(true)}
-        className="flex-row items-center gap-2 bg-white rounded-full px-4 py-1.5 self-start mb-8 border border-border shadow-sm"
+      {/* Main Content */}
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
       >
-        <MaterialIcons name="people" size={14} color="#6B7280" />
-        <Text className="text-textMain text-[11px] font-bold">
-          {members.length} Member{members.length !== 1 ? 's' : ''}
-        </Text>
-      </TouchableOpacity>
-
-      {/* Feature Cards */}
-      <View className="flex-1 gap-5 items-center">
-        {NAV_ITEMS.map(item => (
-          <TouchableOpacity
-            key={item.name}
-            className="w-[92%] rounded-[32px] p-6 border justify-start shadow-sm bg-white border-gray-100"
-            onPress={() => handleNav(item.name)}
-            activeOpacity={0.7}
+        {/* Activity Feed */}
+        <View className="mb-10">
+          <View className="flex-row justify-between items-center mb-4">
+            <Text className="text-textMuted text-[10px] font-bold tracking-[2px] uppercase ml-1">{"What's Happening"}</Text>
+            <View className="w-1.5 h-1.5 rounded-full bg-success" />
+          </View>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            className="flex-row"
+            contentContainerStyle={{ paddingRight: 24 }}
           >
-            <View className="w-12 h-12 rounded-2xl items-center justify-center mb-4 bg-gray-50">
-              <MaterialIcons name={item.icon as any} size={28} color={item.color} />
-            </View>
-            <Text className="text-xl font-bold text-textMain mb-1">{item.name}</Text>
-            <Text className="text-sm font-medium text-textMuted">{item.subtitle}</Text>
-            <View className="flex-row items-center mt-3">
-               <Text className="text-xs font-bold text-textMuted tracking-widest mr-1 uppercase">Open</Text>
-               <MaterialIcons name="arrow-forward" size={14} color="#9CA3AF" />
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
+            {activities.length === 0 ? (
+              <View className="bg-white rounded-3xl p-5 border border-border border-dashed items-center justify-center w-[200px]">
+                <Text className="text-textMuted text-[11px] font-medium">No recent activities</Text>
+              </View>
+            ) : (
+              activities.map(act => {
+                const config = getActivityConfig(act.type);
+                return (
+                  <View 
+                    key={act.id} 
+                    className="bg-white rounded-[28px] p-4 mr-4 border border-border shadow-sm flex-row items-center w-[230px]"
+                  >
+                    <View 
+                      style={{ backgroundColor: `${config.color}15` }}
+                      className="w-10 h-10 rounded-full items-center justify-center mr-3"
+                    >
+                      <MaterialIcons name={config.icon as any} size={20} color={config.color} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-textMain text-xs font-bold leading-tight" numberOfLines={1}>
+                        {act.userName}
+                      </Text>
+                      <Text className="text-textMuted text-[10px] font-medium leading-tight mt-0.5" numberOfLines={1}>
+                        {config.label} {act.title}
+                      </Text>
+                      <Text className="text-[#9CA3AF] text-[9px] font-bold mt-1.5 uppercase">
+                        {formatTime(act.createdAt)}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+
+        {/* Members Chip */}
+        <TouchableOpacity 
+          onPress={() => setIsMembersModalVisible(true)}
+          className="flex-row items-center gap-2 bg-white rounded-full px-4 py-1.5 self-start mb-8 border border-border shadow-sm"
+        >
+          <MaterialIcons name="people" size={14} color="#6B7280" />
+          <Text className="text-textMain text-[11px] font-bold">
+            {members.length} Member{members.length !== 1 ? 's' : ''}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Feature Cards */}
+        <View className="gap-5 items-center pb-10">
+          {NAV_ITEMS.map(item => (
+            <TouchableOpacity
+              key={item.name}
+              className="w-[92%] rounded-[32px] p-6 border justify-start shadow-sm bg-white border-gray-100"
+              onPress={() => handleNav(item.name)}
+              activeOpacity={0.7}
+            >
+              <View className="w-12 h-12 rounded-2xl items-center justify-center mb-4 bg-gray-50">
+                <MaterialIcons name={item.icon as any} size={28} color={item.color} />
+              </View>
+              <Text className="text-xl font-bold text-textMain mb-1">{item.name}</Text>
+              <Text className="text-sm font-medium text-textMuted">{item.subtitle}</Text>
+              <View className="flex-row items-center mt-3">
+                 <Text className="text-xs font-bold text-textMuted tracking-widest mr-1 uppercase">Open</Text>
+                 <MaterialIcons name="arrow-forward" size={14} color="#9CA3AF" />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
 
       {/* Members Modal */}
       <SlideModal
