@@ -24,7 +24,16 @@ export default function ExpenseScreen({ route, navigation }: Props) {
   const { householdId, members = [] } = route.params || {};
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
-  const householdMembers = useHouseholdMembers(members);
+  
+  // Extract all unique UIDs involved in expenses to ensure their names are fetched
+  const allInvolvedUids = Array.from(new Set([
+    ...members,
+    ...expenses.map(e => e.paidByUid).filter(Boolean) as string[],
+    ...expenses.map(e => e.fromPaidUid).filter(Boolean) as string[],
+    ...expenses.map(e => e.toReceivedUid).filter(Boolean) as string[]
+  ]));
+
+  const householdMembers = useHouseholdMembers(allInvolvedUids);
   const getMemberName = householdMembers?.getMemberName || ((uid: string) => uid === auth.currentUser?.uid ? 'You' : 'Member');
 
   // General States
@@ -37,7 +46,6 @@ export default function ExpenseScreen({ route, navigation }: Props) {
 
   // Settlement States
   const [settleAmount, setSettleAmount] = useState('');
-  const [settleToUid, setSettleToUid] = useState('');
 
   useEffect(() => {
     const q = query(
@@ -76,8 +84,8 @@ export default function ExpenseScreen({ route, navigation }: Props) {
 
   const handleAddSettlement = async () => {
     const parsed = parseFloat(settleAmount);
-    if (isNaN(parsed) || parsed <= 0 || !settleToUid) {
-      Alert.alert('Error', 'Please enter a valid amount and recipient.');
+    if (isNaN(parsed) || parsed <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount.');
       return;
     }
     try {
@@ -85,11 +93,10 @@ export default function ExpenseScreen({ route, navigation }: Props) {
         type: 'payment',
         amount: parsed,
         fromPaidUid: auth.currentUser?.uid,
-        toReceivedUid: settleToUid,
         createdAt: serverTimestamp(),
       });
-      logActivity(householdId, 'payment_add', getMemberName(settleToUid), parsed);
-      setSettleAmount(''); setSettleToUid('');
+      logActivity(householdId, 'payment_add', 'their balance', parsed);
+      setSettleAmount('');
       setIsSettleModalVisible(false);
     } catch (e) {
       Alert.alert('Error', 'Could not record settlement.');
@@ -102,12 +109,11 @@ export default function ExpenseScreen({ route, navigation }: Props) {
     expenses.forEach(exp => {
       if (!exp.type || exp.type === 'expense') {
         if (exp.paidByUid) {
-          b[exp.paidByUid] = (b[exp.paidByUid] || 0) - exp.amount;
+          b[exp.paidByUid] = (b[exp.paidByUid] || 0) + exp.amount;
         }
       } else if (exp.type === 'payment') {
-        if (exp.fromPaidUid && exp.toReceivedUid) {
+        if (exp.fromPaidUid) {
           b[exp.fromPaidUid] = (b[exp.fromPaidUid] || 0) - exp.amount;
-          b[exp.toReceivedUid] = (b[exp.toReceivedUid] || 0) + exp.amount;
         }
       }
     });
@@ -126,11 +132,11 @@ export default function ExpenseScreen({ route, navigation }: Props) {
         </View>
         <View className="flex-1">
           <Text className="text-textMain text-base font-bold">
-            {isPayment ? 'Debt Settlement' : `${item.title} (${getMemberName(item.paidByUid || '')})`}
+            {isPayment ? 'Balance Settled' : `${item.title} (${getMemberName(item.paidByUid || '')})`}
           </Text>
           {isPayment && (
             <Text className="text-textMuted text-xs font-medium mt-1">
-              {`${getMemberName(item.fromPaidUid || '')} paid ${getMemberName(item.toReceivedUid || '')}`}
+              {`${getMemberName(item.fromPaidUid || '')} settled their balance`}
             </Text>
           )}
         </View>
@@ -179,6 +185,7 @@ export default function ExpenseScreen({ route, navigation }: Props) {
       ) : (
         <FlatList
           data={expenses}
+          extraData={householdMembers.memberProfiles}
           keyExtractor={i => i.id}
           renderItem={renderExpense}
           contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
@@ -237,43 +244,7 @@ export default function ExpenseScreen({ route, navigation }: Props) {
         title="Settle Up"
       >
         <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
-          <Text className="text-textMuted text-sm font-bold mb-4 ml-1">Recording a payment you made</Text>
-          
-          <Text className="text-textMuted text-xs font-bold tracking-widest mb-2 ml-1">WHO DID YOU PAY?</Text>
-          {(members || []).filter(u => u !== auth.currentUser?.uid).map(uid => {
-            const isSelected = settleToUid === uid;
-            const balance = balances[uid] || 0;
-            return (
-              <TouchableOpacity 
-                key={uid} 
-                className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-primary/5 border-primary/30' : 'bg-background border-border'} `}
-                onPress={() => {
-                  setSettleToUid(uid);
-                  // Auto-suggest the amount if you owe them
-                  const myBalance = balances[auth.currentUser?.uid || ''] || 0;
-                  if (myBalance < 0) {
-                    setSettleAmount(Math.abs(myBalance).toFixed(0));
-                  }
-                }}
-              >
-                <MaterialIcons
-                  name={isSelected ? 'radio-button-checked' : 'radio-button-unchecked'}
-                  size={24} 
-                  color={isSelected ? '#4F46E5' : '#9CA3AF'}
-                />
-                <View className="flex-1 ml-3">
-                  <Text className={`text-base font-bold ${isSelected ? 'text-primary' : 'text-textMain'}`}>
-                    {getMemberName(uid)}
-                  </Text>
-                  <Text className="text-[10px] text-textMuted font-medium uppercase">
-                    {`Balance: ₹${balance.toFixed(0)}`}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-
-          <View className="h-[1px] bg-border my-5" />
+          <Text className="text-textMuted text-sm font-bold mb-4 ml-1">Record a payment to settle your balance</Text>
 
           <Text className="text-textMuted text-sm font-bold mb-2 ml-1">Amount Settled (₹)</Text>
           <TextInput 

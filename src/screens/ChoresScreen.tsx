@@ -28,7 +28,12 @@ export default function ChoresScreen({ route, navigation }: Props) {
   const [assignedTo, setAssignedTo] = useState<string>(auth.currentUser?.uid || '');
   const [deadline, setDeadline] = useState('');
   
-  const { getMemberName } = useHouseholdMembers(members);
+  const allInvolvedUids = Array.from(new Set([
+    ...members,
+    ...chores.map(c => c.assignedToUid).filter(Boolean)
+  ]));
+
+  const { getMemberName } = useHouseholdMembers(allInvolvedUids);
 
   useEffect(() => {
     const q = query(
@@ -164,6 +169,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
       ) : (
         <FlatList
           data={[...pending, ...done]}
+          extraData={getMemberName}
           keyExtractor={i => i.id}
           renderItem={renderChore}
           contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}

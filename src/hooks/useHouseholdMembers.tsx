@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import { UserProfile } from '../types';
 
@@ -16,14 +16,20 @@ export const useHouseholdMembers = (members: string[] | undefined) => {
       }
       
       try {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('uid', 'in', members));
-        const querySnapshot = await getDocs(q);
-        
         const profiles: Record<string, UserProfile> = {};
-        querySnapshot.forEach((doc) => {
-          profiles[doc.id] = doc.data() as UserProfile;
-        });
+        
+        await Promise.all(
+          members.map(async (uid) => {
+            try {
+              const userSnap = await getDoc(doc(db, 'users', uid));
+              if (userSnap.exists()) {
+                profiles[uid] = userSnap.data() as UserProfile;
+              }
+            } catch (err) {
+              console.error(`Failed to fetch user ${uid}:`, err);
+            }
+          })
+        );
         
         setMemberProfiles(profiles);
       } catch (e) {
