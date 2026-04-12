@@ -68,6 +68,7 @@ export interface Chore {
   assignedToUid: string;
   done: boolean;
   createdByUid: string;
+  deadline?: string;
   createdAt: Timestamp;
 }
 

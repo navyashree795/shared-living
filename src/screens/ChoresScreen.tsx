@@ -26,6 +26,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [choreTitle, setChoreTitle] = useState('');
   const [assignedTo, setAssignedTo] = useState<string>(auth.currentUser?.uid || '');
+  const [deadline, setDeadline] = useState('');
   
   const { getMemberName } = useHouseholdMembers(members);
 
@@ -49,10 +50,11 @@ export default function ChoresScreen({ route, navigation }: Props) {
         assignedToUid: assignedTo,
         done: false,
         createdByUid: auth.currentUser?.uid,
+        deadline: deadline.trim(),
         createdAt: serverTimestamp(),
       });
       logActivity(householdId, 'chore_add', choreTitle.trim());
-      setChoreTitle(''); setAssignedTo(auth.currentUser?.uid || '');
+      setChoreTitle(''); setDeadline(''); setAssignedTo(auth.currentUser?.uid || '');
       setIsModalVisible(false);
     } catch (e: any) {
       console.error('Chore Add Error:', e);
@@ -104,11 +106,21 @@ export default function ChoresScreen({ route, navigation }: Props) {
         <Text className={`text-base font-bold ${item.done ? 'text-textMuted line-through' : 'text-textMain'}`}>
           {item.title}
         </Text>
-        <View className="flex-row items-center mt-1 bg-secondary/30 self-start px-2 py-0.5 rounded-md">
-          <MaterialIcons name="person-outline" size={14} color="#6B7280" />
-          <Text className="text-textMuted text-xs font-medium ml-1">
-            {getMemberName(item.assignedToUid)}
-          </Text>
+        <View className="flex-row items-center mt-1 flex-wrap">
+          <View className="flex-row items-center bg-secondary/30 px-2 py-0.5 rounded-md mr-2 mt-1">
+            <MaterialIcons name="person-outline" size={14} color="#6B7280" />
+            <Text className="text-textMuted text-xs font-medium ml-1">
+              {getMemberName(item.assignedToUid)}
+            </Text>
+          </View>
+          {!!item.deadline && (
+            <View className="flex-row items-center bg-warning/10 px-2 py-0.5 rounded-md mt-1 border border-warning/20">
+              <MaterialIcons name="schedule" size={14} color="#D97706" />
+              <Text className="text-warning text-[10px] font-bold ml-1 uppercase">
+                {item.deadline}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -177,11 +189,20 @@ export default function ChoresScreen({ route, navigation }: Props) {
         <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
           <Text className="text-textMuted text-sm font-bold mb-2 ml-1">What needs to be done?</Text>
           <TextInput 
-            className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border" 
+            className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border mb-4" 
             placeholder="e.g. Taking out the trash" 
             placeholderTextColor="#9CA3AF"
             value={choreTitle} 
             onChangeText={setChoreTitle} 
+          />
+          
+          <Text className="text-textMuted text-sm font-bold mb-2 ml-1">Deadline / Timing (Optional)</Text>
+          <TextInput 
+            className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border" 
+            placeholder="e.g. By Friday 5 PM, or Today" 
+            placeholderTextColor="#9CA3AF"
+            value={deadline} 
+            onChangeText={setDeadline} 
           />
         </View>
 

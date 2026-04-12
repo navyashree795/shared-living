@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
+import SlideModal from '../components/SlideModal';
 import { auth, db } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
 import { logActivity } from '../utils/activityUtils';
@@ -45,6 +46,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(CATEGORIES[0].id);
   const { profile: userData } = useUser();
   const [loading, setLoading] = useState(true);
+  const [isAddModalVisible, setIsAddModalVisible] = useState(false);
 
   const selectedCategory = useMemo(() => 
     CATEGORIES.find(c => c.id === selectedCategoryId) || CATEGORIES[0],
@@ -84,6 +86,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
       });
       logActivity(householdId, 'grocery_add', name);
       setNewItem(''); setNewQty(''); setNewPrice('');
+      setIsAddModalVisible(false);
     } catch (e) {
       Alert.alert('Error', 'Could not add item.');
     }
@@ -151,22 +154,30 @@ export default function GroceryScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         
-        <ScreenHeader navigation={navigation} title="Grocery List">
+        <ScreenHeader 
+          navigation={navigation} 
+          title="Grocery List"
+          rightIcon="add"
+          onRightPress={() => setIsAddModalVisible(true)}
+        >
           <View className="bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20">
              <Text className="text-primary font-bold text-xs tracking-wider">{pending.length} LEFT</Text>
           </View>
         </ScreenHeader>
 
         {loading ? (
-          <ActivityIndicator color="#4F46E5" className="mt-10" />
+          <View className="flex-1 justify-center items-center">
+            <ActivityIndicator color="#4F46E5" />
+          </View>
         ) : (
           <FlatList
+            className="flex-1"
             data={[...pending, ...done]}
             keyExtractor={i => i.id}
             renderItem={renderItem}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 220 }}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, paddingTop: 12 }}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <EmptyState 
@@ -178,8 +189,15 @@ export default function GroceryScreen({ route, navigation }: Props) {
           />
         )}
 
-        {/* Add Input Area */}
-        <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-border shadow-2xl pb-10 pt-4">
+      </KeyboardAvoidingView>
+
+      <SlideModal
+        visible={isAddModalVisible}
+        onClose={() => setIsAddModalVisible(false)}
+        title="Add Item"
+      >
+        <View className="bg-white border border-border shadow-sm rounded-3xl pb-2 pt-4 mb-6">
+          <Text className="text-textMuted text-xs font-bold tracking-widest px-6 mb-3">SELECT CATEGORY</Text>
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false} 
@@ -222,46 +240,51 @@ export default function GroceryScreen({ route, navigation }: Props) {
             })}
           </ScrollView>
 
-          <View className="px-6 gap-3">
-            <View className="flex-row gap-3">
+          <View className="px-6 gap-4 pb-4">
+            <View>
+              <Text className="text-textMuted text-sm font-bold mb-2 ml-1">Item Name</Text>
               <TextInput
-                className="flex-[2] bg-background rounded-2xl px-5 py-4 text-textMain text-base border border-border"
-                placeholder={`What ${selectedCategory.name}?`}
+                className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
+                placeholder={`e.g. Milk, Bread`}
                 placeholderTextColor="#9CA3AF"
                 value={newItem}
                 onChangeText={setNewItem}
               />
-              <TextInput
-                className="flex-1 bg-background rounded-2xl px-4 py-4 text-textMain text-sm border border-border font-medium"
-                placeholder="Qty (2kg)"
-                placeholderTextColor="#9CA3AF"
-                value={newQty}
-                onChangeText={setNewQty}
-              />
             </View>
             
-            <View className="flex-row gap-3 items-center">
-              <View className="flex-1 flex-row items-center bg-background rounded-2xl px-5 py-3 border border-border">
-                <Text className="text-textMuted font-bold mr-2 text-base">₹</Text>
+            <View className="flex-row gap-4">
+              <View className="flex-1">
+                <Text className="text-textMuted text-sm font-bold mb-2 ml-1">Quantity</Text>
                 <TextInput
-                  className="flex-1 text-textMain text-base font-bold"
-                  placeholder="Estimated Price"
+                  className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border"
+                  placeholder="e.g. 2kg"
+                  placeholderTextColor="#9CA3AF"
+                  value={newQty}
+                  onChangeText={setNewQty}
+                />
+              </View>
+              <View className="flex-1">
+                <Text className="text-textMuted text-sm font-bold mb-2 ml-1">Price (₹)</Text>
+                <TextInput
+                  className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border font-bold"
+                  placeholder="0.00"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="numeric"
                   value={newPrice}
                   onChangeText={setNewPrice}
                 />
               </View>
-              <TouchableOpacity 
-                className="bg-primary rounded-2xl w-14 h-14 items-center justify-center shadow-lg" 
-                onPress={handleAdd}
-              >
-                <MaterialIcons name="add" size={32} color="#FFF" />
-              </TouchableOpacity>
             </View>
           </View>
         </View>
-      </KeyboardAvoidingView>
+
+        <TouchableOpacity 
+          className="bg-primary rounded-2xl py-4 items-center shadow-lg shadow-primary/30 mb-4" 
+          onPress={handleAdd}
+        >
+          <Text className="text-white font-bold text-lg">Add Item</Text>
+        </TouchableOpacity>
+      </SlideModal>
     </SafeAreaView>
   );
 }

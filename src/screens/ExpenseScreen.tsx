@@ -34,7 +34,6 @@ export default function ExpenseScreen({ route, navigation }: Props) {
   // Expense States
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
-  const [splitWith, setSplitWith] = useState<string[]>([]);
 
   // Settlement States
   const [settleAmount, setSettleAmount] = useState('');
@@ -59,19 +58,16 @@ export default function ExpenseScreen({ route, navigation }: Props) {
       return;
     }
     const paidByUid = auth.currentUser?.uid;
-    const allSplit = splitWith.length > 0 ? splitWith : (members || []);
     try {
       await addDoc(collection(db, 'households', householdId, 'expenses'), {
         type: 'expense',
         title: title.trim(),
         amount: parsed,
         paidByUid,
-        splitWith: allSplit,
-        perPerson: parsed / allSplit.length,
         createdAt: serverTimestamp(),
       });
       logActivity(householdId, 'expense_add', title.trim(), parsed);
-      setTitle(''); setAmount(''); setSplitWith([]);
+      setTitle(''); setAmount('');
       setIsModalVisible(false);
     } catch (e) {
       Alert.alert('Error', 'Could not add expense.');
@@ -105,19 +101,13 @@ export default function ExpenseScreen({ route, navigation }: Props) {
     (members || []).forEach(uid => { b[uid] = 0; });
     expenses.forEach(exp => {
       if (!exp.type || exp.type === 'expense') {
-        const share = exp.perPerson || (exp.amount / (exp.splitWith?.length || 1));
-        (exp.splitWith || []).forEach(uid => {
-          if (uid !== exp.paidByUid) {
-            b[uid] = (b[uid] || 0) - share;
-            if (exp.paidByUid) {
-              b[exp.paidByUid] = (b[exp.paidByUid] || 0) + share;
-            }
-          }
-        });
+        if (exp.paidByUid) {
+          b[exp.paidByUid] = (b[exp.paidByUid] || 0) - exp.amount;
+        }
       } else if (exp.type === 'payment') {
         if (exp.fromPaidUid && exp.toReceivedUid) {
-          b[exp.fromPaidUid] = (b[exp.fromPaidUid] || 0) + exp.amount;
-          b[exp.toReceivedUid] = (b[exp.toReceivedUid] || 0) - exp.amount;
+          b[exp.fromPaidUid] = (b[exp.fromPaidUid] || 0) - exp.amount;
+          b[exp.toReceivedUid] = (b[exp.toReceivedUid] || 0) + exp.amount;
         }
       }
     });
@@ -136,32 +126,20 @@ export default function ExpenseScreen({ route, navigation }: Props) {
         </View>
         <View className="flex-1">
           <Text className="text-textMain text-base font-bold">
-            {isPayment ? 'Debt Settlement' : item.title}
+            {isPayment ? 'Debt Settlement' : `${item.title} (${getMemberName(item.paidByUid || '')})`}
           </Text>
-          <Text className="text-textMuted text-xs font-medium mt-1">
-            {isPayment 
-              ? `${getMemberName(item.fromPaidUid || '')} paid ${getMemberName(item.toReceivedUid || '')}`
-              : `${getMemberName(item.paidByUid || '')} paid • split ${item.splitWith?.length || 1} ways`
-            }
-          </Text>
+          {isPayment && (
+            <Text className="text-textMuted text-xs font-medium mt-1">
+              {`${getMemberName(item.fromPaidUid || '')} paid ${getMemberName(item.toReceivedUid || '')}`}
+            </Text>
+          )}
         </View>
         <View className="items-end pl-2 border-l border-border/50">
           <Text className={`text-lg font-extrabold pb-0.5 ${isPayment ? 'text-primary' : 'text-textMain'}`}>
             ₹{item.amount.toFixed(2)}
           </Text>
-          {!isPayment && (
-            <Text className="text-textMuted text-[10px] font-bold tracking-wide">
-              ₹{(item.perPerson || 0).toFixed(2)} /EACH
-            </Text>
-          )}
         </View>
       </View>
-    );
-  };
-
-  const toggleSplit = (uid: string) => {
-    setSplitWith(prev =>
-      prev.includes(uid) ? prev.filter(u => u !== uid) : [...prev, uid]
     );
   };
 
@@ -244,34 +222,11 @@ export default function ExpenseScreen({ route, navigation }: Props) {
           />
         </View>
 
-        <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
-          <Text className="text-textMuted text-xs font-bold tracking-widest mb-4">SELECTION (TAP TO TOGGLE)</Text>
-          {(members || []).map(uid => {
-            const isSelected = splitWith.length === 0 || splitWith.includes(uid);
-            return (
-              <TouchableOpacity 
-                key={uid} 
-                className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-secondary/40 border-primary/30' : 'bg-background border-border'} `}
-                onPress={() => toggleSplit(uid)}
-              >
-                <MaterialIcons
-                  name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
-                  size={24} 
-                  color={isSelected ? '#4F46E5' : '#9CA3AF'}
-                />
-                <Text className={`text-base font-bold ml-3 ${isSelected ? 'text-primary' : 'text-textMuted'}`}>
-                  {getMemberName(uid)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
         <TouchableOpacity 
           className="bg-primary rounded-2xl py-4 items-center shadow-lg shadow-primary/30 mb-8" 
           onPress={handleAddExpense}
         >
-          <Text className="text-white font-bold text-lg">Split Expense</Text>
+          <Text className="text-white font-bold text-lg">Add Expense</Text>
         </TouchableOpacity>
       </SlideModal>
 
@@ -311,7 +266,7 @@ export default function ExpenseScreen({ route, navigation }: Props) {
                     {getMemberName(uid)}
                   </Text>
                   <Text className="text-[10px] text-textMuted font-medium uppercase">
-                    {balance > 0 ? `They are owed ₹${balance.toFixed(0)}` : `They owe ₹${Math.abs(balance).toFixed(0)}`}
+                    {`Balance: ₹${balance.toFixed(0)}`}
                   </Text>
                 </View>
               </TouchableOpacity>
