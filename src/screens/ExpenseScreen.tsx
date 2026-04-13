@@ -20,12 +20,10 @@ import { RootStackParamList, Expense } from '../types';
 type Props = NativeStackScreenProps<RootStackParamList, 'Expenses'>;
 
 export default function ExpenseScreen({ route, navigation }: Props) {
-  console.log("ExpenseScreen rendering, params:", route.params);
   const { householdId, members = [] } = route.params || {};
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Extract all unique UIDs involved in expenses to ensure their names are fetched
   const allInvolvedUids = Array.from(new Set([
     ...members,
     ...expenses.map(e => e.paidByUid).filter(Boolean) as string[],
@@ -36,15 +34,12 @@ export default function ExpenseScreen({ route, navigation }: Props) {
   const householdMembers = useHouseholdMembers(allInvolvedUids);
   const getMemberName = householdMembers?.getMemberName || ((uid: string) => uid === auth.currentUser?.uid ? 'You' : 'Member');
 
-  // General States
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isSettleModalVisible, setIsSettleModalVisible] = useState(false);
 
-  // Expense States
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
 
-  // Settlement States
   const [settleAmount, setSettleAmount] = useState('');
 
   useEffect(() => {
@@ -151,7 +146,6 @@ export default function ExpenseScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      {/* Header */}
       <ScreenHeader 
         navigation={navigation as any} 
         title="Expenses" 
@@ -167,7 +161,6 @@ export default function ExpenseScreen({ route, navigation }: Props) {
         <Text className="text-white font-bold ml-2">Settle Up Balances</Text>
       </TouchableOpacity>
 
-      {/* Balance Summary */}
       <View className="mx-6 bg-white rounded-3xl p-6 mb-6 shadow-sm border border-border">
         <Text className="text-textMuted text-xs font-bold tracking-widest mb-4">BALANCES</Text>
         {Object.entries(balances).map(([uid, amount]) => (
@@ -189,6 +182,7 @@ export default function ExpenseScreen({ route, navigation }: Props) {
           keyExtractor={i => i.id}
           renderItem={renderExpense}
           contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             expenses.length > 0 ? <Text className="text-textMuted text-xs font-bold tracking-widest mb-3 ml-1">TRANSACTIONS</Text> : null
           }
@@ -202,7 +196,6 @@ export default function ExpenseScreen({ route, navigation }: Props) {
         />
       )}
 
-      {/* Add Expense Modal */}
       <SlideModal
         visible={isModalVisible}
         onClose={() => setIsModalVisible(false)}
@@ -237,7 +230,6 @@ export default function ExpenseScreen({ route, navigation }: Props) {
         </TouchableOpacity>
       </SlideModal>
 
-      {/* Settle Up Modal */}
       <SlideModal
         visible={isSettleModalVisible}
         onClose={() => setIsSettleModalVisible(false)}

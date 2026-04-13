@@ -137,7 +137,6 @@ export default function ChoresScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      {/* Header */}
       <ScreenHeader 
         navigation={navigation as any} 
         title="Chores" 
@@ -148,7 +147,6 @@ export default function ChoresScreen({ route, navigation }: Props) {
         onRightPress={() => setIsModalVisible(true)} 
       />
 
-      {/* Stats row */}
       <View className="flex-row items-center gap-3 px-6 mb-6">
         <View className="flex-1 bg-white rounded-2xl p-4 items-center border border-border shadow-sm">
           <Text className="text-3xl font-extrabold text-textMain leading-none">{pending.length}</Text>
@@ -173,6 +171,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
           keyExtractor={i => i.id}
           renderItem={renderChore}
           contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             chores.length > 0 ? <Text className="text-textMuted text-xs font-bold tracking-widest mb-3 ml-1">TASKS</Text> : null
           }
@@ -186,7 +185,6 @@ export default function ChoresScreen({ route, navigation }: Props) {
         />
       )}
 
-      {/* Add Chore Modal */}
       <SlideModal
         visible={isModalVisible}
         onClose={() => setIsModalVisible(false)}

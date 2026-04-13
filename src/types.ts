@@ -8,7 +8,7 @@ export type RootStackParamList = {
   Grocery: { householdId: string; members: string[] };
   Expenses: { householdId: string; members: string[] };
   Chores: { householdId: string; members: string[] };
-  Chat: { householdId: string; members: string[] };
+  Chat: { householdId: string; members: string[]; householdData?: Household };
 };
 
 export interface UserProfile {

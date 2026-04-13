@@ -154,42 +154,38 @@ export default function GroceryScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        
-        <ScreenHeader 
-          navigation={navigation} 
-          title="Grocery List"
-          rightIcon="add"
-          onRightPress={() => setIsAddModalVisible(true)}
-        >
-          <View className="bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20">
-             <Text className="text-primary font-bold text-xs tracking-wider">{pending.length} LEFT</Text>
-          </View>
-        </ScreenHeader>
+      <ScreenHeader 
+        navigation={navigation} 
+        title="Grocery List"
+        rightIcon="add"
+        onRightPress={() => setIsAddModalVisible(true)}
+      >
+        <View className="bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20">
+           <Text className="text-primary font-bold text-xs tracking-wider">{pending.length} LEFT</Text>
+        </View>
+      </ScreenHeader>
 
-        {loading ? (
-          <View className="flex-1 justify-center items-center">
-            <ActivityIndicator color="#4F46E5" />
-          </View>
-        ) : (
-          <FlatList
-            className="flex-1"
-            data={[...pending, ...done]}
-            keyExtractor={i => i.id}
-            renderItem={renderItem}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, paddingTop: 12 }}
-            keyboardShouldPersistTaps="handled"
-            ListEmptyComponent={
-              <EmptyState 
-                icon="shopping-cart" 
-                title="Your list is empty!" 
-                description="Add your first item below so your roommates know what to buy."
-              />
-            }
-          />
-        )}
-
-      </KeyboardAvoidingView>
+      {loading ? (
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator color="#4F46E5" />
+        </View>
+      ) : (
+        <FlatList
+          className="flex-1"
+          data={[...pending, ...done]}
+          keyExtractor={i => i.id}
+          renderItem={renderItem}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, paddingTop: 12 }}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            <EmptyState 
+              icon="shopping-cart" 
+              title="Your list is empty!" 
+              description="Add your first item below so your roommates know what to buy."
+            />
+          }
+        />
+      )}
 
       <SlideModal
         visible={isAddModalVisible}

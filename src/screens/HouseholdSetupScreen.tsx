@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, Alert,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
+  TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ScreenHeader from '../components/ScreenHeader';
@@ -23,13 +24,12 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
   const [inviteCodeInput, setInviteCodeInput] = useState(route.params?.code || '');
   const [loading, setLoading] = useState(false);
 
-  // ─── Auto-join from deep link ─────────────────────────────────────────────
   useEffect(() => {
     if (route.params?.code) {
       setActiveTab('join');
       handleJoinHousehold(route.params.code);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const generateInviteCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -62,10 +62,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
       };
 
       await setDoc(doc(db, "households", householdId), householdData);
-
-      await setDoc(doc(db, "users", user.uid), {
-        householdId: householdId
-      }, { merge: true });
+      await setDoc(doc(db, "users", user.uid), { householdId }, { merge: true });
 
       Alert.alert("Success", "Household created successfully!");
       
@@ -76,7 +73,6 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
         });
       }, 0);
     } catch (error: any) {
-      console.error("Error in handleCreateHousehold:", error);
       Alert.alert("Error", `Failed to create household: ${error.message}`);
     }
     setLoading(false);
@@ -113,11 +109,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
         members: arrayUnion(user.uid),
       });
 
-      await setDoc(
-        doc(db, 'users', user.uid),
-        { householdId },
-        { merge: true },
-      );
+      await setDoc(doc(db, 'users', user.uid), { householdId }, { merge: true });
 
       Alert.alert('Success', `Joined ${householdDoc.data().name}!`);
 
@@ -128,94 +120,109 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
         });
       }, 0);
     } catch (error: any) {
-      console.error('handleJoinHousehold error:', error);
       Alert.alert('Error', `Failed to join household: ${error.message}`);
     }
     setLoading(false);
   };
 
-  return (
-    <SafeAreaView className="flex-1 bg-background">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
+  const innerContent = (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, paddingTop: 40, paddingHorizontal: 24, paddingBottom: 40 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}
-          keyboardShouldPersistTaps="handled"
-        >
-          <ScreenHeader navigation={navigation} title={activeTab === 'join' ? 'Join Existing' : 'Create New'} />
-          <View className="items-center mb-10">
-            <Text className="text-base text-textMuted text-center">
-              Create a new household or join an existing one.
-            </Text>
-          </View>
+        <View className="items-center mb-10 w-full">
+          <Text className="text-3xl font-black text-black mb-3 tracking-tighter text-center">
+            {activeTab === 'join' ? 'Join Household' : 'Create Household'}
+          </Text>
+          <Text className="text-sm text-gray-500 text-center leading-5 max-w-[280px]">
+            {activeTab === 'join' 
+              ? 'Enter a 6-character invite code to join your roommates.' 
+              : 'Set up a new shared space for you and your roommates.'}
+          </Text>
+        </View>
 
-          <View className="bg-white rounded-3xl p-6 border border-border shadow-sm">
+        <View className="w-full bg-white rounded-[32px] p-6 shadow-sm border border-gray-100">
+          {activeTab === 'create' && (
+            <View className="mb-4">
+              <Text className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest pl-1">Household Name</Text>
+              <TextInput
+                className="bg-gray-50 rounded-2xl px-5 py-4 text-black text-base border border-gray-100 mb-6"
+                placeholder="e.g. My Awesome Apartment"
+                placeholderTextColor="#9CA3AF"
+                value={householdName}
+                onChangeText={setHouseholdName}
+                returnKeyType="done"
+                onSubmitEditing={handleCreateHousehold}
+              />
+              <TouchableOpacity 
+                className="bg-black py-4 rounded-2xl items-center justify-center shadow-lg"
+                onPress={handleCreateHousehold} 
+                disabled={loading}
+              >
+                {loading ? <ActivityIndicator color="#FFF" /> : <Text className="text-white text-base font-bold tracking-wide">Create Space</Text>}
+              </TouchableOpacity>
+            </View>
+          )}
 
-            {/* ── Create Tab ──────────────────────────────────────────── */}
-            {activeTab === 'create' && (
-              <View className="mb-4">
-                <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Household Name</Text>
-                <TextInput
-                  className="bg-background rounded-xl px-4 py-4 text-textMain text-base border border-border mb-6"
-                  placeholder="e.g. My Awesome Apartment"
-                  placeholderTextColor="#9CA3AF"
-                  value={householdName}
-                  onChangeText={setHouseholdName}
-                />
-                <TouchableOpacity 
-                  className="bg-primary py-4 rounded-xl items-center justify-center shadow-sm shadow-primary/50"
-                  onPress={handleCreateHousehold} 
-                  disabled={loading}
-                >
-                  {loading ? <ActivityIndicator color="#FFF" /> : <Text className="text-white text-base font-bold">Create Household</Text>}
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* ── Join Tab ──────────────────────────────────────────── */}
-            {activeTab === 'join' && (
-              <View className="mb-4">
-                <Text className="text-sm font-bold text-textMuted mb-2 ml-1">Invite Code</Text>
-                <TextInput
-                  className="bg-background rounded-xl px-4 py-4 text-textMain text-base border border-border mb-6 font-bold tracking-widest text-center"
-                  placeholder="6-CHAR CODE"
-                  placeholderTextColor="#9CA3AF"
-                  value={inviteCodeInput}
-                  onChangeText={(text) => {
-                    const upperText = text.toUpperCase();
-                    setInviteCodeInput(upperText);
-                    if (upperText.trim().length === 6) {
-                      handleJoinHousehold(upperText);
-                    }
-                  }}
-                  autoCapitalize="characters"
-                  maxLength={6}
-                />
-                <TouchableOpacity
-                  className="bg-primary py-4 rounded-xl items-center justify-center shadow-sm shadow-primary/50"
-                  onPress={() => handleJoinHousehold()}
-                  disabled={loading}
-                >
-                  {loading
-                    ? <ActivityIndicator color="#FFF" />
-                    : <Text className="text-white text-base font-bold">Join Household</Text>
+          {activeTab === 'join' && (
+            <View className="mb-4">
+              <Text className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest pl-1">Invite Code</Text>
+              <TextInput
+                className="bg-gray-50 rounded-2xl px-5 py-4 text-black text-base border border-gray-100 mb-6 font-bold tracking-widest text-center"
+                placeholder="6-CHAR CODE"
+                placeholderTextColor="#9CA3AF"
+                value={inviteCodeInput}
+                onChangeText={(text) => {
+                  const upperText = text.toUpperCase();
+                  setInviteCodeInput(upperText);
+                  if (upperText.trim().length === 6) {
+                    handleJoinHousehold(upperText);
                   }
-                </TouchableOpacity>
-              </View>
-            )}
+                }}
+                autoCapitalize="characters"
+                maxLength={6}
+                returnKeyType="done"
+              />
+              <TouchableOpacity
+                className="bg-black py-4 rounded-2xl items-center justify-center shadow-lg"
+                onPress={() => handleJoinHousehold()}
+                disabled={loading}
+              >
+                {loading
+                  ? <ActivityIndicator color="#FFF" />
+                  : <Text className="text-white text-base font-bold tracking-wide">Join Space</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          )}
 
-            {/* Sign Out */}
-            <TouchableOpacity
-              className="mt-4 py-4 items-center"
-              onPress={() => auth.signOut()}
-            >
-              <Text className="text-danger text-base font-bold">Sign Out</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <TouchableOpacity
+            className="mt-6 py-3 items-center"
+            onPress={() => auth.signOut()}
+          >
+            <Text className="text-gray-400 text-sm font-bold">Sign Out</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </TouchableWithoutFeedback>
+  );
+
+  return (
+    <SafeAreaView className="flex-1 bg-[#FAFAFA]">
+      <ScreenHeader navigation={navigation} title="" />
+      
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView behavior="padding" className="flex-1">
+          {innerContent}
+        </KeyboardAvoidingView>
+      ) : (
+        <View style={{ flex: 1 }}>
+          {innerContent}
+        </View>
+      )}
     </SafeAreaView>
   );
 }
