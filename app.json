@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "com.jeevan0714.sharedliving",
-      "softwareKeyboardLayoutMode": "adjustResize",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

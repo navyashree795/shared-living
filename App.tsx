@@ -33,6 +33,7 @@ function RootNavigator() {
 
   return (
     <Stack.Navigator 
+      id="root"
       screenOptions={{ headerShown: false }}
       initialRouteName={user ? "HouseholdSelection" : "Login"}
     >

@@ -43,9 +43,10 @@ export interface Expense {
   type: 'expense' | 'payment';
   title?: string;
   amount: number;
+  category?: string;
   paidByUid?: string;
-  splitWith?: string[];
-  perPerson?: number;
+  payerName?: string;
+  splitAmong?: string[];
   fromPaidUid?: string;
   toReceivedUid?: string;
   createdAt: Timestamp;
@@ -59,6 +60,7 @@ export interface GroceryItem {
   qty: string;
   price: number;
   addedBy: string;
+  expenseLogged?: boolean;
   createdAt: Timestamp;
 }
 
@@ -68,8 +70,7 @@ export interface Chore {
   assignedToUid: string;
   done: boolean;
   createdByUid: string;
-  startTime: string;
-  endTime: string;
+  time: string;
   day: string;
   createdAt: Timestamp;
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, FlatList, TextInput, TouchableOpacity, 
   ActivityIndicator, Alert, ScrollView, Platform, Switch
@@ -28,12 +28,20 @@ export default function ChoresScreen({ route, navigation }: Props) {
   const [choreTitle, setChoreTitle] = useState('');
   const [assignedTo, setAssignedTo] = useState<string>(auth.currentUser?.uid || '');
   const [deadline, setDeadline] = useState('');
-  const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(new Date(new Date().getTime() + 3600000));
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [time, setTime] = useState(new Date());
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showSplitOptions, setShowSplitOptions] = useState(false);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [syncTime, setSyncTime] = useState(new Date());
+  const inputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    if (isModalVisible) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 250);
+    }
+  }, [isModalVisible]);
 
   useEffect(() => {
     // Simple NTP-like sync (simulated for UI)
@@ -63,8 +71,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
   const handleAddChore = async () => {
     if (!choreTitle.trim()) { Alert.alert('Error', 'Please enter a chore name.'); return; }
     
-    const formattedStartTime = startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-    const formattedEndTime = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    const formattedTime = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
     
     try {
       const choreData = {
@@ -72,8 +79,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         assignedToUid: assignedTo,
         done: false,
         createdByUid: auth.currentUser?.uid,
-        startTime: formattedStartTime,
-        endTime: formattedEndTime,
+        time: formattedTime,
         createdAt: serverTimestamp(),
       };
 
@@ -157,7 +163,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
           <View className="flex-row items-center bg-primary/10 px-2 py-0.5 rounded-md mt-1 border border-primary/20 mr-2">
             <MaterialIcons name="schedule" size={12} color="#4F46E5" />
             <Text className="text-primary text-[10px] font-bold ml-1">
-              {item.startTime} - {item.endTime}
+              {item.time}
             </Text>
           </View>
           {!!item.day && (
@@ -228,122 +234,125 @@ export default function ChoresScreen({ route, navigation }: Props) {
         visible={isModalVisible}
         onClose={() => setIsModalVisible(false)}
         title="Add Chore"
-        scrollEnabled={!showStartPicker && !showEndPicker}
+        scrollEnabled={!showTimePicker}
       >
-        <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
-          <Text className="text-textMuted text-sm font-bold mb-2 ml-1">What needs to be done?</Text>
-          <TextInput 
-            className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border mb-4" 
-            placeholder="e.g. Taking out the trash" 
-            placeholderTextColor="#9CA3AF"
-            value={choreTitle} 
-            onChangeText={setChoreTitle} 
-          />
-          
-          <View className="mb-4 bg-background/50 rounded-2xl p-4 border border-border/50">
-            <View className="mb-3 px-1">
-              <Text className="text-textMain font-bold">Select Days</Text>
-            </View>
-            <View className="flex-row justify-between">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => {
-                const isSelected = selectedDays.includes(d);
-                return (
-                  <TouchableOpacity 
-                    key={d} 
-                    onPress={() => {
-                      if (isSelected) {
-                        setSelectedDays(selectedDays.filter(day => day !== d));
-                      } else {
-                        setSelectedDays([...selectedDays, d]);
-                      }
-                    }}
-                    className={`w-9 h-9 rounded-full items-center justify-center border ${isSelected ? 'bg-warning border-warning' : 'bg-slate-50 border-slate-100'}`}
-                  >
-                    <Text className={`text-[10px] font-black ${isSelected ? 'text-white' : 'text-slate-400'}`}>{d}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          <View className="flex-row gap-3">
-            <TouchableOpacity 
-              onPress={() => { setShowStartPicker(true); setShowEndPicker(false); }}
-              className={`flex-1 rounded-[22px] p-4 border-2 ${showStartPicker ? 'bg-primary/5 border-primary' : 'bg-background border-border'} `}
-            >
-              <Text className={`text-[10px] font-black uppercase mb-1 ${showStartPicker ? 'text-primary' : 'text-textMuted'}`}>Start Time</Text>
-              <View className="flex-row items-baseline">
-                <Text className="text-2xl font-black text-textMain">{startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[0]}</Text>
-                <Text className="text-lg font-black text-textMuted mx-0.5">:</Text>
-                <Text className="text-2xl font-black text-textMain">{startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[1]}</Text>
-                <Text className="text-[10px] font-black text-textMuted ml-1 uppercase">{startTime.getHours() >= 12 ? 'PM' : 'AM'}</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              onPress={() => { setShowEndPicker(true); setShowStartPicker(false); }}
-              className={`flex-1 rounded-[22px] p-4 border-2 ${showEndPicker ? 'bg-primary/5 border-primary' : 'bg-background border-border'} `}
-            >
-              <Text className={`text-[10px] font-black uppercase mb-1 ${showEndPicker ? 'text-primary' : 'text-textMuted'}`}>End Time</Text>
-              <View className="flex-row items-baseline">
-                <Text className="text-2xl font-black text-textMain">{endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[0]}</Text>
-                <Text className="text-lg font-black text-textMuted mx-0.5">:</Text>
-                <Text className="text-2xl font-black text-textMain">{endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[1]}</Text>
-                <Text className="text-[10px] font-black text-textMuted ml-1 uppercase">{endTime.getHours() >= 12 ? 'PM' : 'AM'}</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {showStartPicker && (
-            <View className="mt-4">
-              <TimeWheelPicker 
-                initialTime={startTime}
-                onConfirm={(date) => { setStartTime(date); setShowStartPicker(false); }}
-                onCancel={() => setShowStartPicker(false)}
-              />
-            </View>
-          )}
-
-          {showEndPicker && (
-            <View className="mt-4">
-              <TimeWheelPicker 
-                initialTime={endTime}
-                onConfirm={(date) => { setEndTime(date); setShowEndPicker(false); }}
-                onCancel={() => setShowEndPicker(false)}
-              />
-            </View>
-          )}
-        </View>
-
-        <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
-          <Text className="text-textMuted text-xs font-bold tracking-widest mb-4">ASSIGN TO</Text>
-          {(members || []).map(uid => {
-            const isSelected = assignedTo === uid;
-            return (
-              <TouchableOpacity 
-                key={uid} 
-                className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-warning/10 border-warning/30' : 'bg-background border-border'} `}
-                onPress={() => setAssignedTo(uid)}
-              >
-                <MaterialIcons
-                  name={isSelected ? 'radio-button-checked' : 'radio-button-unchecked'}
-                  size={24} 
-                  color={isSelected ? '#D97706' : '#9CA3AF'}
+        <View className="pt-2 pb-2">
+          {!showSplitOptions ? (
+            <View>
+              <View className="border-b border-border/60 pb-2 mb-6">
+                <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-1">What needs to be done?</Text>
+                <TextInput 
+                  ref={inputRef}
+                  className="text-textMain text-lg font-bold" 
+                  placeholder="e.g. Sweep the floor" 
+                  placeholderTextColor="#D1D5DB"
+                  value={choreTitle} 
+                  onChangeText={setChoreTitle} 
                 />
-                <Text className={`text-base font-bold ml-3 ${isSelected ? 'text-warning' : 'text-textMuted'}`}>
-                  {getMemberName(uid)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+              </View>
 
-        <TouchableOpacity 
-          className="bg-warning rounded-2xl py-4 items-center shadow-lg shadow-warning/30 mb-8" 
-          onPress={handleAddChore}
-        >
-          <Text className="text-white font-bold text-lg">Assign Chore</Text>
-        </TouchableOpacity>
+              <View className="mb-6">
+                <Text className="text-textMuted text-xs font-bold mb-2">Select Days</Text>
+                <View className="flex-row justify-between">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => {
+                    const isSelected = selectedDays.includes(d);
+                    return (
+                      <TouchableOpacity 
+                        key={d} 
+                        onPress={() => {
+                          if (isSelected) {
+                            setSelectedDays(selectedDays.filter(day => day !== d));
+                          } else {
+                            setSelectedDays([...selectedDays, d]);
+                          }
+                        }}
+                        className={`w-9 h-9 rounded-full items-center justify-center border ${isSelected ? 'bg-warning border-warning' : 'bg-slate-50 border-slate-200'}`}
+                      >
+                        <Text className={`text-[10px] font-black ${isSelected ? 'text-white' : 'text-slate-400'}`}>{d}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View className="border-b border-border/60 pb-2 mb-6 flex-row justify-between items-center">
+                <Text className="text-textMuted text-xs font-bold w-16">Time</Text>
+                <TouchableOpacity 
+                  onPress={() => setShowTimePicker(true)}
+                  className={`flex-row items-baseline rounded-xl px-3 py-1 ${showTimePicker ? 'bg-primary/5' : ''}`}
+                >
+                  <Text className="text-xl font-black text-textMain">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[0]}</Text>
+                  <Text className="text-base font-black text-textMuted mx-0.5">:</Text>
+                  <Text className="text-xl font-black text-textMain">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[1]}</Text>
+                  <Text className="text-[10px] font-black text-textMuted ml-1 uppercase">{time.getHours() >= 12 ? 'PM' : 'AM'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {showTimePicker && (
+                <View className="mb-6 border border-border/50 rounded-2xl bg-background/30 p-2">
+                  <TimeWheelPicker 
+                    initialTime={time}
+                    onConfirm={(date) => { setTime(date); setShowTimePicker(false); }}
+                    onCancel={() => setShowTimePicker(false)}
+                  />
+                </View>
+              )}
+
+              <TouchableOpacity 
+                onPress={() => setShowSplitOptions(true)}
+                className="bg-secondary/30 rounded-2xl py-3.5 items-center border border-border/50 mb-6"
+              >
+                <Text className="text-textMain font-bold text-sm">Assignee: {assignedTo ? getMemberName(assignedTo) : 'Select Person'}</Text>
+              </TouchableOpacity>
+
+              <View className="flex-row justify-between mt-2">
+                <TouchableOpacity 
+                  className="flex-1 bg-background py-3.5 rounded-2xl items-center mr-3 border border-border/40"
+                  onPress={() => { setIsModalVisible(false); setShowSplitOptions(false); setChoreTitle(''); }}
+                >
+                  <Text className="text-textMuted font-bold text-sm">Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  className="flex-1 bg-textMain py-3.5 rounded-2xl items-center" 
+                  onPress={handleAddChore}
+                >
+                  <Text className="text-white font-bold text-sm">Save</Text>
+                </TouchableOpacity>
+              </View>
+
+            </View>
+          ) : (
+            <View>
+              <View className="flex-row items-center justify-between mb-6">
+                <Text className="text-textMain text-lg font-black">Assign to</Text>
+                <TouchableOpacity onPress={() => setShowSplitOptions(false)} className="bg-primary/10 px-3 py-1.5 rounded-full">
+                   <Text className="text-primary font-bold text-xs uppercase">Done</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ maxHeight: 290 }} nestedScrollEnabled showsVerticalScrollIndicator={true}>
+                {(members || []).map(uid => {
+                  const isSelected = assignedTo === uid;
+                  return (
+                    <TouchableOpacity 
+                      key={uid} 
+                      className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-warning/10 border-warning/30' : 'bg-background border-border'} `}
+                      onPress={() => setAssignedTo(uid)}
+                    >
+                      <MaterialIcons
+                        name={isSelected ? 'radio-button-checked' : 'radio-button-unchecked'}
+                        size={24} 
+                        color={isSelected ? '#D97706' : '#9CA3AF'}
+                      />
+                      <Text className={`text-base font-bold ml-3 ${isSelected ? 'text-warning' : 'text-textMuted'}`}>
+                        {getMemberName(uid)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+        </View>
       </SlideModal>
     </SafeAreaView>
   );

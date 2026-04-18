@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, Text, FlatList, Animated, NativeScrollEvent, NativeSyntheticEvent, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, Animated, NativeScrollEvent, NativeSyntheticEvent, Platform, TouchableOpacity, ScrollView } from 'react-native';
 
 interface WheelPickerProps {
   data: string[];
@@ -13,7 +13,7 @@ const VISIBLE_ITEMS = 3;
 
 export const WheelPicker: React.FC<WheelPickerProps> = ({ data, initialIndex, onSelect, width = 60 }) => {
   const scrollY = useRef(new Animated.Value(0)).current;
-  const scrollViewRef = useRef<Animated.ScrollView>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const [selectedIndex, setSelectedIndex] = useState(initialIndex);
 
   useEffect(() => {
