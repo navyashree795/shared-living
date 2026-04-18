@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, FlatList, TextInput, TouchableOpacity,
-  ActivityIndicator, Alert, ScrollView
+import { 
+  View, Text, FlatList, TextInput, TouchableOpacity, 
+  ActivityIndicator, Alert, ScrollView, Platform, Switch
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { TimeWheelPicker } from '../components/TimeWheelPicker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { useHouseholdMembers } from '../hooks/useHouseholdMembers';
@@ -27,6 +28,18 @@ export default function ChoresScreen({ route, navigation }: Props) {
   const [choreTitle, setChoreTitle] = useState('');
   const [assignedTo, setAssignedTo] = useState<string>(auth.currentUser?.uid || '');
   const [deadline, setDeadline] = useState('');
+  const [startTime, setStartTime] = useState(new Date());
+  const [endTime, setEndTime] = useState(new Date(new Date().getTime() + 3600000));
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [syncTime, setSyncTime] = useState(new Date());
+
+  useEffect(() => {
+    // Simple NTP-like sync (simulated for UI)
+    const timer = setInterval(() => setSyncTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
   
   const allInvolvedUids = Array.from(new Set([
     ...members,
@@ -49,17 +62,40 @@ export default function ChoresScreen({ route, navigation }: Props) {
 
   const handleAddChore = async () => {
     if (!choreTitle.trim()) { Alert.alert('Error', 'Please enter a chore name.'); return; }
+    
+    const formattedStartTime = startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    const formattedEndTime = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    
     try {
-      await addDoc(collection(db, 'households', householdId, 'chores'), {
+      const choreData = {
         title: choreTitle.trim(),
         assignedToUid: assignedTo,
         done: false,
         createdByUid: auth.currentUser?.uid,
-        deadline: deadline.trim(),
+        startTime: formattedStartTime,
+        endTime: formattedEndTime,
         createdAt: serverTimestamp(),
-      });
-      logActivity(householdId, 'chore_add', choreTitle.trim());
-      setChoreTitle(''); setDeadline(''); setAssignedTo(auth.currentUser?.uid || '');
+      };
+
+      if (selectedDays.length > 0) {
+        // Create ONE chore for all selected days (Consolidated)
+        const daysString = selectedDays.join(', ');
+        await addDoc(collection(db, 'households', householdId, 'chores'), {
+          ...choreData,
+          day: daysString,
+        });
+        logActivity(householdId, 'chore_add', `${choreTitle.trim()} (${daysString})`);
+      } else {
+        // Just create one for today if no days selected
+        const today = new Date().toLocaleDateString('en-US', { weekday: 'short' });
+        await addDoc(collection(db, 'households', householdId, 'chores'), {
+          ...choreData,
+          day: today,
+        });
+        logActivity(householdId, 'chore_add', choreTitle.trim());
+      }
+
+      setChoreTitle(''); setAssignedTo(auth.currentUser?.uid || ''); setSelectedDays([]);
       setIsModalVisible(false);
     } catch (e: any) {
       console.error('Chore Add Error:', e);
@@ -118,12 +154,15 @@ export default function ChoresScreen({ route, navigation }: Props) {
               {getMemberName(item.assignedToUid)}
             </Text>
           </View>
-          {!!item.deadline && (
+          <View className="flex-row items-center bg-primary/10 px-2 py-0.5 rounded-md mt-1 border border-primary/20 mr-2">
+            <MaterialIcons name="schedule" size={12} color="#4F46E5" />
+            <Text className="text-primary text-[10px] font-bold ml-1">
+              {item.startTime} - {item.endTime}
+            </Text>
+          </View>
+          {!!item.day && (
             <View className="flex-row items-center bg-warning/10 px-2 py-0.5 rounded-md mt-1 border border-warning/20">
-              <MaterialIcons name="schedule" size={14} color="#D97706" />
-              <Text className="text-warning text-[10px] font-bold ml-1 uppercase">
-                {item.deadline}
-              </Text>
+              <Text className="text-warning text-[10px] font-black ml-1 uppercase">{item.day}</Text>
             </View>
           )}
         </View>
@@ -189,6 +228,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         visible={isModalVisible}
         onClose={() => setIsModalVisible(false)}
         title="Add Chore"
+        scrollEnabled={!showStartPicker && !showEndPicker}
       >
         <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
           <Text className="text-textMuted text-sm font-bold mb-2 ml-1">What needs to be done?</Text>
@@ -200,14 +240,79 @@ export default function ChoresScreen({ route, navigation }: Props) {
             onChangeText={setChoreTitle} 
           />
           
-          <Text className="text-textMuted text-sm font-bold mb-2 ml-1">Deadline / Timing (Optional)</Text>
-          <TextInput 
-            className="bg-background rounded-xl px-4 py-3.5 text-textMain text-base border border-border" 
-            placeholder="e.g. By Friday 5 PM, or Today" 
-            placeholderTextColor="#9CA3AF"
-            value={deadline} 
-            onChangeText={setDeadline} 
-          />
+          <View className="mb-4 bg-background/50 rounded-2xl p-4 border border-border/50">
+            <View className="mb-3 px-1">
+              <Text className="text-textMain font-bold">Select Days</Text>
+            </View>
+            <View className="flex-row justify-between">
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => {
+                const isSelected = selectedDays.includes(d);
+                return (
+                  <TouchableOpacity 
+                    key={d} 
+                    onPress={() => {
+                      if (isSelected) {
+                        setSelectedDays(selectedDays.filter(day => day !== d));
+                      } else {
+                        setSelectedDays([...selectedDays, d]);
+                      }
+                    }}
+                    className={`w-9 h-9 rounded-full items-center justify-center border ${isSelected ? 'bg-warning border-warning' : 'bg-slate-50 border-slate-100'}`}
+                  >
+                    <Text className={`text-[10px] font-black ${isSelected ? 'text-white' : 'text-slate-400'}`}>{d}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <View className="flex-row gap-3">
+            <TouchableOpacity 
+              onPress={() => { setShowStartPicker(true); setShowEndPicker(false); }}
+              className={`flex-1 rounded-[22px] p-4 border-2 ${showStartPicker ? 'bg-primary/5 border-primary' : 'bg-background border-border'} `}
+            >
+              <Text className={`text-[10px] font-black uppercase mb-1 ${showStartPicker ? 'text-primary' : 'text-textMuted'}`}>Start Time</Text>
+              <View className="flex-row items-baseline">
+                <Text className="text-2xl font-black text-textMain">{startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[0]}</Text>
+                <Text className="text-lg font-black text-textMuted mx-0.5">:</Text>
+                <Text className="text-2xl font-black text-textMain">{startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[1]}</Text>
+                <Text className="text-[10px] font-black text-textMuted ml-1 uppercase">{startTime.getHours() >= 12 ? 'PM' : 'AM'}</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={() => { setShowEndPicker(true); setShowStartPicker(false); }}
+              className={`flex-1 rounded-[22px] p-4 border-2 ${showEndPicker ? 'bg-primary/5 border-primary' : 'bg-background border-border'} `}
+            >
+              <Text className={`text-[10px] font-black uppercase mb-1 ${showEndPicker ? 'text-primary' : 'text-textMuted'}`}>End Time</Text>
+              <View className="flex-row items-baseline">
+                <Text className="text-2xl font-black text-textMain">{endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[0]}</Text>
+                <Text className="text-lg font-black text-textMuted mx-0.5">:</Text>
+                <Text className="text-2xl font-black text-textMain">{endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[1]}</Text>
+                <Text className="text-[10px] font-black text-textMuted ml-1 uppercase">{endTime.getHours() >= 12 ? 'PM' : 'AM'}</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {showStartPicker && (
+            <View className="mt-4">
+              <TimeWheelPicker 
+                initialTime={startTime}
+                onConfirm={(date) => { setStartTime(date); setShowStartPicker(false); }}
+                onCancel={() => setShowStartPicker(false)}
+              />
+            </View>
+          )}
+
+          {showEndPicker && (
+            <View className="mt-4">
+              <TimeWheelPicker 
+                initialTime={endTime}
+                onConfirm={(date) => { setEndTime(date); setShowEndPicker(false); }}
+                onCancel={() => setShowEndPicker(false)}
+              />
+            </View>
+          )}
         </View>
 
         <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">

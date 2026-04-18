@@ -11,12 +11,13 @@ interface SlideModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  scrollEnabled?: boolean;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MAX_MODAL_HEIGHT = SCREEN_HEIGHT * 0.85;
 
-const SlideModal: React.FC<SlideModalProps> = ({ visible, onClose, title, children }) => {
+const SlideModal: React.FC<SlideModalProps> = ({ visible, onClose, title, children, scrollEnabled = true }) => {
   return (
     <Modal
       visible={visible}
@@ -53,6 +54,7 @@ const SlideModal: React.FC<SlideModalProps> = ({ visible, onClose, title, childr
                   </View>
                   
                   <ScrollView 
+                    scrollEnabled={scrollEnabled}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{ paddingBottom: 30 }}
                     keyboardShouldPersistTaps="handled"

@@ -68,7 +68,9 @@ export interface Chore {
   assignedToUid: string;
   done: boolean;
   createdByUid: string;
-  deadline?: string;
+  startTime: string;
+  endTime: string;
+  day: string;
   createdAt: Timestamp;
 }
 
@@ -78,4 +80,5 @@ export interface Message {
   senderId: string;
   senderName: string;
   createdAt: Timestamp;
+  readBy?: string[];
 }
