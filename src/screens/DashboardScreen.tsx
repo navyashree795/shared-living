@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
@@ -49,10 +49,34 @@ export default function DashboardScreen({ navigation, route }: Props) {
   const { householdId, householdData: initialData } = route.params;
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isMembersModalVisible, setIsMembersModalVisible] = useState(false);
+  const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
   const { profile: userData } = useUser();
+  const [editUsername, setEditUsername] = useState(userData?.username || '');
   const [householdData, setHouseholdData] = useState<Household | null>(initialData || null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const { memberProfiles } = useHouseholdMembers(householdData?.members);
+
+  useEffect(() => {
+    if (userData?.username) {
+      setEditUsername(userData.username);
+    }
+  }, [userData?.username]);
+
+  const handleUpdateProfile = async () => {
+    if (!editUsername.trim() || !auth.currentUser) {
+      Alert.alert('Error', 'Please enter a valid username');
+      return;
+    }
+    try {
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        username: editUsername.trim()
+      });
+      setIsProfileModalVisible(false);
+      Alert.alert('Success', 'Profile updated successfully!');
+    } catch (e: any) {
+      Alert.alert('Error', 'Could not update profile: ' + e.message);
+    }
+  };
 
   useEffect(() => {
     if (!householdId) return;
@@ -128,10 +152,18 @@ export default function DashboardScreen({ navigation, route }: Props) {
           <View className="w-[78%] h-full bg-white px-6 border-r border-border shadow-2xl">
             <SafeAreaView className="flex-1">
               <View className="mt-10 mb-6">
-                <View className="w-16 h-16 rounded-full bg-primary justify-center items-center mb-4 shadow-md">
-                  <Text className="text-white text-2xl font-extrabold">
-                    {(userData?.username || auth.currentUser?.email)?.charAt(0).toUpperCase()}
-                  </Text>
+                <View className="flex-row items-center justify-between mb-4">
+                  <View className="w-16 h-16 rounded-full bg-primary justify-center items-center shadow-md">
+                    <Text className="text-white text-2xl font-extrabold">
+                      {(userData?.username || auth.currentUser?.email || 'U').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <TouchableOpacity 
+                    onPress={() => { setIsMenuVisible(false); setIsProfileModalVisible(true); }}
+                    className="p-2 bg-secondary rounded-full"
+                  >
+                    <MaterialIcons name="edit" size={20} color="#4F46E5" />
+                  </TouchableOpacity>
                 </View>
                 <Text className="text-textMain text-lg font-bold mb-0.5">
                   {userData?.username ? `@${userData.username}` : 'User'}
@@ -330,6 +362,35 @@ export default function DashboardScreen({ navigation, route }: Props) {
             );
           })}
         </View>
+      </SlideModal>
+
+      {/* Profile Modal */}
+      <SlideModal
+        visible={isProfileModalVisible}
+        onClose={() => setIsProfileModalVisible(false)}
+        title="Edit Profile"
+      >
+        <View className="bg-white rounded-3xl p-6 border border-border shadow-sm mb-6">
+          <Text className="text-textMuted text-sm font-bold mb-2 ml-1">Username</Text>
+          <View className="border border-border rounded-xl flex-row items-center bg-background px-4">
+            <Text className="text-textMuted font-bold mr-1">@</Text>
+            <TextInput 
+              className="flex-1 py-3.5 text-textMain text-base font-bold" 
+              placeholder="username" 
+              placeholderTextColor="#9CA3AF"
+              value={editUsername} 
+              onChangeText={setEditUsername} 
+              autoCapitalize="none"
+            />
+          </View>
+        </View>
+
+        <TouchableOpacity 
+          className="bg-primary rounded-2xl py-4 items-center shadow-lg shadow-primary/30 mb-8" 
+          onPress={handleUpdateProfile}
+        >
+          <Text className="text-white font-bold text-lg">Save Changes</Text>
+        </TouchableOpacity>
       </SlideModal>
     </SafeAreaView>
   );
