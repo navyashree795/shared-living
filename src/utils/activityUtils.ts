@@ -7,7 +7,8 @@ export type ActivityType =
   | 'expense_add' 
   | 'payment_add' 
   | 'chore_add' 
-  | 'chore_done';
+  | 'chore_done'
+  | 'chore_reminder';
 
 export const logActivity = async (
   householdId: string | undefined, 
@@ -21,7 +22,7 @@ export const logActivity = async (
     // Fetch current user's profile to get the most accurate name
     const userSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
     const userData = userSnap.exists() ? userSnap.data() : null;
-    const userName = userData?.username ? `@${userData.username}` : (auth.currentUser.email?.split('@')[0] || 'Member');
+    const userName = userData?.username ? `${userData.username}` : (auth.currentUser.email?.split('@')[0] || 'Member');
 
     await addDoc(collection(db, 'households', householdId, 'activities'), {
       type,
@@ -37,7 +38,7 @@ export const logActivity = async (
 };
 
 interface ActivityConfig {
-  icon: "shopping-basket" | "check-circle" | "receipt" | "done-all" | "add-task" | "task-alt" | "info";
+  icon: "shopping-basket" | "check-circle" | "receipt" | "done-all" | "add-task" | "task-alt" | "info" | "notifications-active";
   color: string;
   label: string;
 }
@@ -56,6 +57,8 @@ export const getActivityConfig = (type: string): ActivityConfig => {
       return { icon: 'add-task', color: '#CA8A04', label: 'assigned' };
     case 'chore_done':
       return { icon: 'task-alt', color: '#059669', label: 'finished' };
+    case 'chore_reminder':
+      return { icon: 'notifications-active', color: '#D97706', label: 'reminded for' };
     default:
       return { icon: 'info', color: '#6B7280', label: 'updated' };
   }

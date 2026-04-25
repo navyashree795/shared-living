@@ -26,6 +26,14 @@ export interface Household {
   createdBy: string;
   inviteCode: string;
   members: string[];
+  info?: {
+    wifiName?: string;
+    wifiPass?: string;
+    trashArrivalTime?: string; // HH:mm format
+    landlordName?: string;
+    landlordPhone?: string;
+    other?: string;
+  };
 }
 
 export interface Activity {
@@ -73,6 +81,10 @@ export interface Chore {
   time: string;
   day: string;
   createdAt: Timestamp;
+  rotationEnabled?: boolean;
+  rotationOrder?: string[];
+  currentRotationIndex?: number;
+  reminderSent?: boolean;
 }
 
 export interface Message {

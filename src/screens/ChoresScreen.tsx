@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TimeWheelPicker } from '../components/TimeWheelPicker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
+import { useUser } from '../context/UserContext';
+import { getSyncedDate } from '../utils/timeUtils';
 import { useHouseholdMembers } from '../hooks/useHouseholdMembers';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
@@ -28,11 +30,14 @@ export default function ChoresScreen({ route, navigation }: Props) {
   const [choreTitle, setChoreTitle] = useState('');
   const [assignedTo, setAssignedTo] = useState<string>(auth.currentUser?.uid || '');
   const [deadline, setDeadline] = useState('');
-  const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState(getSyncedDate());
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showSplitOptions, setShowSplitOptions] = useState(false);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [isRotationEnabled, setIsRotationEnabled] = useState(false);
+  const [rotationOrder, setRotationOrder] = useState<string[]>([]);
   const [syncTime, setSyncTime] = useState(new Date());
+  const { profile: userData } = useUser();
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -45,7 +50,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     // Simple NTP-like sync (simulated for UI)
-    const timer = setInterval(() => setSyncTime(new Date()), 1000);
+    const timer = setInterval(() => setSyncTime(getSyncedDate()), 1000);
     return () => clearInterval(timer);
   }, []);
   
@@ -55,7 +60,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
   ]));
 
   const { getMemberName } = useHouseholdMembers(allInvolvedUids);
-
+  
   useEffect(() => {
     const q = query(
       collection(db, 'households', householdId, 'chores'),
@@ -93,15 +98,19 @@ export default function ChoresScreen({ route, navigation }: Props) {
         logActivity(householdId, 'chore_add', `${choreTitle.trim()} (${daysString})`);
       } else {
         // Just create one for today if no days selected
-        const today = new Date().toLocaleDateString('en-US', { weekday: 'short' });
+        const today = getSyncedDate().toLocaleDateString('en-US', { weekday: 'short' });
         await addDoc(collection(db, 'households', householdId, 'chores'), {
           ...choreData,
           day: today,
+          rotationEnabled: isRotationEnabled,
+          rotationOrder: isRotationEnabled ? rotationOrder : [],
+          currentRotationIndex: 0,
         });
         logActivity(householdId, 'chore_add', choreTitle.trim());
       }
 
       setChoreTitle(''); setAssignedTo(auth.currentUser?.uid || ''); setSelectedDays([]);
+      setIsRotationEnabled(false); setRotationOrder([]);
       setIsModalVisible(false);
     } catch (e: any) {
       console.error('Chore Add Error:', e);
@@ -112,15 +121,59 @@ export default function ChoresScreen({ route, navigation }: Props) {
   const handleToggleDone = async (chore: Chore) => {
     try {
       const isFinishing = !chore.done;
-      await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
-        done: isFinishing,
-      });
-      if (isFinishing) {
-        logActivity(householdId, 'chore_done', chore.title);
+      
+      if (isFinishing && chore.rotationEnabled && chore.rotationOrder && chore.rotationOrder.length > 0) {
+        // CIRCULAR QUEUE LOGIC: Move to next person
+        const nextIndex = ((chore.currentRotationIndex || 0) + 1) % chore.rotationOrder.length;
+        const nextAssignee = chore.rotationOrder[nextIndex];
+        
+        await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
+          done: false, // Reset to not done for the next person
+          assignedToUid: nextAssignee,
+          currentRotationIndex: nextIndex,
+        });
+        
+        logActivity(householdId, 'chore_done', `${chore.title} (Rotated to ${getMemberName(nextAssignee)})`);
+        
+        // Notify the next person in chat
+        await addDoc(collection(db, 'households', householdId, 'messages'), {
+          text: `🔄 ${chore.title} is done! It's now @${getMemberName(nextAssignee)}'s turn.`,
+          senderId: 'system',
+          senderName: 'Chore Bot',
+          createdAt: serverTimestamp(),
+        });
+
+      } else {
+        await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
+          done: isFinishing,
+        });
+        if (isFinishing) {
+          logActivity(householdId, 'chore_done', chore.title);
+        }
       }
     } catch (e) {
       console.error('Chore Toggle Error:', e);
       Alert.alert('Error', 'Could not update chore.');
+    }
+  };
+
+  const handleReminder = async (chore: Chore) => {
+    try {
+      const assigneeName = getMemberName(chore.assignedToUid);
+      const nudgerName = userData?.username || 'Roommate';
+
+      await addDoc(collection(db, 'households', householdId, 'messages'), {
+        text: `🔔 ${assigneeName}, don't forget to ${chore.title}! (From ${nudgerName})`,
+        senderId: 'system',
+        senderName: 'Reminder Bot',
+        createdAt: serverTimestamp(),
+      });
+
+      Alert.alert('Reminder Sent!', `Sent a reminder to ${assigneeName} in the group chat.`, [{ text: 'OK' }]);
+      logActivity(householdId, 'chore_reminder', `${chore.title} -> ${assigneeName}`);
+    } catch (e) {
+      console.error('Reminder Error:', e);
+      Alert.alert('Error', 'Failed to send reminder.');
     }
   };
 
@@ -177,6 +230,15 @@ export default function ChoresScreen({ route, navigation }: Props) {
       <TouchableOpacity onPress={() => handleDelete(item.id)} className="p-2 ml-2">
         <MaterialIcons name="delete-outline" size={24} color="#EF4444" />
       </TouchableOpacity>
+
+      {!item.done && (
+        <TouchableOpacity 
+          onPress={() => handleReminder(item)}
+          className="bg-warning/10 p-2 rounded-xl ml-1 border border-warning/20"
+        >
+          <MaterialIcons name="notifications-active" size={20} color="#D97706" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -298,11 +360,37 @@ export default function ChoresScreen({ route, navigation }: Props) {
                 </View>
               )}
 
+              <View className="flex-row items-center justify-between mb-6 bg-slate-50 p-4 rounded-3xl border border-slate-100">
+                <View className="flex-1">
+                  <Text className="text-textMain font-bold text-sm">Automated Rotation</Text>
+                  <Text className="text-textMuted text-[10px]">Rotates between members automatically</Text>
+                </View>
+                <Switch 
+                  value={isRotationEnabled}
+                  onValueChange={(val) => {
+                    setIsRotationEnabled(val);
+                    if (val && rotationOrder.length === 0) {
+                      setRotationOrder([auth.currentUser?.uid || '']);
+                      setAssignedTo(auth.currentUser?.uid || '');
+                    }
+                  }}
+                  trackColor={{ false: '#E2E8F0', true: '#F59E0B' }}
+                  thumbColor="#FFF"
+                />
+              </View>
+
               <TouchableOpacity 
                 onPress={() => setShowSplitOptions(true)}
-                className="bg-secondary/30 rounded-2xl py-3.5 items-center border border-border/50 mb-6"
+                className="bg-secondary/30 rounded-2xl py-3.5 px-5 items-center flex-row border border-border/50 mb-6"
               >
-                <Text className="text-textMain font-bold text-sm">Assignee: {assignedTo ? getMemberName(assignedTo) : 'Select Person'}</Text>
+                <MaterialIcons name="people" size={20} color="#4F46E5" />
+                <Text className="text-textMain font-bold text-sm ml-3 flex-1">
+                  {isRotationEnabled 
+                    ? `Rotation: ${rotationOrder.length} Members`
+                    : `Assignee: ${assignedTo ? getMemberName(assignedTo) : 'Select Person'}`
+                  }
+                </Text>
+                <MaterialIcons name="chevron-right" size={20} color="#9CA3AF" />
               </TouchableOpacity>
 
               <View className="flex-row justify-between mt-2">
@@ -336,16 +424,34 @@ export default function ChoresScreen({ route, navigation }: Props) {
                     <TouchableOpacity 
                       key={uid} 
                       className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-warning/10 border-warning/30' : 'bg-background border-border'} `}
-                      onPress={() => setAssignedTo(uid)}
+                      onPress={() => {
+                        if (isRotationEnabled) {
+                          if (rotationOrder.includes(uid)) {
+                            setRotationOrder(rotationOrder.filter(id => id !== uid));
+                          } else {
+                            setRotationOrder([...rotationOrder, uid]);
+                            setAssignedTo(rotationOrder[0] || uid); // Default assigned to first in list
+                          }
+                        } else {
+                          setAssignedTo(uid);
+                        }
+                      }}
                     >
-                      <MaterialIcons
-                        name={isSelected ? 'radio-button-checked' : 'radio-button-unchecked'}
-                        size={24} 
-                        color={isSelected ? '#D97706' : '#9CA3AF'}
-                      />
-                      <Text className={`text-base font-bold ml-3 ${isSelected ? 'text-warning' : 'text-textMuted'}`}>
-                        {getMemberName(uid)}
-                      </Text>
+                      <View className="flex-row items-center flex-1">
+                        <MaterialIcons
+                          name={isSelected ? (isRotationEnabled ? 'check-box' : 'radio-button-checked') : (isRotationEnabled ? 'check-box-outline-blank' : 'radio-button-unchecked')}
+                          size={24} 
+                          color={isSelected ? '#D97706' : '#9CA3AF'}
+                        />
+                        <Text className={`text-base font-bold ml-3 ${isSelected ? 'text-warning' : 'text-textMuted'}`}>
+                          {getMemberName(uid)}
+                        </Text>
+                      </View>
+                      {isRotationEnabled && rotationOrder.includes(uid) && (
+                        <View className="bg-warning w-6 h-6 rounded-full items-center justify-center">
+                          <Text className="text-white text-[10px] font-black">{rotationOrder.indexOf(uid) + 1}</Text>
+                        </View>
+                      )}
                     </TouchableOpacity>
                   );
                 })}

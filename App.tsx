@@ -7,6 +7,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator } from 'react-native';
 import { UserProvider, useUser } from './src/context/UserContext';
 import { RootStackParamList } from './src/types';
+import { syncTimeWithNetwork } from './src/utils/timeUtils';
+import { useEffect } from 'react';
 
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -22,6 +24,10 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function RootNavigator() {
   const { user, loading } = useUser();
+
+  useEffect(() => {
+    syncTimeWithNetwork();
+  }, []);
 
   if (loading) {
     return (
