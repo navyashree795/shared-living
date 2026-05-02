@@ -1,22 +1,25 @@
-import React, { useState, useEffect, memo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, TextInput, Platform } from 'react-native';
+import React, { useState, useEffect, memo } from 'react';
+import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, TextInput } from 'react-native';
 import { Audio } from 'expo-av';
 import { TimeWheelPicker } from '../components/TimeWheelPicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
-import { useHouseholdMembers } from '../hooks/useHouseholdMembers';
+import { useHousehold } from '../context/HouseholdContext';
+import { Card } from '../components/Card';
+import { Avatar } from '../components/Avatar';
 import SlideModal from '../components/SlideModal';
+import { ActivitySkeleton } from '../components/Skeleton';
 import * as Clipboard from 'expo-clipboard';
 import { 
-  doc, onSnapshot, updateDoc, arrayRemove, collection, query, orderBy, limit, Timestamp,
+  doc, onSnapshot, updateDoc, arrayRemove, collection, query, orderBy, limit,
   addDoc, serverTimestamp 
 } from 'firebase/firestore';
 import { getActivityConfig } from '../utils/activityUtils';
 import { getSyncedDate } from '../utils/timeUtils';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList, Household, Activity } from '../types';
+import { RootStackParamList, Activity } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
@@ -52,25 +55,25 @@ const NAV_ITEMS = [
 ];
 
 export default function DashboardScreen({ navigation, route }: Props) {
-  const { householdId, householdData: initialData } = route.params;
+  const { householdId } = route.params;
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isMembersModalVisible, setIsMembersModalVisible] = useState(false);
   const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
   const [isInfoModalVisible, setIsInfoModalVisible] = useState(false);
   const { user, profile: userData } = useUser();
+  const { householdData, memberProfiles } = useHousehold();
+
   const [editUsername, setEditUsername] = useState(userData?.username || '');
-  const [householdData, setHouseholdData] = useState<Household | null>(initialData || null);
   
   const [trashCountdown, setTrashCountdown] = useState<string | null>(null);
   const [trashReminderSent, setTrashReminderSent] = useState(false);
-  const [syncTime, setSyncTime] = useState(new Date());
   const [infoModalTab, setInfoModalTab] = useState<'all' | 'landlord' | 'wifi' | 'trash'>('all');
   const [isEditMode, setIsEditMode] = useState(false);
 
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState(true);
   const [chores, setChores] = useState<any[]>([]);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
-  const { memberProfiles } = useHouseholdMembers(householdData?.members);
 
   useEffect(() => {
     if (userData?.username) {
@@ -96,11 +99,9 @@ export default function DashboardScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (!householdId) return;
-    const unsub = onSnapshot(doc(db, 'households', householdId), (snap) => {
-      if (snap.exists()) {
-        const data = { id: snap.id, ...snap.data() } as Household;
-        setHouseholdData(data);
-      }
+    const unsub = onSnapshot(query(collection(db, 'households', householdId, 'activities'), orderBy('timestamp', 'desc'), limit(15)), (snap) => {
+      setActivities(snap.docs.map(d => ({ id: d.id, ...d.data() } as Activity)));
+      setLoadingActivities(false);
     });
     return unsub;
   }, [householdId]);
@@ -109,7 +110,6 @@ export default function DashboardScreen({ navigation, route }: Props) {
   useEffect(() => {
     const timer = setInterval(async () => {
       const now = getSyncedDate();
-      setSyncTime(now);
 
       const info = householdData?.info;
       if (!info?.trashArrivalTime) {
@@ -234,18 +234,6 @@ export default function DashboardScreen({ navigation, route }: Props) {
     return () => clearInterval(interval);
   }, [chores, householdId, memberProfiles]);
 
-  const formatTime = (timestamp: Timestamp | null) => {
-    if (!timestamp) return 'Just now';
-    const date = timestamp.toDate();
-    const seconds = Math.floor((getSyncedDate().getTime() - date.getTime()) / 1000);
-    if (seconds < 60) return 'Just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
-  };
-
   const members = householdData?.members || [];
   const isOwner = householdData?.createdBy === auth.currentUser?.uid;
 
@@ -343,10 +331,13 @@ export default function DashboardScreen({ navigation, route }: Props) {
             <View className="w-1.5 h-1.5 rounded-full bg-success" />
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row" contentContainerStyle={{ paddingHorizontal: 4 }}>
-            {activities.length > 0 ? activities.map((activity, idx) => {
+            {loadingActivities ? (
+              [1, 2, 3].map((i) => <ActivitySkeleton key={i} />)
+            ) : activities.length > 0 ? (
+              activities.map((activity, idx) => {
                 const config = getActivityConfig(activity.type);
                 return (
-                  <View key={activity.id || idx} className="bg-slate-50 p-4 rounded-[28px] mr-3 border border-slate-100 flex-row items-center gap-4 min-w-[240px]">
+                  <Card key={activity.id || idx} className="bg-slate-50 p-4 rounded-[28px] mr-3 border-slate-100 flex-row items-center gap-4 min-w-[240px] shadow-none mb-0">
                     <View style={{ backgroundColor: config.color + '15' }} className="p-3 rounded-2xl">
                        <MaterialIcons name={config.icon} size={20} color={config.color} />
                     </View>
@@ -354,13 +345,14 @@ export default function DashboardScreen({ navigation, route }: Props) {
                       <Text className="text-textMain font-black text-sm" numberOfLines={1}>{activity.userName} <Text className="text-textMuted font-medium">{config.label}</Text></Text>
                       <Text className="text-textMuted text-[10px] font-bold mt-0.5">{activity.createdAt?.toDate ? activity.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}</Text>
                     </View>
-                    {activity.amount > 0 && <View className="bg-white px-3 py-1.5 rounded-xl border border-slate-100"><Text className="text-indigo-600 font-black text-xs">${activity.amount}</Text></View>}
-                  </View>
+                    {activity.amount > 0 && <View className="bg-white px-3 py-1.5 rounded-xl border border-slate-100"><Text className="text-indigo-600 font-black text-xs">₹{activity.amount}</Text></View>}
+                  </Card>
                 );
-              }) : (
-              <View className="bg-slate-50 p-6 rounded-[28px] border border-slate-100 items-center justify-center w-full min-h-[80px]">
+              })
+            ) : (
+              <Card className="bg-slate-50 p-6 rounded-[28px] border-slate-100 items-center justify-center w-full min-h-[80px] shadow-none mb-0">
                 <Text className="text-textMuted text-xs font-bold uppercase tracking-widest">No Recent Activity</Text>
-              </View>
+              </Card>
             )}
           </ScrollView>
         </View>
@@ -368,7 +360,12 @@ export default function DashboardScreen({ navigation, route }: Props) {
         {/* Quick Nav Grid */}
         <View className="flex-row flex-wrap justify-between gap-y-4">
           {NAV_ITEMS.map((item) => (
-            <TouchableOpacity key={item.name} onPress={() => handleNav(item.name)} style={{ width: '48%' }} className="bg-white p-5 rounded-[32px] border border-slate-100 shadow-sm shadow-slate-200">
+            <Card 
+              key={item.name} 
+              onPress={() => handleNav(item.name)} 
+              style={{ width: '48%' }} 
+              className="p-5 border-slate-100 shadow-sm mb-4"
+            >
               <View className="flex-row justify-between items-start mb-6">
                 <View className="bg-indigo-600/10 p-3 rounded-2xl"><MaterialIcons name={item.icon} size={22} color="#4F46E5" /></View>
                 <View className="w-8 h-8 rounded-full bg-slate-50 items-center justify-center border border-slate-100"><MaterialIcons name="chevron-right" size={18} color="#9CA3AF" /></View>
@@ -380,7 +377,7 @@ export default function DashboardScreen({ navigation, route }: Props) {
                 </View>
                 <Text className="text-textMuted text-[10px] font-bold leading-4" numberOfLines={2}>{item.subtitle}</Text>
               </View>
-            </TouchableOpacity>
+            </Card>
           ))}
         </View>
       </ScrollView>
@@ -414,9 +411,8 @@ export default function DashboardScreen({ navigation, route }: Props) {
         <View className="gap-3 mb-6">
           {Object.entries(memberProfiles).map(([uid, member]: [string, any]) => (
             <View key={uid} className="flex-row items-center gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-100">
-              <View className="w-12 h-12 rounded-2xl bg-white items-center justify-center border border-slate-200"><Text className="text-indigo-600 font-black text-lg">{member.username?.[0]?.toUpperCase() || '?'}</Text></View>
-              <View className="flex-1">
-                <Text className="text-textMain font-black">{member.username || 'Unknown Member'}</Text>
+              <Avatar name={member.username || 'Member'} size={48} bgColor="#FFFFFF" color="#4F46E5" style={{ borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0' }} />
+              <View className="flex-1">                <Text className="text-textMain font-black">{member.username || 'Unknown Member'}</Text>
                 <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mt-0.5">{uid === auth.currentUser?.uid ? 'You' : 'Member'}</Text>
               </View>
               {isOwner && uid !== auth.currentUser?.uid && (
@@ -598,3 +594,4 @@ const HouseholdInfoModalContent = memo(({ tab, isEdit, data, onSave }: any) => {
     </>
   );
 });
+HouseholdInfoModalContent.displayName = 'HouseholdInfoModalContent';

@@ -4,7 +4,6 @@ import {
   KeyboardAvoidingView, Dimensions, TouchableWithoutFeedback, Keyboard 
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface SlideModalProps {
   visible: boolean;

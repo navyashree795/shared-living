@@ -6,6 +6,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator } from 'react-native';
 import { UserProvider, useUser } from './src/context/UserContext';
+import { HouseholdProvider } from './src/context/HouseholdContext';
 import { RootStackParamList } from './src/types';
 import { syncTimeWithNetwork } from './src/utils/timeUtils';
 import { useEffect } from 'react';
@@ -66,10 +67,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <UserProvider>
-        <NavigationContainer>
-          <StatusBar style="auto" />
-          <RootNavigator />
-        </NavigationContainer>
+        <HouseholdProvider>
+          <NavigationContainer>
+            <StatusBar style="auto" />
+            <RootNavigator />
+          </NavigationContainer>
+        </HouseholdProvider>
       </UserProvider>
     </SafeAreaProvider>
   );

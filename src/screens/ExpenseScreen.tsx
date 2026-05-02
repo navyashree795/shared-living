@@ -1,17 +1,19 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  ActivityIndicator, Alert, ScrollView, Switch, Modal, KeyboardAvoidingView, Platform
+  Alert, Switch, Modal, KeyboardAvoidingView, Platform, ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
-import { useHouseholdMembers } from '../hooks/useHouseholdMembers';
+import { useHousehold } from '../context/HouseholdContext';
+import { Card } from '../components/Card';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import SlideModal from '../components/SlideModal';
+import { ExpenseSkeleton } from '../components/Skeleton';
 import {
-  collection, addDoc, onSnapshot, query, orderBy, serverTimestamp
+  collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, deleteDoc
 } from 'firebase/firestore';
 import { logActivity } from '../utils/activityUtils';
 import { detectCategory, getCategoryIcon } from '../utils/expenseUtils';
@@ -21,20 +23,11 @@ import { RootStackParamList, Expense } from '../types';
 type Props = NativeStackScreenProps<RootStackParamList, 'Expenses'>;
 
 export default function ExpenseScreen({ route, navigation }: Props) {
-  const { householdId, members = [] } = route.params || {};
+  const { householdId } = route.params || {};
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const allInvolvedUids = Array.from(new Set([
-    ...members,
-    ...expenses.map(e => e.paidByUid).filter(Boolean) as string[],
-    ...expenses.flatMap(e => e.splitAmong || []),
-    ...expenses.map(e => e.fromPaidUid).filter(Boolean) as string[],
-    ...expenses.map(e => e.toReceivedUid).filter(Boolean) as string[]
-  ]));
-
-  const householdMembers = useHouseholdMembers(allInvolvedUids);
-  const getMemberName = householdMembers?.getMemberName || ((uid: string) => uid === auth.currentUser?.uid ? 'You' : 'Member');
+  const { members, getMemberName } = useHousehold();
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isSettleModalVisible, setIsSettleModalVisible] = useState(false);
@@ -120,7 +113,7 @@ export default function ExpenseScreen({ route, navigation }: Props) {
       logActivity(householdId, 'expense_add', title.trim(), parsed);
       setTitle(''); setAmount('');
       setIsModalVisible(false);
-    } catch (e) {
+    } catch {
       Alert.alert('Error', 'Could not add expense.');
     }
   };
@@ -146,10 +139,27 @@ export default function ExpenseScreen({ route, navigation }: Props) {
       setSettleAmount('');
       setSettleWithUid(null);
       setIsSettleModalVisible(false);
-    } catch (e) {
+    } catch {
       Alert.alert('Error', 'Could not record settlement.');
     }
   };
+
+  const handleDelete = useCallback(async (id: string) => {
+    Alert.alert('Delete Expense', 'Are you sure you want to delete this transaction?', [
+      { text: 'Cancel', style: 'cancel' },
+      { 
+        text: 'Delete', 
+        style: 'destructive', 
+        onPress: async () => {
+          try {
+            await deleteDoc(doc(db, 'households', householdId, 'expenses', id));
+          } catch {
+            Alert.alert('Error', 'Could not delete expense.');
+          }
+        } 
+      }
+    ]);
+  }, [householdId]);
 
   // -------------------------------------------------------------
   // Directed Calculation Engine
@@ -193,9 +203,9 @@ export default function ExpenseScreen({ route, navigation }: Props) {
     });
 
     return { totalHouseholdSpent, peerBalances };
-  }, [expenses, members, auth.currentUser?.uid]);
+  }, [expenses, members]);
 
-  const renderExpense = ({ item }: { item: Expense }) => {
+  const renderExpense = useCallback(({ item }: { item: Expense }) => {
     const isPayment = item.type === 'payment';
     const currentUid = auth.currentUser?.uid;
     
@@ -209,7 +219,7 @@ export default function ExpenseScreen({ route, navigation }: Props) {
           : `${getMemberName(item.fromPaidUid!)} paid ${getMemberName(item.toReceivedUid!)}`;
       
       return (
-        <View className="flex-row items-center bg-secondary/20 rounded-2xl p-4 mb-3 border border-primary/20 shadow-sm">
+        <Card className="flex-row items-center bg-secondary/20 rounded-2xl p-4 mb-3 border-primary/20 shadow-sm">
           <View className="w-10 h-10 rounded-full bg-primary/20 items-center justify-center mr-3">
              <MaterialIcons name="done" size={20} color="#4F46E5" />
           </View>
@@ -222,7 +232,7 @@ export default function ExpenseScreen({ route, navigation }: Props) {
               ₹{item.amount.toFixed(2)}
             </Text>
           </View>
-        </View>
+        </Card>
       );
     }
     
@@ -251,7 +261,7 @@ export default function ExpenseScreen({ route, navigation }: Props) {
     }
 
     return (
-      <View className="flex-row items-center bg-white rounded-2xl p-4 mb-3 border border-border shadow-sm">
+      <Card className="flex-row items-center bg-white rounded-2xl p-4 mb-3 border-border shadow-sm">
         <View className="w-10 h-10 rounded-full bg-secondary items-center justify-center mr-3">
            <MaterialIcons name={iconName} size={20} color="#6B7280" />
         </View>
@@ -265,13 +275,73 @@ export default function ExpenseScreen({ route, navigation }: Props) {
           <Text className="text-base font-extrabold pb-0.5 text-textMain">
             ₹{item.amount.toFixed(2)}
           </Text>
-          <Text className={`text-xs ${relationshipColorClass}`}>
-            {relationshipText}
-          </Text>
+          <View className="flex-row items-center">
+            <Text className={`text-xs ${relationshipColorClass}`}>
+              {relationshipText}
+            </Text>
+            <TouchableOpacity onPress={() => handleDelete(item.id)} className="ml-2">
+               <MaterialIcons name="delete-outline" size={14} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </Card>
     );
-  };
+  }, [getMemberName, handleDelete]);
+
+  const renderHeader = () => (
+    <>
+      {/* Total Spending Card */}
+      <View className="mx-6 bg-primary rounded-3xl p-6 mb-4 shadow-lg shadow-primary/30">
+        <Text className="text-white/80 text-sm font-bold tracking-widest mb-1 uppercase">Total Household Spending</Text>
+        <Text className="text-white text-3xl font-black">₹{totalHouseholdSpent.toFixed(2)}</Text>
+      </View>
+
+      {/* Action Button */}
+      <TouchableOpacity 
+        onPress={() => setIsSettleModalVisible(true)}
+        className="mx-6 flex-row items-center justify-center bg-white border border-border rounded-2xl py-3 px-4 mb-6 shadow-sm"
+      >
+        <MaterialIcons name="account-balance-wallet" size={20} color="#4F46E5" />
+        <Text className="text-primary font-bold ml-2">Settle Up</Text>
+      </TouchableOpacity>
+
+      {/* Directed Liabilities Dashboard */}
+      <View className="mx-6 bg-white rounded-3xl p-6 mb-6 shadow-sm border border-border">
+        <Text className="text-textMuted text-xs font-bold tracking-widest mb-4 uppercase">Your Balances</Text>
+        
+        {Object.entries(peerBalances).filter(([_, amount]) => Math.abs(amount) > 0.01).length === 0 ? (
+          <Text className="text-textMuted text-sm font-medium py-2">You are all settled up! 🎉</Text>
+        ) : (
+          Object.entries(peerBalances).map(([uid, amount]) => {
+            if (Math.abs(amount) < 0.01) return null; // Ignore floats close to 0
+
+            const isOwedToMe = amount < 0; // If I owe them a negative amount, they owe me.
+            const absAmount = Math.abs(amount).toFixed(2);
+            
+            return (
+              <View key={uid} className="flex-row items-center justify-between py-3 border-b border-border/50 last:border-0 last:pb-0">
+                <View className="flex-row items-center">
+                  <View className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${isOwedToMe ? 'bg-success/10' : 'bg-danger/10'}`}>
+                    <MaterialIcons name={isOwedToMe ? "arrow-downward" : "arrow-upward"} size={16} color={isOwedToMe ? "#10B981" : "#EF4444"} />
+                  </View>
+                  <Text className="text-textMain text-sm font-bold">
+                    {isOwedToMe ? `${getMemberName(uid)} owes you` : `You owe ${getMemberName(uid)}`}
+                  </Text>
+                </View>
+                <Text className={`text-base font-extrabold ${isOwedToMe ? 'text-success' : 'text-danger'}`}>
+                  ₹{absAmount}
+                </Text>
+              </View>
+            );
+          })
+        )}
+      </View>
+
+      <View className="px-6">
+        <Text className="text-textMuted text-xs font-bold tracking-widest mb-3 uppercase">Transactions</Text>
+      </View>
+    </>
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -282,70 +352,30 @@ export default function ExpenseScreen({ route, navigation }: Props) {
         onRightPress={() => setIsModalVisible(true)} 
       />
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        {/* Total Spending Card */}
-        <View className="mx-6 bg-primary rounded-3xl p-6 mb-4 shadow-lg shadow-primary/30">
-          <Text className="text-white/80 text-sm font-bold tracking-widest mb-1 uppercase">Total Household Spending</Text>
-          <Text className="text-white text-3xl font-black">₹{totalHouseholdSpent.toFixed(2)}</Text>
-        </View>
-
-        {/* Action Button */}
-        <TouchableOpacity 
-          onPress={() => setIsSettleModalVisible(true)}
-          className="mx-6 flex-row items-center justify-center bg-white border border-border rounded-2xl py-3 px-4 mb-6 shadow-sm"
-        >
-          <MaterialIcons name="account-balance-wallet" size={20} color="#4F46E5" />
-          <Text className="text-primary font-bold ml-2">Settle Up</Text>
-        </TouchableOpacity>
-
-        {/* Directed Liabilities Dashboard */}
-        <View className="mx-6 bg-white rounded-3xl p-6 mb-6 shadow-sm border border-border">
-          <Text className="text-textMuted text-xs font-bold tracking-widest mb-4 uppercase">Your Balances</Text>
-          
-          {Object.entries(peerBalances).filter(([_, amount]) => Math.abs(amount) > 0.01).length === 0 ? (
-            <Text className="text-textMuted text-sm font-medium py-2">You are all settled up! 🎉</Text>
-          ) : (
-            Object.entries(peerBalances).map(([uid, amount]) => {
-              if (Math.abs(amount) < 0.01) return null; // Ignore floats close to 0
-
-              const isOwedToMe = amount < 0; // If I owe them a negative amount, they owe me.
-              const absAmount = Math.abs(amount).toFixed(2);
-              
-              return (
-                <View key={uid} className="flex-row items-center justify-between py-3 border-b border-border/50 last:border-0 last:pb-0">
-                  <View className="flex-row items-center">
-                    <View className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${isOwedToMe ? 'bg-success/10' : 'bg-danger/10'}`}>
-                      <MaterialIcons name={isOwedToMe ? "arrow-downward" : "arrow-upward"} size={16} color={isOwedToMe ? "#10B981" : "#EF4444"} />
-                    </View>
-                    <Text className="text-textMain text-sm font-bold">
-                      {isOwedToMe ? `${getMemberName(uid)} owes you` : `You owe ${getMemberName(uid)}`}
-                    </Text>
-                  </View>
-                  <Text className={`text-base font-extrabold ${isOwedToMe ? 'text-success' : 'text-danger'}`}>
-                    ₹{absAmount}
-                  </Text>
-                </View>
-              );
-            })
-          )}
-        </View>
-
-        {/* Transactions List */}
-        <View className="px-6 pb-24">
-          <Text className="text-textMuted text-xs font-bold tracking-widest mb-3 uppercase">Transactions</Text>
-          {loading ? (
-            <ActivityIndicator color="#4F46E5" className="mt-10" />
-          ) : expenses.length === 0 ? (
-            <EmptyState 
-              icon="receipt-long" 
-              title="No expenses yet" 
-              description="Add a shared expense to split it automatically."
-            />
-          ) : (
-            expenses.map(exp => <React.Fragment key={exp.id}>{renderExpense({item: exp})}</React.Fragment>)
-          )}
-        </View>
-      </ScrollView>
+      <FlatList
+        className="flex-1"
+        data={expenses}
+        keyExtractor={item => item.id}
+        renderItem={renderExpense}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={
+          !loading && expenses.length === 0 ? (
+            <View className="px-6">
+              <EmptyState 
+                icon="receipt-long" 
+                title="No expenses yet" 
+                description="Add a shared expense to split it automatically."
+              />
+            </View>
+          ) : loading ? (
+            <View className="px-6">
+              {[1, 2, 3, 4, 5].map((i) => <ExpenseSkeleton key={i} />)}
+            </View>
+          ) : null
+        }
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+      />
 
       {/* Add Expense Minimalist Modal */}
       <Modal visible={isModalVisible} transparent animationType="fade">

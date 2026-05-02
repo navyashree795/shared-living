@@ -24,13 +24,6 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
   const [inviteCodeInput, setInviteCodeInput] = useState(route.params?.code || '');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (route.params?.code) {
-      setActiveTab('join');
-      handleJoinHousehold(route.params.code);
-    }
-  }, []);
-
   const generateInviteCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
@@ -78,7 +71,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
     setLoading(false);
   };
 
-  const handleJoinHousehold = async (overrideCode?: string) => {
+  const handleJoinHousehold = React.useCallback(async (overrideCode?: string) => {
     const codeToUse = typeof overrideCode === 'string' ? overrideCode : inviteCodeInput.trim();
     if (!codeToUse || codeToUse.length !== 6) {
       Alert.alert('Error', 'Please enter a valid 6-character code.');
@@ -123,7 +116,14 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
       Alert.alert('Error', `Failed to join household: ${error.message}`);
     }
     setLoading(false);
-  };
+  }, [inviteCodeInput, navigation]);
+
+  useEffect(() => {
+    if (route.params?.code) {
+      setActiveTab('join');
+      handleJoinHousehold(route.params.code);
+    }
+  }, [route.params?.code, handleJoinHousehold]);
 
   const innerContent = (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>

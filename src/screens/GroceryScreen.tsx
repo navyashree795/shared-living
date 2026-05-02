@@ -1,20 +1,21 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  ActivityIndicator, Alert, ScrollView
+  Alert, ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import SlideModal from '../components/SlideModal';
+import { Skeleton } from '../components/Skeleton';
 import { auth, db } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
-import { useHouseholdMembers } from '../hooks/useHouseholdMembers';
+import { useHousehold } from '../context/HouseholdContext';
 import { detectCategory } from '../utils/expenseUtils';
 import { logActivity } from '../utils/activityUtils';
 import {
-  collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, getDocs, writeBatch
+  collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, writeBatch
 } from 'firebase/firestore';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, GroceryItem } from '../types';
@@ -40,14 +41,14 @@ const CATEGORIES: Category[] = [
 ];
 
 export default function GroceryScreen({ route, navigation }: Props) {
-  const { householdId, members } = route.params;
+  const { householdId } = route.params;
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [newItem, setNewItem] = useState('');
   const [newQty, setNewQty] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(CATEGORIES[0].id);
   const { profile: userData } = useUser();
-  const { getMemberName } = useHouseholdMembers(members);
+  const { members, getMemberName } = useHousehold();
   const [loading, setLoading] = useState(true);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -101,7 +102,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
       logActivity(householdId, 'grocery_add', name);
       setNewItem(''); setNewQty(''); setNewPrice('');
       setIsAddModalVisible(false);
-    } catch (e) {
+    } catch {
       Alert.alert('Error', 'Could not add item.');
     }
   };
@@ -115,7 +116,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
       if (isFinishing) {
         logActivity(householdId, 'grocery_done', item.name);
       }
-    } catch (e) {
+    } catch {
       Alert.alert('Error', 'Could not update item.');
     }
   };
@@ -123,7 +124,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
   const handleDelete = async (itemId: string) => {
     try {
       await deleteDoc(doc(db, 'households', householdId, 'groceries', itemId));
-    } catch (e) {
+    } catch {
       Alert.alert('Error', 'Could not delete item.');
     }
   };
@@ -144,7 +145,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
               batch.delete(ref);
             });
             await batch.commit();
-          } catch (e) {
+          } catch {
             Alert.alert('Error', 'Could not clear list.');
           }
         }
@@ -187,7 +188,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
               });
 
               Alert.alert('Success', 'Successfully integrated into Household Expenses.');
-            } catch (e) {
+            } catch {
               Alert.alert('Error', 'Could not log to expenses.');
             }
           }
@@ -197,7 +198,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
   };
 
   // Convert flat data into sectioned data for FlatList
-  const listData: Array<any> = [];
+  const listData: any[] = [];
   
   if (pending.length > 0) {
     listData.push({ type: 'header', title: 'ON THE LIST', color: 'text-warning' });
@@ -308,8 +309,17 @@ export default function GroceryScreen({ route, navigation }: Props) {
       </View>
 
       {loading ? (
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator color="#4F46E5" />
+        <View className="px-6 gap-3 pt-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <View key={i} className="flex-row items-center bg-white rounded-2xl p-4 border border-border">
+              <Skeleton width={24} height={24} borderRadius={12} style={{ marginRight: 12 }} />
+              <View className="flex-1">
+                <Skeleton width="50%" height={16} style={{ marginBottom: 8 }} />
+                <Skeleton width="30%" height={12} />
+              </View>
+              <Skeleton width={40} height={20} borderRadius={8} />
+            </View>
+          ))}
         </View>
       ) : (
         <FlatList

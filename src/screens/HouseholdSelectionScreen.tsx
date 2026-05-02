@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, FlatList, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
+import { useHousehold } from '../context/HouseholdContext';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
+import { HouseholdSkeleton } from '../components/Skeleton';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Household } from '../types';
 
@@ -14,6 +16,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdSelection'>;
 export default function HouseholdSelectionScreen({ navigation }: Props) {
   const [households, setHouseholds] = useState<Household[]>([]);
   const [loading, setLoading] = useState(true);
+  const { setHouseholdId } = useHousehold();
 
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -36,6 +39,7 @@ export default function HouseholdSelectionScreen({ navigation }: Props) {
   }, []);
 
   const handleSelect = (hh: Household) => {
+    setHouseholdId(hh.id);
     navigation.replace('Dashboard', { householdId: hh.id, householdData: hh });
   };
 
@@ -60,10 +64,17 @@ export default function HouseholdSelectionScreen({ navigation }: Props) {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-background justify-center items-center">
-        <ActivityIndicator size="large" color="#4F46E5" />
-        <Text className="text-textMuted text-sm mt-4 font-medium">Discovering households...</Text>
-      </View>
+      <SafeAreaView className="flex-1 bg-background px-6">
+        <ScreenHeader 
+          navigation={navigation as any} 
+          title="My Projects" 
+          hideBack={true}
+        />
+        <Text className="text-textMuted text-base font-medium px-6 mb-10 -mt-4">Discovering households...</Text>
+        <View>
+          {[1, 2, 3].map((i) => <HouseholdSkeleton key={i} />)}
+        </View>
+      </SafeAreaView>
     );
   }
 

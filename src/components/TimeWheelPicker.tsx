@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useState, memo, useCallback } from 'react';
-import { View, Text, FlatList, Animated, NativeScrollEvent, NativeSyntheticEvent, Platform, TouchableOpacity } from 'react-native';
+import React, { useRef, useState, memo, useCallback } from 'react';
+import { View, Text, FlatList, Animated, NativeScrollEvent, NativeSyntheticEvent, TouchableOpacity } from 'react-native';
 
 interface WheelPickerProps {
   data: string[];
@@ -43,6 +43,7 @@ const PickerItem = memo(({ item, index, scrollY, width }: { item: string, index:
     </View>
   );
 });
+PickerItem.displayName = 'PickerItem';
 
 export const WheelPicker: React.FC<WheelPickerProps> = memo(({ data, initialIndex, onSelect, width = 60 }) => {
   const scrollY = useRef(new Animated.Value(initialIndex * ITEM_HEIGHT)).current;
@@ -111,6 +112,7 @@ export const WheelPicker: React.FC<WheelPickerProps> = memo(({ data, initialInde
     </View>
   );
 });
+WheelPicker.displayName = 'WheelPicker';
 
 interface TimeWheelPickerProps {
   initialTime: Date;

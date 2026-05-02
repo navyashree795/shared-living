@@ -7,8 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
-import { 
-  collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, limit, updateDoc, doc, arrayUnion
+import { useHousehold } from '../context/HouseholdContext';
+import { Avatar } from '../components/Avatar';
+import {
+  collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, limit, doc, arrayUnion, writeBatch
 } from 'firebase/firestore';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Message } from '../types';
@@ -16,12 +18,13 @@ import { RootStackParamList, Message } from '../types';
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
 export default function ChatScreen({ route, navigation }: Props) {
-  const { householdId, householdData } = route.params;
+  const { householdId } = route.params;
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
   const [showEmojis, setShowEmojis] = useState(false);
   const { profile: userData } = useUser();
+  const { householdData } = useHousehold();
   const flatListRef = useRef<FlatList>(null);
   const insets = useSafeAreaInsets();
   
@@ -73,16 +76,22 @@ export default function ChatScreen({ route, navigation }: Props) {
         setLoading(false);
         isFirstLoad.current = false;
 
-        // Mark unread messages as read
+        // Mark unread messages as read (Batch optimization)
         const currentUid = auth.currentUser?.uid;
         if (currentUid) {
-          fetchedMessages.forEach(msg => {
-            if (msg.senderId !== currentUid && (!msg.readBy || !msg.readBy.includes(currentUid))) {
-              updateDoc(doc(db, 'households', householdId, 'messages', msg.id), {
+          const unreadMsgs = fetchedMessages.filter(msg => 
+            msg.senderId !== currentUid && (!msg.readBy || !msg.readBy.includes(currentUid))
+          );
+
+          if (unreadMsgs.length > 0) {
+            const batch = writeBatch(db);
+            unreadMsgs.forEach(msg => {
+              batch.update(doc(db, 'households', householdId, 'messages', msg.id), {
                 readBy: arrayUnion(currentUid)
-              }).catch(e => console.error("Error marking read:", e));
-            }
-          });
+              });
+            });
+            batch.commit().catch(error => console.error("Error batch marking read:", error));
+          }
         }
       },
       (error) => {
@@ -93,7 +102,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     );
 
     return unsub;
-  }, [householdId, navigation]);
+  }, [householdId, navigation, insets.top, notificationAnim]);
 
   const handleSend = async () => {
     const user = auth.currentUser;
@@ -135,9 +144,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     return (
       <View style={{ flexDirection: 'row', marginBottom: 6, justifyContent: isMe ? 'flex-end' : 'flex-start', alignItems: 'flex-end' }}>
         {!isMe && (
-          <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#E0E7FF', alignItems: 'center', justifyContent: 'center', marginRight: 8, marginBottom: 4 }}>
-            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#4F46E5' }}>{item.senderName[0].toUpperCase()}</Text>
-          </View>
+          <Avatar name={item.senderName} style={{ marginRight: 8, marginBottom: 4 }} />
         )}
         <View 
           style={{

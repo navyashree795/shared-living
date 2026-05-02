@@ -1,7 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { initializeAuth } from 'firebase/auth';
-// @ts-ignore - getReactNativePersistence is available at runtime in React Native but missing from types
-import { getReactNativePersistence } from 'firebase/auth';
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -15,8 +13,24 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID
 };
 
+// Validate that all required config is present
+const missingKeys = Object.entries(firebaseConfig)
+  .filter(([_, value]) => !value)
+  .map(([key]) => key);
+
+if (missingKeys.length > 0) {
+  console.error(`Firebase configuration error: Missing environment variables: ${missingKeys.join(', ')}`);
+  console.error("Make sure your .env file is correctly configured and the dev server is restarted.");
+}
+
 // Initialize Firebase App
-const app = initializeApp(firebaseConfig);
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+} catch (error) {
+  console.error("Failed to initialize Firebase App:", error);
+  throw error;
+}
 
 // Initialize Firebase Auth with React Native persistence to keep users logged in
 const auth = initializeAuth(app, {

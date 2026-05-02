@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, FlatList, TextInput, TouchableOpacity, 
-  ActivityIndicator, Alert, ScrollView, Platform, Switch
+  Alert, ScrollView, Switch
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TimeWheelPicker } from '../components/TimeWheelPicker';
@@ -9,10 +9,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
 import { getSyncedDate } from '../utils/timeUtils';
-import { useHouseholdMembers } from '../hooks/useHouseholdMembers';
+import { useHousehold } from '../context/HouseholdContext';
+import { Card } from '../components/Card';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import SlideModal from '../components/SlideModal';
+import { ChoreSkeleton } from '../components/Skeleton';
 import {
   collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp
 } from 'firebase/firestore';
@@ -23,21 +25,20 @@ import { RootStackParamList, Chore } from '../types';
 type Props = NativeStackScreenProps<RootStackParamList, 'Chores'>;
 
 export default function ChoresScreen({ route, navigation }: Props) {
-  const { householdId, members } = route.params;
+  const { householdId } = route.params;
   const [chores, setChores] = useState<Chore[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [choreTitle, setChoreTitle] = useState('');
   const [assignedTo, setAssignedTo] = useState<string>(auth.currentUser?.uid || '');
-  const [deadline, setDeadline] = useState('');
   const [time, setTime] = useState(getSyncedDate());
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showSplitOptions, setShowSplitOptions] = useState(false);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [isRotationEnabled, setIsRotationEnabled] = useState(false);
   const [rotationOrder, setRotationOrder] = useState<string[]>([]);
-  const [syncTime, setSyncTime] = useState(new Date());
   const { profile: userData } = useUser();
+  const { members, getMemberName } = useHousehold();
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -48,19 +49,6 @@ export default function ChoresScreen({ route, navigation }: Props) {
     }
   }, [isModalVisible]);
 
-  useEffect(() => {
-    // Simple NTP-like sync (simulated for UI)
-    const timer = setInterval(() => setSyncTime(getSyncedDate()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  
-  const allInvolvedUids = Array.from(new Set([
-    ...members,
-    ...chores.map(c => c.assignedToUid).filter(Boolean)
-  ]));
-
-  const { getMemberName } = useHouseholdMembers(allInvolvedUids);
-  
   useEffect(() => {
     const q = query(
       collection(db, 'households', householdId, 'chores'),
@@ -112,13 +100,13 @@ export default function ChoresScreen({ route, navigation }: Props) {
       setChoreTitle(''); setAssignedTo(auth.currentUser?.uid || ''); setSelectedDays([]);
       setIsRotationEnabled(false); setRotationOrder([]);
       setIsModalVisible(false);
-    } catch (e: any) {
-      console.error('Chore Add Error:', e);
-      Alert.alert('Error', 'Could not add chore. ' + e.message);
+    } catch (error: any) {
+      console.error('Chore Add Error:', error);
+      Alert.alert('Error', 'Could not add chore. ' + error.message);
     }
   };
 
-  const handleToggleDone = async (chore: Chore) => {
+  const handleToggleDone = useCallback(async (chore: Chore) => {
     try {
       const isFinishing = !chore.done;
       
@@ -151,13 +139,13 @@ export default function ChoresScreen({ route, navigation }: Props) {
           logActivity(householdId, 'chore_done', chore.title);
         }
       }
-    } catch (e) {
-      console.error('Chore Toggle Error:', e);
+    } catch (error) {
+      console.error('Chore Toggle Error:', error);
       Alert.alert('Error', 'Could not update chore.');
     }
-  };
+  }, [householdId, getMemberName]);
 
-  const handleReminder = async (chore: Chore) => {
+  const handleReminder = useCallback(async (chore: Chore) => {
     try {
       const assigneeName = getMemberName(chore.assignedToUid);
       const nudgerName = userData?.username || 'Roommate';
@@ -171,30 +159,30 @@ export default function ChoresScreen({ route, navigation }: Props) {
 
       Alert.alert('Reminder Sent!', `Sent a reminder to ${assigneeName} in the group chat.`, [{ text: 'OK' }]);
       logActivity(householdId, 'chore_reminder', `${chore.title} -> ${assigneeName}`);
-    } catch (e) {
-      console.error('Reminder Error:', e);
+    } catch (error) {
+      console.error('Reminder Error:', error);
       Alert.alert('Error', 'Failed to send reminder.');
     }
-  };
+  }, [getMemberName, userData?.username, householdId]);
 
-  const handleDelete = async (choreId: string) => {
+  const handleDelete = useCallback(async (choreId: string) => {
     Alert.alert('Delete Chore', 'Remove this chore?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try {
           await deleteDoc(doc(db, 'households', householdId, 'chores', choreId));
-        } catch (e) {
+        } catch {
           Alert.alert('Error', 'Could not delete chore.');
         }
       }}
     ]);
-  };
+  }, [householdId]);
 
   const pending = chores.filter(c => !c.done);
   const done = chores.filter(c => c.done);
 
-  const renderChore = ({ item }: { item: Chore }) => (
-    <View className="flex-row items-center bg-white rounded-2xl p-4 mb-3 border border-border shadow-sm">
+  const renderChore = useCallback(({ item }: { item: Chore }) => (
+    <Card className="flex-row items-center bg-white rounded-2xl p-4 mb-3 border-border shadow-sm">
       <TouchableOpacity className="mr-3" onPress={() => handleToggleDone(item)}>
         {item.done
           ? <MaterialIcons name="check-circle" size={28} color="#10B981" />
@@ -239,8 +227,8 @@ export default function ChoresScreen({ route, navigation }: Props) {
           <MaterialIcons name="notifications-active" size={20} color="#D97706" />
         </TouchableOpacity>
       )}
-    </View>
-  );
+    </Card>
+  ), [getMemberName, handleToggleDone, handleDelete, handleReminder]);
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -270,7 +258,9 @@ export default function ChoresScreen({ route, navigation }: Props) {
       </View>
 
       {loading ? (
-        <ActivityIndicator color="#F59E0B" className="mt-10" />
+        <View className="px-6">
+          {[1, 2, 3, 4, 5].map((i) => <ChoreSkeleton key={i} />)}
+        </View>
       ) : (
         <FlatList
           data={[...pending, ...done]}
