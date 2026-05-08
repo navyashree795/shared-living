@@ -75,7 +75,7 @@ export default function HouseholdSelectionScreen({ navigation }: Props) {
             { text: "Cancel", style: "cancel" },
             { text: "Sign Out", style: "destructive", onPress: () => auth.signOut() }
           ])}
-          style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: '#1C1917', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#7F1D1D' }}
+          style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(239, 68, 68, 0.08)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(239, 68, 68, 0.15)' }}
         >
           <MaterialIcons name="logout" size={20} color="#EF4444" />
         </TouchableOpacity>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, memo, useRef } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, TextInput, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, TextInput, Image, Linking } from 'react-native';
 import { createAudioPlayer } from 'expo-audio';
 import { TimeWheelPicker } from '../components/TimeWheelPicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -57,6 +57,11 @@ export default function DashboardScreen({ navigation }: Props) {
   const [trashReminderSent, setTrashReminderSent] = useState(false);
   const [infoModalTab, setInfoModalTab] = useState<'all' | 'landlord' | 'wifi' | 'trash'>('all');
   const [isEditMode, setIsEditMode] = useState(false);
+  const [revealedFields, setRevealedFields] = useState<string[]>([]);
+
+  const toggleFieldVisibility = (id: string) => {
+    setRevealedFields(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
+  };
 
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
@@ -314,6 +319,43 @@ export default function DashboardScreen({ navigation }: Props) {
     { id: 'trash_truck', label: 'Trash Truck', value: householdData?.info?.trashArrivalTime || '', type: 'time', icon: 'delete-outline' }
   ].filter(item => item.value);
 
+  const handlePhoneCall = async (phone: string) => {
+    if (!phone) return;
+    const url = `tel:${phone.replace(/\s+/g, '')}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        await Clipboard.setStringAsync(phone);
+        showToast('Phone copied to clipboard', 'success');
+      }
+    } catch {
+      await Clipboard.setStringAsync(phone);
+      showToast('Phone copied to clipboard', 'success');
+    }
+  };
+
+  const handleOpenLink = async (link: string) => {
+    if (!link) return;
+    let formatted = link.trim();
+    if (!/^https?:\/\//i.test(formatted)) {
+      formatted = `https://${formatted}`;
+    }
+    try {
+      const supported = await Linking.canOpenURL(formatted);
+      if (supported) {
+        await Linking.openURL(formatted);
+      } else {
+        await Clipboard.setStringAsync(link);
+        showToast('Link copied to clipboard', 'success');
+      }
+    } catch {
+      await Clipboard.setStringAsync(link);
+      showToast('Link copied to clipboard', 'success');
+    }
+  };
+
   return (
     <LinearGradient colors={bgColors} style={{ flex: 1 }}>
       {/* Glowing Ambient Backdrops */}
@@ -419,18 +461,34 @@ export default function DashboardScreen({ navigation }: Props) {
                               </View>
                               <View style={{ flex: 1 }}>
                                 <Text style={{ fontSize: 9, color: isTrashAndHasCountdown ? '#FBBF24' : (isDark ? '#94A3B8' : '#64748B'), fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>{isTrashAndHasCountdown ? 'Truck Arriving' : field.label}</Text>
-                                <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '800', color: isTrashAndHasCountdown ? '#FBBF24' : textMain }}>{isTrashAndHasCountdown ? `${trashCountdown}` : (field.value || 'Not Set')}</Text>
+                                <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '800', color: isTrashAndHasCountdown ? '#FBBF24' : textMain }}>
+                                  {isTrashAndHasCountdown 
+                                    ? `${trashCountdown}` 
+                                    : (field.type === 'password' && field.value 
+                                        ? (revealedFields.includes(field.id) ? field.value : '••••••••') 
+                                        : (field.value || 'Not Set'))}
+                                </Text>
                               </View>
                             </View>
                             
                             {field.type === 'password' && field.value ? (
-                              <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(field.value); showToast('Copied to clipboard', 'success'); }} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
-                                <MaterialIcons name="content-copy" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
-                              </TouchableOpacity>
+                              <View style={{ flexDirection: 'row', gap: 6 }}>
+                                <TouchableOpacity onPress={() => toggleFieldVisibility(field.id)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                                  <MaterialIcons name={revealedFields.includes(field.id) ? "visibility" : "visibility-off"} size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(field.value); showToast('Copied to clipboard', 'success'); }} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                                  <MaterialIcons name="content-copy" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
+                                </TouchableOpacity>
+                              </View>
                             ) : null}
                             {field.type === 'phone' && field.value ? (
-                              <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(field.value); showToast('Copied phone number', 'success'); }} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                              <TouchableOpacity onPress={() => handlePhoneCall(field.value)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
                                 <MaterialIcons name="call" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
+                              </TouchableOpacity>
+                            ) : null}
+                            {field.type === 'link' && field.value ? (
+                              <TouchableOpacity onPress={() => handleOpenLink(field.value)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                                <MaterialIcons name="link" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
                               </TouchableOpacity>
                             ) : null}
                           </View>
@@ -651,6 +709,11 @@ const HouseholdInfoModalContent = memo(({ tab, isEdit, data, householdName, onSa
   });
 
   const [activeTimePickerId, setActiveTimePickerId] = useState<string | null>(null);
+  const [revealedFields, setRevealedFields] = useState<string[]>([]);
+
+  const toggleFieldVisibility = (id: string) => {
+    setRevealedFields(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
+  };
 
   const handleSave = () => {
     const updates: any = { details: fields };
@@ -670,21 +733,58 @@ const HouseholdInfoModalContent = memo(({ tab, isEdit, data, householdName, onSa
   };
 
   const handleAddField = () => {
-    setFields([...fields, { id: Math.random().toString(), label: '', value: '', type: 'text', icon: 'description' }]);
+    setFields(prev => [...prev, { id: Math.random().toString(), label: '', value: '', type: 'text', icon: 'description' }]);
   };
 
   const handleDeleteField = (id: string) => {
-    setFields(fields.filter(f => f.id !== id));
+    setFields(prev => prev.filter(f => f.id !== id));
   };
 
-  const handleUpdateField = (id: string, key: string, val: any) => {
-    setFields(fields.map(f => f.id === id ? { ...f, [key]: val } : f));
+  const handleUpdateField = (id: string, updates: any) => {
+    setFields(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
   };
 
   const copyToClipboard = async (text: string) => {
     if (!text) return;
     await Clipboard.setStringAsync(text);
     showToast('Copied to clipboard', 'success');
+  };
+
+  const handlePhoneCall = async (phone: string) => {
+    if (!phone) return;
+    const url = `tel:${phone.replace(/\s+/g, '')}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        await Clipboard.setStringAsync(phone);
+        showToast('Phone copied to clipboard', 'success');
+      }
+    } catch {
+      await Clipboard.setStringAsync(phone);
+      showToast('Phone copied to clipboard', 'success');
+    }
+  };
+
+  const handleOpenLink = async (link: string) => {
+    if (!link) return;
+    let formatted = link.trim();
+    if (!/^https?:\/\//i.test(formatted)) {
+      formatted = `https://${formatted}`;
+    }
+    try {
+      const supported = await Linking.canOpenURL(formatted);
+      if (supported) {
+        await Linking.openURL(formatted);
+      } else {
+        await Clipboard.setStringAsync(link);
+        showToast('Link copied to clipboard', 'success');
+      }
+    } catch {
+      await Clipboard.setStringAsync(link);
+      showToast('Link copied to clipboard', 'success');
+    }
   };
 
   const textMain = isDark ? '#F1F5F9' : '#1E1B4B';
@@ -711,7 +811,7 @@ const HouseholdInfoModalContent = memo(({ tab, isEdit, data, householdName, onSa
                     style={{ flex: 1, fontSize: 13, fontWeight: '800', color: isDark ? '#F1F5F9' : '#1E1B4B', backgroundColor: isDark ? '#070913' : '#FFFFFF', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }} 
                     placeholder="Label (e.g. WiFi Network)" 
                     value={field.label} 
-                    onChangeText={(v) => handleUpdateField(field.id, 'label', v)} 
+                    onChangeText={(v) => handleUpdateField(field.id, { label: v })} 
                   />
                   {field.type === 'time' ? (
                     <TouchableOpacity 
@@ -727,7 +827,7 @@ const HouseholdInfoModalContent = memo(({ tab, isEdit, data, householdName, onSa
                       style={{ flex: 1.2, fontSize: 13, fontWeight: '700', color: isDark ? '#FBBF24' : '#1E1B4B', backgroundColor: isDark ? '#070913' : '#FFFFFF', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }} 
                       placeholder="Value" 
                       value={field.value} 
-                      onChangeText={(v) => handleUpdateField(field.id, 'value', v)} 
+                      onChangeText={(v) => handleUpdateField(field.id, { value: v })} 
                     />
                   )}
                   <TouchableOpacity onPress={() => handleDeleteField(field.id)} style={{ padding: 8, backgroundColor: 'rgba(239, 68, 68, 0.12)', borderRadius: 10 }}>
@@ -747,8 +847,7 @@ const HouseholdInfoModalContent = memo(({ tab, isEdit, data, householdName, onSa
                     <TouchableOpacity 
                       key={t.type} 
                       onPress={() => {
-                        handleUpdateField(field.id, 'type', t.type);
-                        handleUpdateField(field.id, 'icon', t.icon);
+                        handleUpdateField(field.id, { type: t.type, icon: t.icon });
                         if (t.type === 'time') setActiveTimePickerId(field.id);
                       }}
                       style={{ 
@@ -775,8 +874,17 @@ const HouseholdInfoModalContent = memo(({ tab, isEdit, data, householdName, onSa
                     <TouchableOpacity className="flex-1 bg-black/40 justify-center items-center px-6" activeOpacity={1} onPress={() => setActiveTimePickerId(null)}>
                       <TouchableOpacity activeOpacity={1} className="w-full bg-surface rounded-[32px] p-6 shadow-2xl" onPress={(e) => e.stopPropagation()}>
                         <TimeWheelPicker 
-                          initialTime={(() => { if (!field.value) return getSyncedDate(); const [h, m] = field.value.split(':').map(Number); const d = getSyncedDate(); d.setHours(h, m, 0, 0); return d; })()}
-                          onConfirm={(date) => { const hours = date.getHours().toString().padStart(2, '0'); const minutes = date.getMinutes().toString().padStart(2, '0'); handleUpdateField(field.id, 'value', `${hours}:${minutes}`); setActiveTimePickerId(null); }}
+                          initialTime={(() => { 
+                            if (!field.value || typeof field.value !== 'string' || !field.value.includes(':')) return getSyncedDate(); 
+                            const parts = field.value.split(':').map(Number);
+                            const h = parts[0];
+                            const m = parts[1];
+                            if (isNaN(h) || isNaN(m)) return getSyncedDate();
+                            const d = getSyncedDate(); 
+                            d.setHours(h, m, 0, 0); 
+                            return d; 
+                          })()}
+                          onConfirm={(date) => { const hours = date.getHours().toString().padStart(2, '0'); const minutes = date.getMinutes().toString().padStart(2, '0'); handleUpdateField(field.id, { value: `${hours}:${minutes}` }); setActiveTimePickerId(null); }}
                           onCancel={() => setActiveTimePickerId(null)}
                         />
                         <TouchableOpacity onPress={() => setActiveTimePickerId(null)} className="mt-4 py-3 items-center"><Text className="text-textMuted font-bold text-sm">Cancel</Text></TouchableOpacity>
@@ -815,20 +923,34 @@ const HouseholdInfoModalContent = memo(({ tab, isEdit, data, householdName, onSa
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 9, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>{field.label}</Text>
-                    <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: '800', color: textMain }}>{field.value || 'Not Set'}</Text>
+                    <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: '800', color: textMain }}>
+                      {field.type === 'password' && field.value 
+                        ? (revealedFields.includes(field.id) ? field.value : '••••••••') 
+                        : (field.value || 'Not Set')}
+                    </Text>
                   </View>
                 </View>
                 
                 {/* Actions Based on Type */}
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   {field.type === 'password' && field.value ? (
-                    <TouchableOpacity onPress={() => copyToClipboard(field.value)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
-                      <MaterialIcons name="content-copy" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
-                    </TouchableOpacity>
+                    <>
+                      <TouchableOpacity onPress={() => toggleFieldVisibility(field.id)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                        <MaterialIcons name={revealedFields.includes(field.id) ? "visibility" : "visibility-off"} size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => copyToClipboard(field.value)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                        <MaterialIcons name="content-copy" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
+                      </TouchableOpacity>
+                    </>
                   ) : null}
                   {field.type === 'phone' && field.value ? (
-                    <TouchableOpacity onPress={() => copyToClipboard(field.value)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                    <TouchableOpacity onPress={() => handlePhoneCall(field.value)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
                       <MaterialIcons name="call" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
+                    </TouchableOpacity>
+                  ) : null}
+                  {field.type === 'link' && field.value ? (
+                    <TouchableOpacity onPress={() => handleOpenLink(field.value)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                      <MaterialIcons name="link" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
                     </TouchableOpacity>
                   ) : null}
                 </View>
