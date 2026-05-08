@@ -5,6 +5,7 @@ import {
   TouchableWithoutFeedback, Keyboard 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -25,9 +26,16 @@ export default function LoginScreen({ navigation }: Props) {
   const [username, setUsername] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
 
-  const normalizePhone = (phone: string) => {
-    return phone.replace(/[^\d+]/g, '');
-  };
+  // Always dark on auth screens for premium feel
+  const bg      = '#0F172A';
+  const surface = '#1E293B';
+  const text    = '#F1F5F9';
+  const muted   = '#94A3B8';
+  const bord    = '#334155';
+  const inputBg = '#0F172A';
+  const accent  = '#6366F1';
+
+  const normalizePhone = (phone: string) => phone.replace(/[^\d+]/g, '');
 
   const handleAuth = async () => {
     if (!email || !password || (isSignUp && (!phoneNumber || !username))) {
@@ -86,129 +94,96 @@ export default function LoginScreen({ navigation }: Props) {
       .catch(error => Alert.alert("Error", error.message));
   };
 
+  const renderInput = (label: string, value: string, onChangeText: (t: string) => void, opts: any = {}) => (
+    <View style={{ marginBottom: 16 }}>
+      <Text style={{ fontSize: 10, fontWeight: '800', color: muted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 2, paddingLeft: 4 }}>{label}</Text>
+      <TextInput
+        style={{ backgroundColor: inputBg, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 16, color: text, fontSize: 15, fontWeight: '600', borderWidth: 1, borderColor: bord }}
+        placeholderTextColor="#475569"
+        value={value}
+        onChangeText={onChangeText}
+        {...opts}
+      />
+    </View>
+  );
+
   const innerContent = (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <ScrollView 
-        contentContainerStyle={{ flexGrow: 1, paddingTop: 60, paddingBottom: 40 }} 
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingVertical: 40 }} 
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <View className="px-6 items-center">
+        <View style={{ paddingHorizontal: 24 }}>
           {/* App Branding */}
-          <View className="items-center mb-10 w-full mt-4">
-            <View className="w-16 h-1 bg-black rounded-full mb-8 opacity-20" />
-            <Text className="text-4xl font-black text-black mb-3 tracking-tighter">Shared Living</Text>
-            <Text className="text-sm text-gray-500 text-center leading-5 max-w-[280px]">
+          <View style={{ alignItems: 'center', marginBottom: 40 }}>
+            <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: accent, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+              <MaterialIcons name="home" size={32} color="#fff" />
+            </View>
+            <Text style={{ fontSize: 28, fontWeight: '900', color: text, letterSpacing: -1, marginBottom: 8 }}>Shared Living</Text>
+            <Text style={{ fontSize: 14, color: muted, textAlign: 'center', lineHeight: 22, maxWidth: 280 }}>
               Manage your household tasks, expenses, and groceries effortlessly.
             </Text>
           </View>
 
-          <View className="w-full bg-white rounded-[32px] p-6 shadow-sm border border-gray-100">
-            <Text className="text-2xl font-black text-black mb-6 text-center tracking-tight">
+          {/* Form Card */}
+          <View style={{ backgroundColor: surface, borderRadius: 28, padding: 24, borderWidth: 1, borderColor: bord }}>
+            <Text style={{ fontSize: 22, fontWeight: '900', color: text, marginBottom: 24, textAlign: 'center', letterSpacing: -0.5 }}>
               {isSignUp ? 'Create Account' : 'Welcome Back'}
             </Text>
 
-            <View className="mb-4">
-              <Text className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest pl-1">Email</Text>
-              <TextInput
-                className="bg-gray-50 rounded-2xl px-5 py-4 text-black text-base border border-gray-100"
-                placeholder="name@example.com"
-                placeholderTextColor="#9CA3AF"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                returnKeyType="next"
-              />
-            </View>
+            {renderInput('Email', email, setEmail, { placeholder: 'name@example.com', autoCapitalize: 'none', keyboardType: 'email-address', returnKeyType: 'next' })}
 
             {isSignUp && (
               <>
-                <View className="mb-4">
-                  <Text className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest pl-1">Phone</Text>
-                  <TextInput
-                    className="bg-gray-50 rounded-2xl px-5 py-4 text-black text-base border border-gray-100"
-                    placeholder="+1 (555) 000-0000"
-                    placeholderTextColor="#9CA3AF"
-                    value={phoneNumber}
-                    onChangeText={setPhoneNumber}
-                    keyboardType="phone-pad"
-                    returnKeyType="next"
-                  />
-                </View>
-                <View className="mb-4">
-                  <Text className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest pl-1">Username</Text>
-                  <TextInput
-                    className="bg-gray-50 rounded-2xl px-5 py-4 text-black text-base border border-gray-100"
-                    placeholder="unique_username"
-                    placeholderTextColor="#9CA3AF"
-                    value={username}
-                    onChangeText={setUsername}
-                    autoCapitalize="none"
-                    returnKeyType="next"
-                  />
-                </View>
+                {renderInput('Phone', phoneNumber, setPhoneNumber, { placeholder: '+1 (555) 000-0000', keyboardType: 'phone-pad', returnKeyType: 'next' })}
+                {renderInput('Username', username, setUsername, { placeholder: 'unique_username', autoCapitalize: 'none', returnKeyType: 'next' })}
               </>
             )}
 
-            <View className="mb-2">
-              <Text className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest pl-1">Password</Text>
-              <TextInput
-                className="bg-gray-50 rounded-2xl px-5 py-4 text-black text-base border border-gray-100"
-                placeholder="••••••••"
-                placeholderTextColor="#9CA3AF"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                returnKeyType="done"
-                onSubmitEditing={handleAuth}
-              />
-            </View>
+            {renderInput('Password', password, setPassword, { placeholder: '••••••••', secureTextEntry: true, returnKeyType: 'done', onSubmitEditing: handleAuth })}
 
             {!isSignUp && (
-              <TouchableOpacity className="self-end mb-6 mt-1" onPress={handleForgotPassword}>
-                <Text className="text-gray-500 text-sm font-bold">Forgot password?</Text>
+              <TouchableOpacity style={{ alignSelf: 'flex-end', marginBottom: 20, marginTop: -8 }} onPress={handleForgotPassword}>
+                <Text style={{ color: accent, fontSize: 13, fontWeight: '700' }}>Forgot password?</Text>
               </TouchableOpacity>
             )}
 
             <TouchableOpacity
-              className="bg-black py-4 rounded-2xl items-center justify-center shadow-lg mt-2 mb-6"
               onPress={handleAuth}
               disabled={loading}
+              style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 8, marginBottom: 16 }}
             >
               {loading ? (
                 <ActivityIndicator color="#FFF" />
               ) : (
-                <Text className="text-white text-base font-bold tracking-wide">
-                  {isSignUp ? 'Sign Up' : 'Sign In'}
+                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 }}>
+                  {isSignUp ? 'Create Account' : 'Sign In'}
                 </Text>
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              className="py-3 items-center mb-2"
-              onPress={() => setIsSignUp(!isSignUp)}
-            >
-              <Text className="text-gray-500 text-sm font-medium">
+            <TouchableOpacity style={{ paddingVertical: 12, alignItems: 'center' }} onPress={() => setIsSignUp(!isSignUp)}>
+              <Text style={{ color: muted, fontSize: 14, fontWeight: '500' }}>
                 {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
-                <Text className="text-black font-bold">{isSignUp ? 'Sign In' : 'Sign Up'}</Text>
+                <Text style={{ color: accent, fontWeight: '800' }}>{isSignUp ? 'Sign In' : 'Sign Up'}</Text>
               </Text>
             </TouchableOpacity>
-
-            <Text className="text-[11px] text-gray-400 text-center px-4 leading-relaxed">
-              By continuing, you agree to our Terms of Service and Privacy Policy.
-            </Text>
           </View>
+
+          <Text style={{ fontSize: 11, color: '#475569', textAlign: 'center', marginTop: 24, lineHeight: 18, paddingHorizontal: 16 }}>
+            By continuing, you agree to our Terms of Service and Privacy Policy.
+          </Text>
         </View>
       </ScrollView>
     </TouchableWithoutFeedback>
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-[#FAFAFA]">
+    <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
       {Platform.OS === 'ios' ? (
-        <KeyboardAvoidingView behavior="padding" className="flex-1">
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           {innerContent}
         </KeyboardAvoidingView>
       ) : (

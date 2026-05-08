@@ -1,3 +1,24 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #F8FAFC;
+    --surface: #FFFFFF;
+    --surface-raised: #F1F5F9;
+    --text-main: #0F172A;
+    --text-muted: #64748B;
+    --text-faint: #94A3B8;
+    --border: #E2E8F0;
+  }
+  .dark {
+    --background: #0F172A;
+    --surface: #1E293B;
+    --surface-raised: #334155;
+    --text-main: #F1F5F9;
+    --text-muted: #94A3B8;
+    --text-faint: #475569;
+    --border: #334155;
+  }
+}

@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { db } from '../firebaseConfig';
-import { doc, onSnapshot, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, getDocs, collection, query, where, documentId } from 'firebase/firestore';
 import { Household, UserProfile } from '../types';
 import { useUser } from './UserContext';
 
@@ -22,6 +22,13 @@ export const HouseholdProvider = ({ children }: { children: ReactNode }) => {
   const [householdData, setHouseholdData] = useState<Household | null>(null);
   const [memberProfiles, setMemberProfiles] = useState<Record<string, UserProfile>>({});
   const [loading, setLoading] = useState(false);
+
+  // 0. Clear householdId when user logs out
+  useEffect(() => {
+    if (!user) {
+      setHouseholdId(null);
+    }
+  }, [user]);
 
   // 1. Sync householdData when householdId changes
   useEffect(() => {
@@ -49,32 +56,35 @@ export const HouseholdProvider = ({ children }: { children: ReactNode }) => {
   }, [householdId]);
 
   // 2. Fetch/Sync member profiles when members list changes
+  const membersDeps = householdData?.members?.join(',') || '';
+
   useEffect(() => {
-    const members = householdData?.members || [];
-    if (members.length === 0) {
+    const membersList = householdData?.members || [];
+    if (membersList.length === 0) {
       setMemberProfiles({});
       return;
     }
 
     const fetchProfiles = async () => {
-      const profiles: Record<string, UserProfile> = {};
-      await Promise.all(
-        members.map(async (uid) => {
-          try {
-            const userSnap = await getDoc(doc(db, 'users', uid));
-            if (userSnap.exists()) {
-              profiles[uid] = userSnap.data() as UserProfile;
-            }
-          } catch (err) {
-            console.error(`Failed to fetch user profile ${uid}:`, err);
-          }
-        })
-      );
-      setMemberProfiles(profiles);
+      try {
+        const q = query(
+          collection(db, "users"),
+          where(documentId(), "in", membersList)
+        );
+        const querySnapshot = await getDocs(q);
+        const profiles: Record<string, UserProfile> = {};
+        querySnapshot.forEach((doc) => {
+          profiles[doc.id] = doc.data() as UserProfile;
+        });
+        setMemberProfiles(profiles);
+      } catch (err) {
+        console.error("Failed to fetch member profiles:", err);
+      }
     };
 
     fetchProfiles();
-  }, [householdData?.members]);
+  }, [membersDeps]);
+
 
   const getMemberName = useCallback((uid: string) => {
     if (uid === user?.uid) return 'You';

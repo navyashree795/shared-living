@@ -1,23 +1,42 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  // NOTE: Update this to include the paths to all of your component files.
-  // If your main file is index.js instead of App.js, add "./index.{js,jsx,ts,tsx}" here too.
   content: ["./App.{js,jsx,ts,tsx}", "./src/**/*.{js,jsx,ts,tsx}"],
   presets: [require("nativewind/preset")],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
-        background: '#F9FAFB', // Light gray background
-        card: '#FFFFFF',       // Clean white cards
-        primary: '#4F46E5',    // Premium Indigo for primary actions
-        secondary: '#E0E7FF',  // Light indigo for subtle elements
-        textMain: '#111827',   // Near black for strong readability
-        textMuted: '#6B7280',  // Slate gray for secondary text
-        border: '#E5E7EB',     // Soft borders
-        success: '#10B981',    // Emerald green
-        danger: '#EF4444',     // Red error
-        warning: '#F59E0B'     // Amber
-      }
+        // ── Main theme tokens (mapped to CSS variables) ─────────────
+        background:   'var(--background)',
+        surface:      'var(--surface)',
+        surfaceRaised:'var(--surface-raised)',
+        primary:      '#6366F1',
+        primaryLight: '#EEF2FF',
+        secondary:    '#E0E7FF',
+        textMain:     'var(--text-main)',
+        textMuted:    'var(--text-muted)',
+        textFaint:    'var(--text-faint)',
+        border:       'var(--border)',
+        success:      '#10B981',
+        danger:       '#EF4444',
+        warning:      '#F59E0B',
+        // ── Dark mode surface overrides (used with dark: prefix) ──
+        // bg-dark-bg, bg-dark-surface, etc.
+        dark: {
+          bg:          '#0F172A',
+          surface:     '#1E293B',
+          raised:      '#334155',
+          border:      '#334155',
+          textMain:    '#F1F5F9',
+          textMuted:   '#94A3B8',
+          textFaint:   '#475569',
+          primary:     '#818CF8',
+          primaryBg:   '#1E1B4B',
+          success:     '#34D399',
+          danger:      '#F87171',
+          warning:     '#FBBF24',
+        },
+      },
     },
   },
   plugins: [],

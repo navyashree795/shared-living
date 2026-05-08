@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, Alert,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
   TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import ScreenHeader from '../components/ScreenHeader';
+import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
+import { useHousehold } from '../context/HouseholdContext';
 import {
   doc, setDoc, updateDoc, query, collection,
   where, getDocs, arrayUnion,
@@ -19,52 +20,49 @@ type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdSetup'>;
 export default function HouseholdSetupScreen({ navigation, route }: Props) {
   const initialTab = route.params?.activeTab || 'create';
   const [activeTab, setActiveTab] = useState<'create' | 'join'>(initialTab);
-  
   const [householdName, setHouseholdName] = useState('');
   const [inviteCodeInput, setInviteCodeInput] = useState(route.params?.code || '');
   const [loading, setLoading] = useState(false);
+  const { setHouseholdId } = useHousehold();
+
+  // OTP-style refs
+  const codeRefs = useRef<(TextInput | null)[]>([]);
+  const [codeDigits, setCodeDigits] = useState<string[]>(
+    (route.params?.code || '').split('').concat(Array(6).fill('')).slice(0, 6)
+  );
+
+  const bg      = '#0F172A';
+  const surface = '#1E293B';
+  const text    = '#F1F5F9';
+  const muted   = '#94A3B8';
+  const bord    = '#334155';
+  const accent  = '#6366F1';
 
   const generateInviteCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
-    for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
     return code;
   };
 
   const handleCreateHousehold = async () => {
-    if (!householdName.trim()) {
-      Alert.alert("Error", "Please enter a household name.");
-      return;
-    }
+    if (!householdName.trim()) { Alert.alert("Error", "Please enter a household name."); return; }
     setLoading(true);
     try {
       const user = auth.currentUser;
       if (!user) throw new Error("No user logged in");
-      
       const code = generateInviteCode();
       const householdId = `hh_${Date.now()}_${code}`;
-
-      const householdData = {
-        name: householdName,
-        inviteCode: code,
-        members: [user.uid],
-        createdBy: user.uid,
-        createdAt: new Date().toISOString()
-      };
-
+      const householdData = { name: householdName, inviteCode: code, members: [user.uid], createdBy: user.uid, createdAt: new Date().toISOString() };
       await setDoc(doc(db, "households", householdId), householdData);
       await setDoc(doc(db, "users", user.uid), { householdId }, { merge: true });
-
+      setHouseholdId(householdId);
       Alert.alert("Success", "Household created successfully!");
       
-      setTimeout(() => {
-        navigation.replace('Dashboard', { 
-          householdId, 
-          householdData: { id: householdId, ...householdData } 
-        });
-      }, 0);
+      const state = navigation.getState();
+      if (state?.routeNames?.includes('MainTabs')) {
+        navigation.navigate('MainTabs');
+      }
     } catch (error: any) {
       Alert.alert("Error", `Failed to create household: ${error.message}`);
     }
@@ -73,45 +71,26 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
 
   const handleJoinHousehold = React.useCallback(async (overrideCode?: string) => {
     const codeToUse = typeof overrideCode === 'string' ? overrideCode : inviteCodeInput.trim();
-    if (!codeToUse || codeToUse.length !== 6) {
-      Alert.alert('Error', 'Please enter a valid 6-character code.');
-      return;
-    }
+    if (!codeToUse || codeToUse.length !== 6) { Alert.alert('Error', 'Please enter a valid 6-character code.'); return; }
     setLoading(true);
     try {
       const code = codeToUse.toUpperCase();
       const user = auth.currentUser;
       if (!user) throw new Error("No user logged in");
-
-      const q = query(
-        collection(db, 'households'),
-        where('inviteCode', '==', code),
-      );
+      const q = query(collection(db, 'households'), where('inviteCode', '==', code));
       const snap = await getDocs(q);
-
-      if (snap.empty) {
-        Alert.alert('Error', 'No household found with this code.');
-        setLoading(false);
-        return;
-      }
-
+      if (snap.empty) { Alert.alert('Error', 'No household found with this code.'); setLoading(false); return; }
       const householdDoc = snap.docs[0];
       const householdId = householdDoc.id;
-
-      await updateDoc(doc(db, 'households', householdId), {
-        members: arrayUnion(user.uid),
-      });
-
+      await updateDoc(doc(db, 'households', householdId), { members: arrayUnion(user.uid) });
       await setDoc(doc(db, 'users', user.uid), { householdId }, { merge: true });
-
+      setHouseholdId(householdId);
       Alert.alert('Success', `Joined ${householdDoc.data().name}!`);
-
-      setTimeout(() => {
-        navigation.replace('Dashboard', {
-          householdId,
-          householdData: { id: householdId, ...householdDoc.data() } as any,
-        });
-      }, 0);
+      
+      const state = navigation.getState();
+      if (state?.routeNames?.includes('MainTabs')) {
+        navigation.navigate('MainTabs');
+      }
     } catch (error: any) {
       Alert.alert('Error', `Failed to join household: ${error.message}`);
     }
@@ -125,104 +104,124 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
     }
   }, [route.params?.code, handleJoinHousehold]);
 
-  const innerContent = (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1, paddingTop: 40, paddingHorizontal: 24, paddingBottom: 40 }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <View className="items-center mb-10 w-full">
-          <Text className="text-3xl font-black text-black mb-3 tracking-tighter text-center">
-            {activeTab === 'join' ? 'Join Household' : 'Create Household'}
-          </Text>
-          <Text className="text-sm text-gray-500 text-center leading-5 max-w-[280px]">
-            {activeTab === 'join' 
-              ? 'Enter a 6-character invite code to join your roommates.' 
-              : 'Set up a new shared space for you and your roommates.'}
-          </Text>
-        </View>
+  const handleCodeChange = (value: string, index: number) => {
+    const newDigits = [...codeDigits];
+    const upper = value.toUpperCase();
+    newDigits[index] = upper;
+    setCodeDigits(newDigits);
+    const fullCode = newDigits.join('');
+    setInviteCodeInput(fullCode);
+    if (upper && index < 5) {
+      codeRefs.current[index + 1]?.focus();
+    }
+    if (fullCode.length === 6 && !fullCode.includes('')) {
+      handleJoinHousehold(fullCode);
+    }
+  };
 
-        <View className="w-full bg-white rounded-[32px] p-6 shadow-sm border border-gray-100">
-          {activeTab === 'create' && (
-            <View className="mb-4">
-              <Text className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest pl-1">Household Name</Text>
-              <TextInput
-                className="bg-gray-50 rounded-2xl px-5 py-4 text-black text-base border border-gray-100 mb-6"
-                placeholder="e.g. My Awesome Apartment"
-                placeholderTextColor="#9CA3AF"
-                value={householdName}
-                onChangeText={setHouseholdName}
-                returnKeyType="done"
-                onSubmitEditing={handleCreateHousehold}
-              />
-              <TouchableOpacity 
-                className="bg-black py-4 rounded-2xl items-center justify-center shadow-lg"
-                onPress={handleCreateHousehold} 
-                disabled={loading}
-              >
-                {loading ? <ActivityIndicator color="#FFF" /> : <Text className="text-white text-base font-bold tracking-wide">Create Space</Text>}
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {activeTab === 'join' && (
-            <View className="mb-4">
-              <Text className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest pl-1">Invite Code</Text>
-              <TextInput
-                className="bg-gray-50 rounded-2xl px-5 py-4 text-black text-base border border-gray-100 mb-6 font-bold tracking-widest text-center"
-                placeholder="6-CHAR CODE"
-                placeholderTextColor="#9CA3AF"
-                value={inviteCodeInput}
-                onChangeText={(text) => {
-                  const upperText = text.toUpperCase();
-                  setInviteCodeInput(upperText);
-                  if (upperText.trim().length === 6) {
-                    handleJoinHousehold(upperText);
-                  }
-                }}
-                autoCapitalize="characters"
-                maxLength={6}
-                returnKeyType="done"
-              />
-              <TouchableOpacity
-                className="bg-black py-4 rounded-2xl items-center justify-center shadow-lg"
-                onPress={() => handleJoinHousehold()}
-                disabled={loading}
-              >
-                {loading
-                  ? <ActivityIndicator color="#FFF" />
-                  : <Text className="text-white text-base font-bold tracking-wide">Join Space</Text>
-                }
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <TouchableOpacity
-            className="mt-6 py-3 items-center"
-            onPress={() => auth.signOut()}
-          >
-            <Text className="text-gray-400 text-sm font-bold">Sign Out</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </TouchableWithoutFeedback>
-  );
+  const handleCodeKeyPress = (e: any, index: number) => {
+    if (e.nativeEvent.key === 'Backspace' && !codeDigits[index] && index > 0) {
+      codeRefs.current[index - 1]?.focus();
+    }
+  };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#FAFAFA]">
-      <ScreenHeader navigation={navigation} title="" />
-      
-      {Platform.OS === 'ios' ? (
-        <KeyboardAvoidingView behavior="padding" className="flex-1">
-          {innerContent}
-        </KeyboardAvoidingView>
-      ) : (
-        <View style={{ flex: 1 }}>
-          {innerContent}
-        </View>
-      )}
+    <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
+      {/* Back button */}
+      <View style={{ paddingHorizontal: 24, paddingTop: 8 }}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: bord }}
+        >
+          <MaterialIcons name="arrow-back" size={22} color={text} />
+        </TouchableOpacity>
+      </View>
+
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bounces={false}>
+            
+            {/* Title */}
+            <View style={{ alignItems: 'center', marginBottom: 32 }}>
+              <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: accent, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                <MaterialIcons name={activeTab === 'create' ? 'add-home' : 'group-add'} size={28} color="#fff" />
+              </View>
+              <Text style={{ fontSize: 24, fontWeight: '900', color: text, letterSpacing: -0.5, marginBottom: 8 }}>
+                {activeTab === 'create' ? 'Create Household' : 'Join Household'}
+              </Text>
+              <Text style={{ fontSize: 14, color: muted, textAlign: 'center', lineHeight: 22, maxWidth: 280 }}>
+                {activeTab === 'create' ? 'Set up a new shared space for your roommates.' : 'Enter the 6-character invite code from your roommate.'}
+              </Text>
+            </View>
+
+            {/* Segmented Control */}
+            <View style={{ flexDirection: 'row', backgroundColor: surface, borderRadius: 16, padding: 4, marginBottom: 28, borderWidth: 1, borderColor: bord }}>
+              {(['create', 'join'] as const).map(tab => (
+                <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}
+                  style={{ flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', backgroundColor: activeTab === tab ? accent : 'transparent' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: activeTab === tab ? '#fff' : muted }}>
+                    {tab === 'create' ? 'Create' : 'Join'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Create Tab */}
+            {activeTab === 'create' && (
+              <View style={{ backgroundColor: surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: bord }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10, paddingLeft: 4 }}>Household Name</Text>
+                <TextInput
+                  style={{ backgroundColor: bg, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 16, color: text, fontSize: 15, fontWeight: '600', borderWidth: 1, borderColor: bord, marginBottom: 20 }}
+                  placeholder="e.g. My Awesome Apartment"
+                  placeholderTextColor="#475569"
+                  value={householdName}
+                  onChangeText={setHouseholdName}
+                  returnKeyType="done"
+                  onSubmitEditing={handleCreateHousehold}
+                />
+                <TouchableOpacity onPress={handleCreateHousehold} disabled={loading}
+                  style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center' }}>
+                  {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Create Space</Text>}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Join Tab — OTP-style input */}
+            {activeTab === 'join' && (
+              <View style={{ backgroundColor: surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: bord }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, paddingLeft: 4 }}>Invite Code</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 24 }}>
+                  {[0, 1, 2, 3, 4, 5].map(i => (
+                    <TextInput
+                      key={i}
+                      ref={ref => { codeRefs.current[i] = ref; }}
+                      style={{
+                        flex: 1, height: 56, borderRadius: 14, backgroundColor: bg, borderWidth: 2,
+                        borderColor: codeDigits[i] ? accent : bord,
+                        color: text, fontSize: 20, fontWeight: '900', textAlign: 'center', letterSpacing: 2
+                      }}
+                      maxLength={1}
+                      autoCapitalize="characters"
+                      value={codeDigits[i]}
+                      onChangeText={v => handleCodeChange(v, i)}
+                      onKeyPress={e => handleCodeKeyPress(e, i)}
+                    />
+                  ))}
+                </View>
+                <TouchableOpacity onPress={() => handleJoinHousehold()} disabled={loading}
+                  style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center' }}>
+                  {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Join Space</Text>}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Sign Out */}
+            <TouchableOpacity onPress={() => auth.signOut()} style={{ marginTop: 32, paddingVertical: 12, alignItems: 'center' }}>
+              <Text style={{ color: '#EF4444', fontSize: 14, fontWeight: '700' }}>Sign Out</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

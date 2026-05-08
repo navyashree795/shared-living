@@ -1,5 +1,5 @@
 import { db, auth } from '../firebaseConfig';
-import { collection, addDoc, serverTimestamp, getDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export type ActivityType = 
   | 'grocery_add' 
@@ -14,20 +14,18 @@ export const logActivity = async (
   householdId: string | undefined, 
   type: ActivityType, 
   title: string, 
+  userName?: string,
   amount: number = 0
 ) => {
   if (!householdId || !auth.currentUser) return;
 
   try {
-    // Fetch current user's profile to get the most accurate name
-    const userSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
-    const userData = userSnap.exists() ? userSnap.data() : null;
-    const userName = userData?.username ? `${userData.username}` : (auth.currentUser.email?.split('@')[0] || 'Member');
+    const finalUserName = userName || auth.currentUser.email?.split('@')[0] || 'Member';
 
     await addDoc(collection(db, 'households', householdId, 'activities'), {
       type,
       title,
-      userName,
+      userName: finalUserName,
       amount,
       userId: auth.currentUser.uid,
       createdAt: serverTimestamp(),

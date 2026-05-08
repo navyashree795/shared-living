@@ -7,10 +7,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { useHousehold } from '../context/HouseholdContext';
+import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { Card } from '../components/Card';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import SlideModal from '../components/SlideModal';
+import SwipeableRow from '../components/SwipeableRow';
 import { ExpenseSkeleton } from '../components/Skeleton';
 import {
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, deleteDoc
@@ -20,14 +23,21 @@ import { detectCategory, getCategoryIcon } from '../utils/expenseUtils';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Expense } from '../types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Expenses'>;
+type Props = { navigation: any; route?: any };
 
-export default function ExpenseScreen({ route, navigation }: Props) {
-  const { householdId } = route.params || {};
+export default function ExpenseScreen({ navigation }: Props) {
+  const { householdId, members, getMemberName } = useHousehold();
+  const hid = householdId ?? '';
+  const { isDark } = useTheme();
+  const bg      = isDark ? '#0F172A' : '#F8FAFC';
+  const surface = isDark ? '#1E293B' : '#FFFFFF';
+  const text    = isDark ? '#F1F5F9' : '#0F172A';
+  const muted   = isDark ? '#94A3B8' : '#64748B';
+  const bord    = isDark ? '#334155' : '#E2E8F0';
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const { members, getMemberName } = useHousehold();
+  const { showToast } = useToast();
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isSettleModalVisible, setIsSettleModalVisible] = useState(false);
@@ -70,8 +80,12 @@ export default function ExpenseScreen({ route, navigation }: Props) {
   }, [members, isModalVisible]);
 
   useEffect(() => {
+    if (!hid) {
+      setLoading(false);
+      return;
+    }
     const q = query(
-      collection(db, 'households', householdId, 'expenses'),
+      collection(db, 'households', hid, 'expenses'),
       orderBy('createdAt', 'desc')
     );
     const unsub = onSnapshot(q, (snap) => {
@@ -97,10 +111,11 @@ export default function ExpenseScreen({ route, navigation }: Props) {
     const currentUid = auth.currentUser?.uid;
     if (!currentUid) return;
 
+    const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
     const category = detectCategory(title.trim());
 
     try {
-      await addDoc(collection(db, 'households', householdId, 'expenses'), {
+      await addDoc(collection(db, 'households', hid, 'expenses'), {
         type: 'expense',
         title: title.trim(),
         amount: parsed,
@@ -110,7 +125,8 @@ export default function ExpenseScreen({ route, navigation }: Props) {
         splitAmong: splitAmongUids,
         createdAt: serverTimestamp(),
       });
-      logActivity(householdId, 'expense_add', title.trim(), parsed);
+      logActivity(hid, 'expense_add', title.trim(), currentUserName, parsed);
+      showToast('Expense logged', 'success');
       setTitle(''); setAmount('');
       setIsModalVisible(false);
     } catch {
@@ -128,14 +144,15 @@ export default function ExpenseScreen({ route, navigation }: Props) {
     if (!currentUid) return;
 
     try {
-      await addDoc(collection(db, 'households', householdId, 'expenses'), {
+      await addDoc(collection(db, 'households', hid, 'expenses'), {
         type: 'payment',
         amount: parsed,
         fromPaidUid: currentUid,
         toReceivedUid: settleWithUid,
         createdAt: serverTimestamp(),
       });
-      logActivity(householdId, 'payment_add', `to ${getMemberName(settleWithUid)}`, parsed);
+      logActivity(hid, 'payment_add', `to ${getMemberName(settleWithUid)}`, parsed);
+      showToast('Payment recorded', 'success');
       setSettleAmount('');
       setSettleWithUid(null);
       setIsSettleModalVisible(false);
@@ -152,7 +169,8 @@ export default function ExpenseScreen({ route, navigation }: Props) {
         style: 'destructive', 
         onPress: async () => {
           try {
-            await deleteDoc(doc(db, 'households', householdId, 'expenses', id));
+            await deleteDoc(doc(db, 'households', hid, 'expenses', id));
+            showToast('Transaction removed', 'success');
           } catch {
             Alert.alert('Error', 'Could not delete expense.');
           }
@@ -219,20 +237,22 @@ export default function ExpenseScreen({ route, navigation }: Props) {
           : `${getMemberName(item.fromPaidUid!)} paid ${getMemberName(item.toReceivedUid!)}`;
       
       return (
-        <Card className="flex-row items-center bg-secondary/20 rounded-2xl p-4 mb-3 border-primary/20 shadow-sm">
-          <View className="w-10 h-10 rounded-full bg-primary/20 items-center justify-center mr-3">
-             <MaterialIcons name="done" size={20} color="#4F46E5" />
+        <SwipeableRow onDelete={() => handleDelete(item.id)}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+               <MaterialIcons name="done" size={20} color="#6366F1" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: isDark ? '#F1F5F9' : '#0F172A' }}>{primaryText}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '500', color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 }}>Settlement</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end', paddingLeft: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#6366F1' }}>
+                ₹{item.amount.toFixed(2)}
+              </Text>
+            </View>
           </View>
-          <View className="flex-1">
-            <Text className="text-textMain text-base font-bold">{primaryText}</Text>
-            <Text className="text-textMuted text-xs font-medium mt-1">Settlement</Text>
-          </View>
-          <View className="items-end pl-2">
-            <Text className="text-lg font-extrabold pb-0.5 text-primary">
-              ₹{item.amount.toFixed(2)}
-            </Text>
-          </View>
-        </Card>
+        </SwipeableRow>
       );
     }
     
@@ -244,73 +264,71 @@ export default function ExpenseScreen({ route, navigation }: Props) {
     const amIInvolved = Boolean(item.splitAmong?.includes(currentUid!));
 
     let relationshipText = '';
-    let relationshipColorClass = 'text-textMuted';
+    let relationshipColor = isDark ? '#94A3B8' : '#64748B';
 
     if (iPaid) {
       if (splitCount > 1) {
         relationshipText = `You lent ₹${(item.amount - individualShare).toFixed(2)}`;
-        relationshipColorClass = 'text-success font-bold';
+        relationshipColor = '#10B981'; // text-success
       } else {
         relationshipText = `You paid for yourself`;
       }
     } else if (amIInvolved) {
       relationshipText = `You owe ₹${individualShare.toFixed(2)}`;
-      relationshipColorClass = 'text-danger font-bold';
+      relationshipColor = '#EF4444'; // text-danger
     } else {
       relationshipText = `Not involved`;
+      relationshipColor = isDark ? '#94A3B8' : '#64748B';
     }
 
     return (
-      <Card className="flex-row items-center bg-white rounded-2xl p-4 mb-3 border-border shadow-sm">
-        <View className="w-10 h-10 rounded-full bg-secondary items-center justify-center mr-3">
-           <MaterialIcons name={iconName} size={20} color="#6B7280" />
-        </View>
-        <View className="flex-1">
-          <Text className="text-textMain text-base font-bold">{item.title}</Text>
-          <Text className="text-textMuted text-xs font-medium mt-1">
-            Paid by {iPaid ? 'You' : getMemberName(item.paidByUid!)}
-          </Text>
-        </View>
-        <View className="items-end">
-          <Text className="text-base font-extrabold pb-0.5 text-textMain">
-            ₹{item.amount.toFixed(2)}
-          </Text>
-          <View className="flex-row items-center">
-            <Text className={`text-xs ${relationshipColorClass}`}>
+      <SwipeableRow onDelete={() => handleDelete(item.id)}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
+          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? '#0F172A' : '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
+             <MaterialIcons name={iconName} size={20} color={isDark ? '#94A3B8' : '#64748B'} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: isDark ? '#F1F5F9' : '#0F172A' }}>{item.title}</Text>
+            <Text style={{ fontSize: 12, fontWeight: '500', color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 }}>
+              Paid by {iPaid ? 'You' : getMemberName(item.paidByUid!)}
+            </Text>
+          </View>
+          <View style={{ alignItems: 'flex-end', paddingLeft: 8 }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: isDark ? '#F1F5F9' : '#0F172A', marginBottom: 4 }}>
+              ₹{item.amount.toFixed(2)}
+            </Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: relationshipColor }}>
               {relationshipText}
             </Text>
-            <TouchableOpacity onPress={() => handleDelete(item.id)} className="ml-2">
-               <MaterialIcons name="delete-outline" size={14} color="#EF4444" />
-            </TouchableOpacity>
           </View>
         </View>
-      </Card>
+      </SwipeableRow>
     );
   }, [getMemberName, handleDelete]);
 
   const renderHeader = () => (
     <>
       {/* Total Spending Card */}
-      <View className="mx-6 bg-primary rounded-3xl p-6 mb-4 shadow-lg shadow-primary/30">
-        <Text className="text-white/80 text-sm font-bold tracking-widest mb-1 uppercase">Total Household Spending</Text>
-        <Text className="text-white text-3xl font-black">₹{totalHouseholdSpent.toFixed(2)}</Text>
+      <View style={{ backgroundColor: '#6366F1', borderRadius: 24, padding: 24, marginBottom: 16, shadowColor: '#6366F1', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8 }}>
+        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Total Household Spending</Text>
+        <Text style={{ color: '#FFFFFF', fontSize: 32, fontWeight: '900', letterSpacing: -1 }}>₹{totalHouseholdSpent.toFixed(2)}</Text>
       </View>
 
       {/* Action Button */}
       <TouchableOpacity 
         onPress={() => setIsSettleModalVisible(true)}
-        className="mx-6 flex-row items-center justify-center bg-white border border-border rounded-2xl py-3 px-4 mb-6 shadow-sm"
+        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 24, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}
       >
-        <MaterialIcons name="account-balance-wallet" size={20} color="#4F46E5" />
-        <Text className="text-primary font-bold ml-2">Settle Up</Text>
+        <MaterialIcons name="account-balance-wallet" size={20} color="#6366F1" />
+        <Text style={{ color: '#6366F1', fontWeight: '800', marginLeft: 8, fontSize: 15 }}>Settle Up</Text>
       </TouchableOpacity>
 
       {/* Directed Liabilities Dashboard */}
-      <View className="mx-6 bg-white rounded-3xl p-6 mb-6 shadow-sm border border-border">
-        <Text className="text-textMuted text-xs font-bold tracking-widest mb-4 uppercase">Your Balances</Text>
+      <View style={{ backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 24, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
+        <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 }}>Your Balances</Text>
         
         {Object.entries(peerBalances).filter(([_, amount]) => Math.abs(amount) > 0.01).length === 0 ? (
-          <Text className="text-textMuted text-sm font-medium py-2">You are all settled up! 🎉</Text>
+          <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 14, fontWeight: '600', paddingVertical: 8 }}>You are all settled up! 🎉</Text>
         ) : (
           Object.entries(peerBalances).map(([uid, amount]) => {
             if (Math.abs(amount) < 0.01) return null; // Ignore floats close to 0
@@ -319,16 +337,16 @@ export default function ExpenseScreen({ route, navigation }: Props) {
             const absAmount = Math.abs(amount).toFixed(2);
             
             return (
-              <View key={uid} className="flex-row items-center justify-between py-3 border-b border-border/50 last:border-0 last:pb-0">
-                <View className="flex-row items-center">
-                  <View className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${isOwedToMe ? 'bg-success/10' : 'bg-danger/10'}`}>
+              <View key={uid} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#E2E8F0' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 12, backgroundColor: isOwedToMe ? (isDark ? '#064E3B' : '#D1FAE5') : (isDark ? '#7F1D1D' : '#FEE2E2') }}>
                     <MaterialIcons name={isOwedToMe ? "arrow-downward" : "arrow-upward"} size={16} color={isOwedToMe ? "#10B981" : "#EF4444"} />
                   </View>
-                  <Text className="text-textMain text-sm font-bold">
+                  <Text style={{ color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 14, fontWeight: '700' }}>
                     {isOwedToMe ? `${getMemberName(uid)} owes you` : `You owe ${getMemberName(uid)}`}
                   </Text>
                 </View>
-                <Text className={`text-base font-extrabold ${isOwedToMe ? 'text-success' : 'text-danger'}`}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: isOwedToMe ? '#10B981' : '#EF4444' }}>
                   ₹{absAmount}
                 </Text>
               </View>
@@ -337,14 +355,14 @@ export default function ExpenseScreen({ route, navigation }: Props) {
         )}
       </View>
 
-      <View className="px-6">
-        <Text className="text-textMuted text-xs font-bold tracking-widest mb-3 uppercase">Transactions</Text>
+      <View style={{ marginBottom: 12 }}>
+        <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginLeft: 4 }}>Transactions</Text>
       </View>
     </>
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
       <ScreenHeader 
         navigation={navigation as any} 
         title="Expenses" 
@@ -373,7 +391,7 @@ export default function ExpenseScreen({ route, navigation }: Props) {
             </View>
           ) : null
         }
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       />
 
@@ -384,7 +402,7 @@ export default function ExpenseScreen({ route, navigation }: Props) {
             
             {!showSplitOptions && <Text className="text-white text-2xl font-black mb-4 ml-2 shadow-sm">Add new expense</Text>}
 
-            <View className="bg-white rounded-[32px] p-6 shadow-xl relative overflow-hidden">
+            <View className="bg-surface rounded-[32px] p-6 shadow-xl relative overflow-hidden">
               { !showSplitOptions ? (
                 <View>
                   <Text className="text-textMuted text-xs font-bold mb-1">Enter expense name</Text>
