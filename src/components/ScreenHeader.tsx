@@ -29,8 +29,8 @@ const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   const { isDark } = useTheme();
   const text = isDark ? '#F1F5F9' : '#0F172A';
   const muted = isDark ? '#94A3B8' : '#64748B';
-  const bord = isDark ? '#334155' : '#E2E8F0';
-  const surfaceBg = isDark ? '#1E293B' : '#FFFFFF';
+  const bord = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
+  const surfaceBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.85)';
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, justifyContent: 'space-between' }}>

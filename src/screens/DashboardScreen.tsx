@@ -38,11 +38,11 @@ export default function DashboardScreen({ navigation }: Props) {
   const { householdId, setHouseholdId } = useHousehold();
   const hid = householdId ?? '';
   const { isDark } = useTheme();
-  const bg      = isDark ? '#0F172A' : '#FFFFFF';
-  const surface = isDark ? '#1E293B' : '#F8FAFC';
-  const text    = isDark ? '#F1F5F9' : '#0F172A';
-  const muted   = isDark ? '#94A3B8' : '#64748B';
-  const bord    = isDark ? '#334155' : '#E2E8F0';
+  const bg      = isDark ? '#070913' : '#F5F7FF';
+  const surface = isDark ? '#0E1324' : '#FFFFFF';
+  const text    = isDark ? '#F1F5F9' : '#1E1B4B';
+  const muted   = isDark ? '#A78BFA' : '#4F46E5';
+  const bord    = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
   const { showToast } = useToast();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isMembersModalVisible, setIsMembersModalVisible] = useState(false);
@@ -277,13 +277,13 @@ export default function DashboardScreen({ navigation }: Props) {
 
 
   const bgColors = isDark 
-    ? ['#0A1128', '#0F1A3A'] as readonly [string, string]
-    : ['#FFFFFF', '#FFFFFF'] as readonly [string, string];
-  const textMain = isDark ? '#FFFFFF' : '#0F172A';
-  const textMuted = isDark ? '#94A3B8' : '#4F46E5';
-  const glassBorder = isDark ? 'rgba(255,255,255,0.1)' : '#DBEAFE';
-  const glassBg = isDark ? 'rgba(255,255,255,0.1)' : '#EFF6FF';
-  const blurTint = isDark ? 'light' : 'light';
+    ? ['#070913', '#0F1324'] as readonly [string, string]
+    : ['#F5F7FF', '#EBEFFF'] as readonly [string, string];
+  const textMain = isDark ? '#F1F5F9' : '#1E1B4B';
+  const textMuted = isDark ? '#A78BFA' : '#4F46E5';
+  const glassBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
+  const glassBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.85)';
+  const blurTint = isDark ? 'dark' : 'light';
 
   // Dynamic grid card values
   const cardIntensity = isDark ? 30 : 0;
@@ -307,46 +307,63 @@ export default function DashboardScreen({ navigation }: Props) {
     ? ['rgba(30, 58, 138, 0.7)', 'rgba(37, 99, 235, 0.2)'] as const 
     : ['#3B82F6', '#2563EB'] as const;
 
+  const detailsList = householdData?.info?.details || [
+    { id: 'wifi_net', label: 'WiFi Network', value: householdData?.info?.wifiName || '', type: 'text', icon: 'wifi' },
+    { id: 'wifi_pass', label: 'WiFi Password', value: householdData?.info?.wifiPass || '', type: 'password', icon: 'vpn-key' },
+    { id: 'landlord', label: 'Landlord', value: householdData?.info?.landlordName || '', type: 'text', icon: 'phone-in-talk' },
+    { id: 'trash_truck', label: 'Trash Truck', value: householdData?.info?.trashArrivalTime || '', type: 'time', icon: 'delete-outline' }
+  ].filter(item => item.value);
+
   return (
     <LinearGradient colors={bgColors} style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        {/* Header */}
-        <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Glowing Ambient Backdrops */}
+      <View style={{ position: 'absolute', top: -60, right: -60, width: 260, height: 260, borderRadius: 130, backgroundColor: isDark ? 'rgba(124, 58, 237, 0.18)' : 'rgba(99, 102, 241, 0.08)', zIndex: 0 }} />
+      <View style={{ position: 'absolute', top: 380, left: -60, width: 240, height: 240, borderRadius: 120, backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.04)', zIndex: 0 }} />
+
+      <SafeAreaView style={{ flex: 1, zIndex: 1 }} edges={['top']}>
+        {/* Sleek Premium Header */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-              <Avatar name={userData?.username || 'U'} size={48} bgColor="#FFFFFF" color="#0A1128" style={{ borderRadius: 24 }} />
+            <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{ position: 'relative' }}>
+              <View style={{ padding: 2.5, borderRadius: 24, borderWidth: 1.5, borderColor: isDark ? '#A78BFA' : '#4F46E5', backgroundColor: 'transparent' }}>
+                <Avatar name={userData?.username || 'U'} size={38} bgColor={isDark ? '#1E1B4B' : '#EEF2FF'} color={isDark ? '#A78BFA' : '#4F46E5'} style={{ borderRadius: 19 }} />
+              </View>
+              <View style={{ position: 'absolute', bottom: 1, right: 1, width: 10, height: 10, borderRadius: 5, backgroundColor: '#10B981', borderWidth: 2, borderColor: isDark ? '#070913' : '#F5F7FF' }} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setIsSwitchModalVisible(true)}>
-              <Text style={{ fontSize: 16, fontWeight: '500', color: textMuted }}>Good evening,</Text>
-              <Text style={{ fontSize: 24, fontWeight: 'bold', color: textMain }}>{householdData?.name || 'Loading...'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 1 }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: textMuted, textTransform: 'uppercase', letterSpacing: 0.8 }}>Household Hub</Text>
+                <MaterialIcons name="keyboard-arrow-down" size={13} color={textMuted} />
+              </View>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: textMain, letterSpacing: -0.6 }}>{householdData?.name || 'Loading...'}</Text>
             </TouchableOpacity>
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity onPress={() => setIsMembersModalVisible(true)}>
-              <BlurView intensity={20} tint={blurTint} style={{ width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
-                <MaterialIcons name="people" size={24} color={textMuted} />
+              <BlurView intensity={25} tint={blurTint} style={{ width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
+                <MaterialIcons name="people" size={20} color={isDark ? '#C084FC' : '#4F46E5'} />
               </BlurView>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => {}}>
-              <BlurView intensity={20} tint={blurTint} style={{ width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
-                <MaterialIcons name="notifications" size={24} color={textMuted} />
-                <View style={{ position: 'absolute', top: 12, right: 14, width: 8, height: 8, borderRadius: 4, backgroundColor: '#60A5FA', borderWidth: 1, borderColor: isDark ? '#0A1128' : '#DBEAFE' }} />
+              <BlurView intensity={25} tint={blurTint} style={{ width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
+                <MaterialIcons name="notifications" size={20} color={isDark ? '#C084FC' : '#4F46E5'} />
+                <View style={{ position: 'absolute', top: 10, right: 11, width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444', borderWidth: 1, borderColor: isDark ? '#070913' : '#FFFFFF' }} />
               </BlurView>
             </TouchableOpacity>
           </View>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
-          {/* Activity Feed pills */}
-          <View style={{ marginTop: 12, marginBottom: 24 }}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}>
+        <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 110 }}>
+          {/* Horizontal Activity Stream */}
+          <View style={{ marginTop: 8, marginBottom: 16 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
               {loadingActivities ? (
                 [1, 2, 3].map(i => (
-                  <BlurView key={i} intensity={15} tint={blurTint} style={{ borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 160, overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
-                    <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: glassBg }} />
+                  <BlurView key={i} intensity={15} tint={blurTint} style={{ borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 140, overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
+                    <View style={{ width: 24, height: 24, borderRadius: 8, backgroundColor: glassBg }} />
                     <View>
-                      <View style={{ width: 80, height: 10, borderRadius: 4, backgroundColor: glassBg, marginBottom: 4 }} />
-                      <View style={{ width: 50, height: 8, borderRadius: 4, backgroundColor: glassBg }} />
+                      <View style={{ width: 60, height: 8, borderRadius: 3, backgroundColor: glassBg, marginBottom: 4 }} />
+                      <View style={{ width: 40, height: 6, borderRadius: 3, backgroundColor: glassBg }} />
                     </View>
                   </BlurView>
                 ))
@@ -354,138 +371,158 @@ export default function DashboardScreen({ navigation }: Props) {
                 activities.slice(0, 6).map((activity, idx) => {
                   const config = getActivityConfig(activity.type);
                   return (
-                    <BlurView key={activity.id || idx} intensity={15} tint={blurTint} style={{ borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 12, overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
-                      <View style={{ backgroundColor: glassBg, padding: 8, borderRadius: 8 }}>
-                        <MaterialIcons name={config.icon} size={16} color={textMain} />
+                    <BlurView key={activity.id || idx} intensity={20} tint={blurTint} style={{ borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 10, overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
+                      <View style={{ backgroundColor: isDark ? 'rgba(192, 132, 252, 0.15)' : 'rgba(99, 102, 241, 0.08)', padding: 6, borderRadius: 8 }}>
+                        <MaterialIcons name={config.icon} size={14} color={isDark ? '#C084FC' : '#4F46E5'} />
                       </View>
                       <View>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: textMain }} numberOfLines={1}>{activity.userName} {config.label.toLowerCase()}</Text>
-                        <Text style={{ fontSize: 11, fontWeight: '500', color: textMuted }}>{activity.createdAt?.toDate ? activity.createdAt.toDate().toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Just now'}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: textMain }} numberOfLines={1}>{activity.userName} {config.label.toLowerCase()}</Text>
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: isDark ? '#94A3B8' : '#64748B' }}>{activity.createdAt?.toDate ? activity.createdAt.toDate().toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Just now'}</Text>
                       </View>
                     </BlurView>
                   );
                 })
               ) : (
-                  <BlurView intensity={15} tint={blurTint} style={{ borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: textMuted }}>No recent activity</Text>
+                <BlurView intensity={20} tint={blurTint} style={{ borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#A78BFA' : '#4F46E5' }}>✨ All caught up! No recent activity.</Text>
                 </BlurView>
               )}
             </ScrollView>
           </View>
 
-          {/* Household Info Banner Card */}
-          <View style={{ paddingHorizontal: 24, marginBottom: 24 }}>
-            <BlurView intensity={20} tint={blurTint} style={{ borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
-              <LinearGradient colors={[glassBg, 'rgba(255,255,255,0.02)']} style={{ padding: 20 }}>
-                {/* Top Row: Name and Edit Icon */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <Text style={{ fontSize: 22, fontWeight: '800', color: textMain }}>{householdData?.name || 'My Household'}</Text>
-                  <TouchableOpacity onPress={() => { setInfoModalTab('all'); setIsEditMode(true); setIsInfoModalVisible(true); }} style={{ padding: 4 }}>
-                    <MaterialIcons name="edit" size={20} color={textMuted} />
+          {/* Futuristic Glassy Household Hub Card */}
+          <View style={{ paddingHorizontal: 16, marginBottom: 18 }}>
+            <BlurView intensity={25} tint={blurTint} style={{ borderRadius: 24, overflow: 'hidden', borderWidth: 1.5, borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(99, 102, 241, 0.1)' }}>
+              <LinearGradient colors={isDark ? ['rgba(14, 19, 36, 0.9)', 'rgba(7, 9, 19, 0.95)'] : ['rgba(255, 255, 255, 0.95)', 'rgba(240, 244, 255, 0.95)']} style={{ padding: 16 }}>
+                {/* Hub Header */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 4, height: 16, borderRadius: 2, backgroundColor: isDark ? '#A78BFA' : '#4F46E5' }} />
+                    <Text style={{ fontSize: 12, fontWeight: '900', color: textMain, textTransform: 'uppercase', letterSpacing: 1 }}>Household Details</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => { setInfoModalTab('all'); setIsEditMode(true); setIsInfoModalVisible(true); }} style={{ padding: 6, borderRadius: 10, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }}>
+                    <MaterialIcons name="edit" size={16} color={isDark ? '#C084FC' : '#4F46E5'} />
                   </TouchableOpacity>
                 </View>
 
-                {/* Info Grid */}
-                <View style={{ gap: 12 }}>
-                  {/* WiFi */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 12, borderRadius: 16 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <MaterialIcons name="wifi" size={18} color="#6366F1" />
-                      <View>
-                        <Text style={{ fontSize: 11, color: textMuted, fontWeight: '600', textTransform: 'uppercase' }}>WiFi Network</Text>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: textMain }}>{householdData?.info?.wifiName || 'Not Set'}</Text>
+                {/* Info Grid (Fixed-height Scrollable Widget) */}
+                <View style={{ height: 140 }}>
+                  <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                    {detailsList.length > 0 ? (
+                      detailsList.map((field: any) => {
+                        const isTrashAndHasCountdown = field.type === 'time' && field.icon === 'delete-outline' && trashCountdown;
+                        return (
+                          <View key={field.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: isTrashAndHasCountdown ? 'rgba(245, 158, 11, 0.2)' : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)') }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
+                              <View style={{ backgroundColor: isTrashAndHasCountdown ? 'rgba(245, 158, 11, 0.18)' : (isDark ? 'rgba(192, 132, 252, 0.15)' : 'rgba(99, 102, 241, 0.08)'), padding: 8, borderRadius: 12 }}>
+                                <MaterialIcons name={field.icon || 'description'} size={18} color={isTrashAndHasCountdown ? '#FBBF24' : (isDark ? '#C084FC' : '#4F46E5')} />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 9, color: isTrashAndHasCountdown ? '#FBBF24' : (isDark ? '#94A3B8' : '#64748B'), fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>{isTrashAndHasCountdown ? 'Truck Arriving' : field.label}</Text>
+                                <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '800', color: isTrashAndHasCountdown ? '#FBBF24' : textMain }}>{isTrashAndHasCountdown ? `${trashCountdown}` : (field.value || 'Not Set')}</Text>
+                              </View>
+                            </View>
+                            
+                            {field.type === 'password' && field.value ? (
+                              <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(field.value); showToast('Copied to clipboard', 'success'); }} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                                <MaterialIcons name="content-copy" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
+                              </TouchableOpacity>
+                            ) : null}
+                            {field.type === 'phone' && field.value ? (
+                              <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(field.value); showToast('Copied phone number', 'success'); }} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                                <MaterialIcons name="call" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        );
+                      })
+                    ) : (
+                      <View style={{ alignItems: 'center', paddingVertical: 36 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B' }}>No details set yet. Tap Edit to add!</Text>
                       </View>
-                    </View>
-                    {householdData?.info?.wifiPass ? (
-                      <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(householdData?.info?.wifiPass || ''); showToast('Password copied', 'success'); }} style={{ padding: 6, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', borderRadius: 10 }}>
-                        <MaterialIcons name="content-copy" size={14} color={textMuted} />
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-
-                  {/* Landlord & Trash Row */}
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
-                    {/* Landlord */}
-                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 12, borderRadius: 16 }}>
-                      <MaterialIcons name="phone-in-talk" size={18} color="#10B981" />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 10, color: textMuted, fontWeight: '600', textTransform: 'uppercase' }}>Landlord</Text>
-                        <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: textMain }}>{householdData?.info?.landlordName || 'Not Set'}</Text>
-                      </View>
-                    </View>
-
-                    {/* Trash */}
-                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 12, borderRadius: 16 }}>
-                      <MaterialIcons name="delete-outline" size={18} color="#FBBF24" />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 10, color: textMuted, fontWeight: '600', textTransform: 'uppercase' }}>Trash Truck</Text>
-                        <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: textMain }}>{householdData?.info?.trashArrivalTime || 'Not Set'}</Text>
-                      </View>
-                    </View>
-                  </View>
+                    )}
+                  </ScrollView>
                 </View>
               </LinearGradient>
             </BlurView>
           </View>
 
-          {/* 4 Cards Grid */}
-          <View style={{ paddingHorizontal: 24, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16 }}>
+          {/* Interactive Navigation Grid */}
+          <View style={{ paddingHorizontal: 16, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
             {/* Grocery */}
-            <TouchableOpacity onPress={() => handleNav('Grocery')} style={{ width: '47%', aspectRatio: 1 }}>
+            <TouchableOpacity onPress={() => handleNav('Grocery')} style={{ width: '48%', aspectRatio: 1.05 }}>
               <BlurView intensity={cardIntensity} tint="light" style={{ flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: groceryBorder }}>
-                <LinearGradient colors={groceryGrad} style={{ flex: 1, padding: 16 }}>
+                <LinearGradient colors={groceryGrad} style={{ flex: 1, padding: 14 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '700' }}>Grocery</Text>
-                    <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
-                      <MaterialIcons name="shopping-cart" size={24} color="#FFFFFF" />
+                    <View>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: -0.3, marginBottom: 2 }}>Grocery</Text>
+                      <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '600' }}>View shared list →</Text>
+                    </View>
+                    <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 7, borderRadius: 10 }}>
+                      <MaterialIcons name="shopping-cart" size={16} color="#FFFFFF" />
                     </View>
                   </View>
-                  <MaterialIcons name="shopping-cart" size={80} color="rgba(255, 255, 255, 0.15)" style={{ position: 'absolute', bottom: -10, right: -10 }} />
+                  <MaterialIcons name="shopping-cart" size={54} color="rgba(255, 255, 255, 0.12)" style={{ position: 'absolute', bottom: -6, right: -6 }} />
                 </LinearGradient>
               </BlurView>
             </TouchableOpacity>
 
             {/* Expenses */}
-            <TouchableOpacity onPress={() => handleNav('Expenses')} style={{ width: '47%', aspectRatio: 1 }}>
+            <TouchableOpacity onPress={() => handleNav('Expenses')} style={{ width: '48%', aspectRatio: 1.05 }}>
               <BlurView intensity={cardIntensity} tint="light" style={{ flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: expenseBorder }}>
-                <LinearGradient colors={expenseGrad} style={{ flex: 1, padding: 16 }}>
+                <LinearGradient colors={expenseGrad} style={{ flex: 1, padding: 14 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '700' }}>Expenses</Text>
-                    <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
-                      <MaterialIcons name="attach-money" size={24} color="#FFFFFF" />
+                    <View>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: -0.3, marginBottom: 2 }}>Expenses</Text>
+                      <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '600' }}>Split bills easily →</Text>
+                    </View>
+                    <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 7, borderRadius: 10 }}>
+                      <MaterialIcons name="attach-money" size={16} color="#FFFFFF" />
                     </View>
                   </View>
-                  <MaterialIcons name="bar-chart" size={80} color="rgba(255, 255, 255, 0.15)" style={{ position: 'absolute', bottom: -10, right: -10 }} />
+                  <MaterialIcons name="bar-chart" size={54} color="rgba(255, 255, 255, 0.12)" style={{ position: 'absolute', bottom: -6, right: -6 }} />
                 </LinearGradient>
               </BlurView>
             </TouchableOpacity>
 
             {/* Chores */}
-            <TouchableOpacity onPress={() => handleNav('Chores')} style={{ width: '47%', aspectRatio: 1 }}>
+            <TouchableOpacity onPress={() => handleNav('Chores')} style={{ width: '48%', aspectRatio: 1.05 }}>
               <BlurView intensity={cardIntensity} tint="light" style={{ flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: choresBorder }}>
-                <LinearGradient colors={choresGrad} style={{ flex: 1, padding: 16 }}>
+                <LinearGradient colors={choresGrad} style={{ flex: 1, padding: 14 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '700' }}>Chores</Text>
-                    <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
-                      <MaterialIcons name="cleaning-services" size={24} color="#FFFFFF" />
+                    <View style={{ flex: 1, paddingRight: 4 }}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: -0.3, marginBottom: 2 }}>Chores</Text>
+                      <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '600' }}>
+                        {chores.filter(c => !c.done).length > 0 
+                          ? `${chores.filter(c => !c.done).length} active tasks` 
+                          : "All tasks done ✨"}
+                      </Text>
+                    </View>
+                    <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 7, borderRadius: 10 }}>
+                      <MaterialIcons name="cleaning-services" size={16} color="#FFFFFF" />
                     </View>
                   </View>
-                  <MaterialIcons name="format-list-bulleted" size={80} color="rgba(255, 255, 255, 0.15)" style={{ position: 'absolute', bottom: -10, right: -10 }} />
+                  <MaterialIcons name="format-list-bulleted" size={54} color="rgba(255, 255, 255, 0.12)" style={{ position: 'absolute', bottom: -6, right: -6 }} />
                 </LinearGradient>
               </BlurView>
             </TouchableOpacity>
 
             {/* Chat */}
-            <TouchableOpacity onPress={() => handleNav('Chat')} style={{ width: '47%', aspectRatio: 1 }}>
+            <TouchableOpacity onPress={() => handleNav('Chat')} style={{ width: '48%', aspectRatio: 1.05 }}>
               <BlurView intensity={cardIntensity} tint="light" style={{ flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: chatBorder }}>
-                <LinearGradient colors={chatGrad} style={{ flex: 1, padding: 16 }}>
+                <LinearGradient colors={chatGrad} style={{ flex: 1, padding: 14 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '700' }}>Chat</Text>
-                    <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
-                      <MaterialIcons name="chat" size={24} color="#FFFFFF" />
+                    <View>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: -0.3, marginBottom: 2 }}>Chat</Text>
+                      <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '700' }}>
+                        {hasUnreadMessages ? "New messages 💬" : "Join chat →"}
+                      </Text>
+                    </View>
+                    <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 7, borderRadius: 10 }}>
+                      <MaterialIcons name="chat" size={16} color="#FFFFFF" />
                     </View>
                   </View>
-                  <MaterialIcons name="chat" size={80} color="rgba(255, 255, 255, 0.15)" style={{ position: 'absolute', bottom: -10, right: -10 }} />
+                  <MaterialIcons name="chat" size={54} color="rgba(255, 255, 255, 0.12)" style={{ position: 'absolute', bottom: -6, right: -6 }} />
                 </LinearGradient>
               </BlurView>
             </TouchableOpacity>
@@ -600,154 +637,210 @@ export default function DashboardScreen({ navigation }: Props) {
 }
 
 const HouseholdInfoModalContent = memo(({ tab, isEdit, data, householdName, onSave }: any) => {
+  const { isDark } = useTheme();
   const { showToast } = useToast();
   const [name, setName] = useState(householdName || '');
-  const [wifiName, setWifiName] = useState(data?.wifiName || '');
-  const [wifiPass, setWifiPass] = useState(data?.wifiPass || '');
-  const [trashArrivalTime, setTrashArrivalTime] = useState(data?.trashArrivalTime || '');
-  const [landlordName, setLandlordName] = useState(data?.landlordName || '');
-  const [landlordPhone, setLandlordPhone] = useState(data?.landlordPhone || '');
-  const [otherInfo, setOtherInfo] = useState(data?.other || '');
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [fields, setFields] = useState<any[]>(() => {
+    if (data?.details && data.details.length > 0) return data.details;
+    const initial = [];
+    if (data?.wifiName) initial.push({ id: 'wifi_net', label: 'WiFi Network', value: data.wifiName, type: 'text', icon: 'wifi' });
+    if (data?.wifiPass) initial.push({ id: 'wifi_pass', label: 'WiFi Password', value: data.wifiPass, type: 'password', icon: 'vpn-key' });
+    if (data?.landlordName) initial.push({ id: 'landlord_contact', label: 'Landlord', value: data.landlordName, type: 'text', icon: 'phone-in-talk' });
+    if (data?.trashArrivalTime) initial.push({ id: 'trash_truck', label: 'Trash Truck', value: data.trashArrivalTime, type: 'time', icon: 'delete-outline' });
+    return initial;
+  });
+
+  const [activeTimePickerId, setActiveTimePickerId] = useState<string | null>(null);
 
   const handleSave = () => {
-    onSave({ name: name.trim() || 'My Household', info: { wifiName, wifiPass, trashArrivalTime, landlordName, landlordPhone, other: otherInfo } });
+    const updates: any = { details: fields };
+    
+    // Fallback static values for backwards compatibility
+    const wifiF = fields.find(f => f.id === 'wifi_net' || f.label.toLowerCase().includes('network') || f.label.toLowerCase().includes('wifi name'));
+    const passF = fields.find(f => f.id === 'wifi_pass' || f.label.toLowerCase().includes('password') || f.label.toLowerCase().includes('wifi pass'));
+    const landF = fields.find(f => f.id === 'landlord_contact' || f.label.toLowerCase().includes('landlord'));
+    const trashF = fields.find(f => f.type === 'time' && f.icon === 'delete-outline');
+
+    updates.wifiName = wifiF ? wifiF.value : '';
+    updates.wifiPass = passF ? passF.value : '';
+    updates.landlordName = landF ? landF.value : '';
+    updates.trashArrivalTime = trashF ? trashF.value : '';
+
+    onSave({ name: name.trim() || 'My Household', info: updates });
+  };
+
+  const handleAddField = () => {
+    setFields([...fields, { id: Math.random().toString(), label: '', value: '', type: 'text', icon: 'description' }]);
+  };
+
+  const handleDeleteField = (id: string) => {
+    setFields(fields.filter(f => f.id !== id));
+  };
+
+  const handleUpdateField = (id: string, key: string, val: any) => {
+    setFields(fields.map(f => f.id === id ? { ...f, [key]: val } : f));
   };
 
   const copyToClipboard = async (text: string) => {
     if (!text) return;
     await Clipboard.setStringAsync(text);
-    showToast('Copied', 'success');
+    showToast('Copied to clipboard', 'success');
   };
+
+  const textMain = isDark ? '#F1F5F9' : '#1E1B4B';
+
+  if (isEdit) {
+    return (
+      <>
+        <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 16 }}>
+          <View style={{ gap: 16, paddingBottom: 24 }}>
+            {/* Household Name */}
+            <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)' }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: isDark ? '#A78BFA' : '#4F46E5', textTransform: 'uppercase', marginBottom: 6, letterSpacing: 0.5 }}>Household Name</Text>
+              <TextInput style={{ fontSize: 15, fontWeight: '700', color: isDark ? '#F1F5F9' : '#1E1B4B', backgroundColor: isDark ? '#070913' : '#FFFFFF', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }} placeholder="e.g. My Flat" value={name} onChangeText={setName} />
+            </View>
+
+            {/* Dynamic Fields List */}
+            <Text style={{ fontSize: 11, fontWeight: '900', color: isDark ? '#94A3B8' : '#64748B', textTransform: 'uppercase', letterSpacing: 1, marginTop: 8, marginLeft: 4 }}>Custom Fields</Text>
+            
+            {fields.map((field) => (
+              <View key={field.id} style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', padding: 14, borderRadius: 20, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', gap: 10 }}>
+                {/* Inputs Row */}
+                <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                  <TextInput 
+                    style={{ flex: 1, fontSize: 13, fontWeight: '800', color: isDark ? '#F1F5F9' : '#1E1B4B', backgroundColor: isDark ? '#070913' : '#FFFFFF', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }} 
+                    placeholder="Label (e.g. WiFi Network)" 
+                    value={field.label} 
+                    onChangeText={(v) => handleUpdateField(field.id, 'label', v)} 
+                  />
+                  {field.type === 'time' ? (
+                    <TouchableOpacity 
+                      onPress={() => setActiveTimePickerId(field.id)} 
+                      style={{ flex: 1.2, height: 42, backgroundColor: isDark ? '#070913' : '#FFFFFF', paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', justifyContent: 'center' }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: field.value ? (isDark ? '#FBBF24' : '#D97706') : '#94A3B8' }}>
+                        {field.value || 'Set Time'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TextInput 
+                      style={{ flex: 1.2, fontSize: 13, fontWeight: '700', color: isDark ? '#FBBF24' : '#1E1B4B', backgroundColor: isDark ? '#070913' : '#FFFFFF', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }} 
+                      placeholder="Value" 
+                      value={field.value} 
+                      onChangeText={(v) => handleUpdateField(field.id, 'value', v)} 
+                    />
+                  )}
+                  <TouchableOpacity onPress={() => handleDeleteField(field.id)} style={{ padding: 8, backgroundColor: 'rgba(239, 68, 68, 0.12)', borderRadius: 10 }}>
+                    <MaterialIcons name="delete-outline" size={18} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Type Selection pills */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {[
+                    { type: 'text', label: 'Text', icon: 'description' },
+                    { type: 'password', label: 'Password', icon: 'vpn-key' },
+                    { type: 'time', label: 'Time', icon: 'delete-outline' },
+                    { type: 'phone', label: 'Phone', icon: 'call' },
+                    { type: 'link', label: 'Link', icon: 'link' }
+                  ].map((t) => (
+                    <TouchableOpacity 
+                      key={t.type} 
+                      onPress={() => {
+                        handleUpdateField(field.id, 'type', t.type);
+                        handleUpdateField(field.id, 'icon', t.icon);
+                        if (t.type === 'time') setActiveTimePickerId(field.id);
+                      }}
+                      style={{ 
+                        paddingHorizontal: 10, 
+                        paddingVertical: 5, 
+                        borderRadius: 8, 
+                        backgroundColor: field.type === t.type 
+                          ? (isDark ? 'rgba(192, 132, 252, 0.22)' : 'rgba(99, 102, 241, 0.12)') 
+                          : 'transparent',
+                        borderWidth: 1,
+                        borderColor: field.type === t.type 
+                          ? (isDark ? '#C084FC' : '#4F46E5') 
+                          : 'transparent'
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: field.type === t.type ? (isDark ? '#C084FC' : '#4F46E5') : (isDark ? '#94A3B8' : '#64748B') }}>{t.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Nested TimePicker Modal */}
+                {activeTimePickerId === field.id && (
+                  <Modal visible={activeTimePickerId === field.id} transparent animationType="fade">
+                    <TouchableOpacity className="flex-1 bg-black/40 justify-center items-center px-6" activeOpacity={1} onPress={() => setActiveTimePickerId(null)}>
+                      <TouchableOpacity activeOpacity={1} className="w-full bg-surface rounded-[32px] p-6 shadow-2xl" onPress={(e) => e.stopPropagation()}>
+                        <TimeWheelPicker 
+                          initialTime={(() => { if (!field.value) return getSyncedDate(); const [h, m] = field.value.split(':').map(Number); const d = getSyncedDate(); d.setHours(h, m, 0, 0); return d; })()}
+                          onConfirm={(date) => { const hours = date.getHours().toString().padStart(2, '0'); const minutes = date.getMinutes().toString().padStart(2, '0'); handleUpdateField(field.id, 'value', `${hours}:${minutes}`); setActiveTimePickerId(null); }}
+                          onCancel={() => setActiveTimePickerId(null)}
+                        />
+                        <TouchableOpacity onPress={() => setActiveTimePickerId(null)} className="mt-4 py-3 items-center"><Text className="text-textMuted font-bold text-sm">Cancel</Text></TouchableOpacity>
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  </Modal>
+                )}
+              </View>
+            ))}
+
+            {/* Add Field Button */}
+            <TouchableOpacity onPress={handleAddField} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, backgroundColor: isDark ? 'rgba(192, 132, 252, 0.12)' : 'rgba(99, 102, 241, 0.06)', borderRadius: 16, borderStyle: 'dashed', borderWidth: 1, borderColor: isDark ? '#C084FC' : '#4F46E5', marginTop: 6 }}>
+              <MaterialIcons name="add" size={18} color={isDark ? '#C084FC' : '#4F46E5'} style={{ marginRight: 6 }} />
+              <Text style={{ fontSize: 13, fontWeight: '800', color: isDark ? '#C084FC' : '#4F46E5' }}>Add Custom Field</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        <TouchableOpacity onPress={handleSave} className="bg-indigo-600 rounded-2xl py-4 items-center shadow-lg shadow-indigo-300 mb-8">
+          <Text className="text-white font-black text-lg">Save Changes</Text>
+        </TouchableOpacity>
+      </>
+    );
+  }
 
   return (
     <>
-      <ScrollView showsVerticalScrollIndicator={false} className="mb-6">
-        <View className="gap-5">
-          {tab === 'all' && isEdit && (
-            <View className="bg-surface rounded-3xl p-5 border border-border shadow-sm">
-              <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Household Name</Text>
-              <TextInput className="bg-background rounded-xl p-3 text-textMain font-bold border border-border/50" placeholder="Household Name" value={name} onChangeText={setName} />
-            </View>
-          )}
-
-          {(tab === 'all' || tab === 'landlord') && (
-            <View className="bg-surface rounded-3xl p-5 border border-border shadow-sm">
-              <View className="flex-row items-center gap-2 mb-4">
-                <View className="bg-success/10 p-2 rounded-lg"><MaterialIcons name="phone-in-talk" size={20} color="#10B981" /></View>
-                <Text className="text-textMain font-bold">Landlord / Maintenance</Text>
-              </View>
-              {isEdit ? (
-                <>
-                  <TextInput className="bg-background rounded-xl p-3 text-textMain font-bold mb-3 border border-border/50" placeholder="Name" value={landlordName} onChangeText={setLandlordName} />
-                  <TextInput className="bg-background rounded-xl p-3 text-textMain font-bold border border-border/50" placeholder="Phone Number" value={landlordPhone} onChangeText={setLandlordPhone} keyboardType="phone-pad" />
-                </>
-              ) : (
-                <View className="gap-2">
-                  <View className="bg-surfaceRaised p-4 rounded-2xl border border-border/50">
-                    <Text className="text-textMuted text-[10px] font-bold uppercase mb-1">Name</Text>
-                    <Text className="text-textMain font-black text-lg">{landlordName || 'Not Set'}</Text>
+      <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 16 }}>
+        <View style={{ gap: 12, paddingBottom: 24 }}>
+          {fields.length > 0 ? (
+            fields.map((field) => (
+              <View key={field.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
+                  <View style={{ backgroundColor: isDark ? 'rgba(192, 132, 252, 0.15)' : 'rgba(99, 102, 241, 0.08)', padding: 8, borderRadius: 12 }}>
+                    <MaterialIcons name={field.icon || 'description'} size={18} color={isDark ? '#C084FC' : '#4F46E5'} />
                   </View>
-                  <View className="bg-surfaceRaised p-4 rounded-2xl border border-border/50 flex-row items-center justify-between">
-                    <View><Text className="text-textMuted text-[10px] font-bold uppercase mb-1">Phone</Text><Text className="text-textMain font-black text-lg">{landlordPhone || 'Not Set'}</Text></View>
-                    {landlordPhone && (
-                      <TouchableOpacity className="bg-success w-10 h-10 rounded-full items-center justify-center shadow-lg shadow-success/30" onPress={() => {}}>
-                        <MaterialIcons name="call" size={20} color="white" />
-                      </TouchableOpacity>
-                    )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 9, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>{field.label}</Text>
+                    <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: '800', color: textMain }}>{field.value || 'Not Set'}</Text>
                   </View>
                 </View>
-              )}
-            </View>
-          )}
-
-          {(tab === 'all' || tab === 'wifi') && (
-            <View className="bg-surface rounded-3xl p-5 border border-border shadow-sm">
-              <View className="flex-row items-center gap-2 mb-4">
-                <View className="bg-primary/10 p-2 rounded-lg"><MaterialIcons name="wifi" size={20} color="#4F46E5" /></View>
-                <Text className="text-textMain font-bold">WiFi Details</Text>
-              </View>
-              {isEdit ? (
-                <>
-                  <TextInput className="bg-background rounded-xl p-3 text-textMain font-bold mb-3 border border-border/50" placeholder="WiFi Name" value={wifiName} onChangeText={setWifiName} />
-                  <TextInput className="bg-background rounded-xl p-3 text-textMain font-bold border border-border/50" placeholder="Password" value={wifiPass} onChangeText={setWifiPass} />
-                </>
-              ) : (
-                <View className="gap-2">
-                  <View className="bg-surfaceRaised p-4 rounded-2xl border border-border/50"><Text className="text-textMuted text-[10px] font-bold uppercase mb-1">Network</Text><Text className="text-textMain font-black text-lg">{wifiName || 'Not Set'}</Text></View>
-                  <View className="bg-surfaceRaised p-4 rounded-2xl border border-border/50 flex-row items-center justify-between">
-                    <View><Text className="text-textMuted text-[10px] font-bold uppercase mb-1">Password</Text><Text className="text-textMain font-black text-lg">{wifiPass || 'Not Set'}</Text></View>
-                    <TouchableOpacity className="bg-slate-200 w-10 h-10 rounded-full items-center justify-center" onPress={() => copyToClipboard(wifiPass)}><MaterialIcons name="content-copy" size={18} color="#4B5563" /></TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </View>
-          )}
-
-          {(tab === 'all' || tab === 'trash') && (
-            <View className="bg-surface rounded-3xl p-5 border border-border shadow-sm">
-              <View className="flex-row items-center gap-2 mb-4">
-                <View className="bg-warning/10 p-2 rounded-lg"><MaterialIcons name="delete-outline" size={20} color="#D97706" /></View>
-                <Text className="text-textMain font-bold">Trash & Utilities</Text>
-              </View>
-              <Text className="text-textMuted text-[10px] font-bold uppercase mb-2 ml-1">Arrival Time</Text>
-              {isEdit ? (
-                <TouchableOpacity onPress={() => setShowTimePicker(true)} className={`flex-row items-baseline rounded-xl px-4 py-2 ${showTimePicker ? 'bg-primary/5' : 'bg-background border border-border/50'}`}>
-                  {trashArrivalTime ? (
-                    <>
-                      <Text className="text-xl font-black text-textMain">{trashArrivalTime.split(':')[0]}</Text>
-                      <Text className="text-base font-black text-textMuted mx-0.5">:</Text>
-                      <Text className="text-xl font-black text-textMain">{trashArrivalTime.split(':')[1]}</Text>
-                      <Text className="text-[10px] font-black text-textMuted ml-1 uppercase">{parseInt(trashArrivalTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}</Text>
-                    </>
-                  ) : (<Text className="text-textMuted font-bold py-1">Set Time</Text>)}
-                  <View className="flex-1" /><MaterialIcons name="access-time" size={20} color="#4F46E5" />
-                </TouchableOpacity>
-              ) : (
-                <View className="bg-surfaceRaised p-4 rounded-2xl border border-border/50 flex-row items-baseline">
-                  <Text className="text-3xl font-black text-textMain">{trashArrivalTime ? trashArrivalTime.split(':')[0] : '--'}</Text>
-                  <Text className="text-xl font-black text-textMuted mx-1">:</Text>
-                  <Text className="text-3xl font-black text-textMain">{trashArrivalTime ? trashArrivalTime.split(':')[1] : '--'}</Text>
-                  <Text className="text-xs font-black text-textMuted ml-1 uppercase">{trashArrivalTime ? (parseInt(trashArrivalTime.split(':')[0]) >= 12 ? 'PM' : 'AM') : ''}</Text>
-                </View>
-              )}
-              {showTimePicker && (
-                <Modal visible={showTimePicker} transparent animationType="fade">
-                  <TouchableOpacity className="flex-1 bg-black/40 justify-center items-center px-6" activeOpacity={1} onPress={() => setShowTimePicker(false)}>
-                    <TouchableOpacity activeOpacity={1} className="w-full bg-surface rounded-[32px] p-6 shadow-2xl" onPress={(e) => e.stopPropagation()}>
-                      <TimeWheelPicker 
-                        initialTime={(() => { if (!trashArrivalTime) return getSyncedDate(); const [h, m] = trashArrivalTime.split(':').map(Number); const d = getSyncedDate(); d.setHours(h, m, 0, 0); return d; })()}
-                        onConfirm={(date) => { const hours = date.getHours().toString().padStart(2, '0'); const minutes = date.getMinutes().toString().padStart(2, '0'); setTrashArrivalTime(`${hours}:${minutes}`); setShowTimePicker(false); }}
-                        onCancel={() => setShowTimePicker(false)}
-                      />
-                      <TouchableOpacity onPress={() => setShowTimePicker(false)} className="mt-4 py-3 items-center"><Text className="text-textMuted font-bold text-sm">Cancel</Text></TouchableOpacity>
+                
+                {/* Actions Based on Type */}
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {field.type === 'password' && field.value ? (
+                    <TouchableOpacity onPress={() => copyToClipboard(field.value)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                      <MaterialIcons name="content-copy" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
                     </TouchableOpacity>
-                  </TouchableOpacity>
-                </Modal>
-              )}
-            </View>
-          )}
-
-          {tab === 'all' && (
-            <View className="bg-surface rounded-3xl p-5 border border-border shadow-sm">
-              <View className="flex-row items-center gap-2 mb-4">
-                <View className="bg-slate-100 p-2 rounded-lg"><MaterialIcons name="description" size={20} color="#6B7280" /></View>
-                <Text className="text-textMain font-bold">House Rules</Text>
+                  ) : null}
+                  {field.type === 'phone' && field.value ? (
+                    <TouchableOpacity onPress={() => copyToClipboard(field.value)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                      <MaterialIcons name="call" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
               </View>
-              {isEdit ? (
-                <TextInput className="bg-background rounded-xl p-3 text-textMain font-medium border border-border/50 min-h-[100px]" placeholder="Rules..." multiline numberOfLines={4} textAlignVertical="top" value={otherInfo} onChangeText={setOtherInfo} />
-              ) : (
-                <View className="bg-surfaceRaised p-4 rounded-2xl border border-border/50 min-h-[60px]"><Text className="text-textMain font-medium leading-6">{otherInfo || 'None'}</Text></View>
-              )}
+            ))
+          ) : (
+            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B' }}>No custom fields added yet. Tap Edit to begin!</Text>
             </View>
           )}
         </View>
       </ScrollView>
-      {isEdit && (
-        <TouchableOpacity onPress={handleSave} className="bg-indigo-600 rounded-2xl py-4 items-center shadow-lg shadow-indigo-300 mb-8">
-          <Text className="text-white font-black text-lg">Save Changes</Text>
-        </TouchableOpacity>
-      )}
     </>
   );
 });

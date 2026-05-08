@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, TouchableOpacity, Text } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, TouchableOpacity, Text, Platform, Keyboard } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,22 +23,57 @@ const TAB_CONFIG: TabConfig[] = [
 export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  // Hide the bottom tab bar completely on the Chat screen or when the keyboard is active
+  const currentRouteName = state.routes[state.index]?.name;
+  if (currentRouteName === 'Chat' || isKeyboardVisible) {
+    return null;
+  }
 
   return (
-    <View style={{ backgroundColor: isDark ? '#0F172A' : '#FFFFFF' }}>
+    <View style={{
+      position: 'absolute',
+      bottom: insets.bottom > 0 ? insets.bottom : 12,
+      left: 16,
+      right: 16,
+      borderRadius: 24,
+      overflow: 'hidden',
+      borderWidth: 1.5,
+      borderColor: isDark ? 'rgba(167, 139, 250, 0.18)' : 'rgba(99, 102, 241, 0.18)',
+      backgroundColor: isDark ? 'rgba(4, 5, 12, 0.94)' : 'rgba(255, 255, 255, 0.95)',
+      // Bolder glow dropping down
+      shadowColor: isDark ? '#A78BFA' : '#4F46E5',
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: isDark ? 0.35 : 0.12,
+      shadowRadius: 24,
+      elevation: 12,
+    }}>
       <BlurView
-        intensity={100}
+        intensity={Platform.OS === 'ios' ? 55 : 95}
         tint={isDark ? "dark" : "light"}
         style={{
           flexDirection: 'row',
-          paddingTop: 12,
-          paddingBottom: insets.bottom || 16,
-          paddingHorizontal: 16,
+          paddingVertical: 8,
+          paddingHorizontal: 8,
           justifyContent: 'space-between',
           alignItems: 'center',
-          borderTopWidth: 1,
-          borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-          backgroundColor: isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.85)',
         }}
       >
         {state.routes.map((route, index) => {
@@ -47,9 +82,9 @@ export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
 
           const isFocused = state.index === index;
           
-          let color = isDark ? '#64748B' : '#94A3B8';
+          let color = isDark ? '#94A3B8' : '#64748B';
           if (isFocused) {
-            color = isDark ? '#FFFFFF' : '#0F172A';
+            color = isDark ? '#C084FC' : '#4F46E5'; // More vibrant lavender/violet on dark, rich deep indigo on light
           }
 
           return (
@@ -57,17 +92,47 @@ export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
               key={route.key}
               activeOpacity={0.7}
               onPress={() => navigation.navigate(route.name)}
-              style={{ alignItems: 'center', justifyContent: 'center', flex: 1 }}
+              style={{ alignItems: 'center', justifyContent: 'center', flex: 1, paddingVertical: 4 }}
             >
-              <MaterialIcons
-                name={config.icon}
-                size={24}
-                color={color}
-                style={{ marginBottom: 4 }}
-              />
-              <Text style={{ fontSize: 11, color: color, fontWeight: isFocused ? '900' : '500' }}>
-                {config.label}
-              </Text>
+              <View style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 4,
+                paddingHorizontal: 12,
+                borderRadius: 14,
+                backgroundColor: isFocused 
+                  ? (isDark ? 'rgba(192, 132, 252, 0.18)' : 'rgba(99, 102, 241, 0.10)')
+                  : 'transparent',
+              }}>
+                <MaterialIcons
+                  name={config.icon}
+                  size={22}
+                  color={color}
+                  style={{ marginBottom: 2 }}
+                />
+                <Text style={{ 
+                  fontSize: 9, 
+                  color: color, 
+                  fontWeight: isFocused ? '900' : '700', // Bolder labels
+                  letterSpacing: -0.2
+                }}>
+                  {config.label}
+                </Text>
+                {isFocused && (
+                  <View style={{
+                    position: 'absolute',
+                    bottom: -2,
+                    width: 5,
+                    height: 5,
+                    borderRadius: 2.5,
+                    backgroundColor: isDark ? '#C084FC' : '#4F46E5',
+                    shadowColor: isDark ? '#C084FC' : '#4F46E5',
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 1,
+                    shadowRadius: 8,
+                  }} />
+                )}
+              </View>
             </TouchableOpacity>
           );
         })}

@@ -4,20 +4,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { useHousehold } from '../context/HouseholdContext';
+import { useTheme } from '../context/ThemeContext';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Household } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdSelection'>;
 
-const bg      = '#0F172A';
-const surface = '#1E293B';
-const text    = '#F1F5F9';
-const muted   = '#94A3B8';
-const bord    = '#334155';
-const accent  = '#6366F1';
-
 export default function HouseholdSelectionScreen({ navigation }: Props) {
+  const { isDark } = useTheme();
+  const bg      = isDark ? '#070913' : '#F5F7FF';
+  const surface = isDark ? '#0E1324' : '#FFFFFF';
+  const text    = isDark ? '#F1F5F9' : '#1E1B4B';
+  const muted   = isDark ? '#A78BFA' : '#4F46E5';
+  const bord    = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
+  const accent  = '#6366F1';
   const [households, setHouseholds] = useState<Household[]>([]);
   const [loading, setLoading] = useState(true);
   const { setHouseholdId } = useHousehold();

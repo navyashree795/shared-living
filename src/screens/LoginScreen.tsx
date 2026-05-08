@@ -35,6 +35,8 @@ export default function LoginScreen({ navigation }: Props) {
   const inputBg = '#0F172A';
   const accent  = '#6366F1';
 
+  const [showPassword, setShowPassword] = useState(false);
+
   const normalizePhone = (phone: string) => phone.replace(/[^\d+]/g, '');
 
   const handleAuth = async () => {
@@ -94,18 +96,47 @@ export default function LoginScreen({ navigation }: Props) {
       .catch(error => Alert.alert("Error", error.message));
   };
 
-  const renderInput = (label: string, value: string, onChangeText: (t: string) => void, opts: any = {}) => (
-    <View style={{ marginBottom: 16 }}>
-      <Text style={{ fontSize: 10, fontWeight: '800', color: muted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 2, paddingLeft: 4 }}>{label}</Text>
-      <TextInput
-        style={{ backgroundColor: inputBg, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 16, color: text, fontSize: 15, fontWeight: '600', borderWidth: 1, borderColor: bord }}
-        placeholderTextColor="#475569"
-        value={value}
-        onChangeText={onChangeText}
-        {...opts}
-      />
-    </View>
-  );
+  const renderInput = (label: string, value: string, onChangeText: (t: string) => void, opts: any = {}) => {
+    const isPassword = label === 'Password';
+    return (
+      <View style={{ marginBottom: 16 }}>
+        <Text style={{ fontSize: 10, fontWeight: '800', color: muted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 2, paddingLeft: 4 }}>{label}</Text>
+        <View style={{ position: 'relative', justifyContent: 'center' }}>
+          <TextInput
+            style={{ 
+              backgroundColor: inputBg, 
+              borderRadius: 16, 
+              paddingHorizontal: 20, 
+              paddingVertical: 16, 
+              paddingRight: isPassword ? 50 : 20,
+              color: text, 
+              fontSize: 15, 
+              fontWeight: '600', 
+              borderWidth: 1, 
+              borderColor: bord 
+            }}
+            placeholderTextColor="#475569"
+            value={value}
+            onChangeText={onChangeText}
+            {...opts}
+            secureTextEntry={isPassword ? !showPassword : opts.secureTextEntry}
+          />
+          {isPassword && (
+            <TouchableOpacity 
+              onPress={() => setShowPassword(!showPassword)}
+              style={{ position: 'absolute', right: 16, padding: 4 }}
+            >
+              <MaterialIcons 
+                name={showPassword ? 'visibility' : 'visibility-off'} 
+                size={22} 
+                color={muted} 
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
 
   const innerContent = (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -142,7 +173,7 @@ export default function LoginScreen({ navigation }: Props) {
               </>
             )}
 
-            {renderInput('Password', password, setPassword, { placeholder: '••••••••', secureTextEntry: true, returnKeyType: 'done', onSubmitEditing: handleAuth })}
+            {renderInput('Password', password, setPassword, { placeholder: '••••••••', returnKeyType: 'done', onSubmitEditing: handleAuth })}
 
             {!isSignUp && (
               <TouchableOpacity style={{ alignSelf: 'flex-end', marginBottom: 20, marginTop: -8 }} onPress={handleForgotPassword}>
@@ -182,15 +213,9 @@ export default function LoginScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
-      {Platform.OS === 'ios' ? (
-        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-          {innerContent}
-        </KeyboardAvoidingView>
-      ) : (
-        <View style={{ flex: 1 }}>
-          {innerContent}
-        </View>
-      )}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        {innerContent}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

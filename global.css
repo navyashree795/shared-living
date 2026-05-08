@@ -4,21 +4,21 @@
 
 @layer base {
   :root {
-    --background: #F8FAFC;
+    --background: #F5F7FF;     /* Elegant backlit indigo-tinted background */
     --surface: #FFFFFF;
-    --surface-raised: #F1F5F9;
-    --text-main: #0F172A;
-    --text-muted: #64748B;
-    --text-faint: #94A3B8;
-    --border: #E2E8F0;
+    --surface-raised: #EEF2FF; /* Soft lavender-indigo raised surface */
+    --text-main: #1E1B4B;       /* Deep high-end indigo for body text instead of harsh black */
+    --text-muted: #4F46E5;      /* Vivid indigo contrast */
+    --text-faint: #818CF8;      /* Soft accent indigo */
+    --border: rgba(99, 102, 241, 0.08);
   }
   .dark {
-    --background: #0F172A;
-    --surface: #1E293B;
-    --surface-raised: #334155;
-    --text-main: #F1F5F9;
-    --text-muted: #94A3B8;
-    --text-faint: #475569;
-    --border: #334155;
+    --background: #070913;     /* Sleek obsidian/deep-midnight backdrop */
+    --surface: #0E1324;        /* Rich premium dark glass surface */
+    --surface-raised: #181F38; /* Elevated glassy surface */
+    --text-main: #F1F5F9;      /* Smooth off-white */
+    --text-muted: #A78BFA;     /* Premium vivid lavender/violet highlight */
+    --text-faint: #6366F1;     /* Solid violet accent */
+    --border: rgba(255, 255, 255, 0.08);
   }
 }

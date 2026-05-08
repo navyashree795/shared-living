@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, FlatList, TextInput, TouchableOpacity, 
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Animated
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Animated, Keyboard
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,8 +22,8 @@ export default function ChatScreen({ route, navigation }: Props) {
   const { householdId } = useHousehold();
   const hid = householdId ?? '';
   const { isDark } = useTheme();
-  const bg     = isDark ? '#0F172A' : '#FFFFFF';
-  const chatBg = isDark ? '#0F172A' : '#FAFAFA';
+  const bg     = isDark ? '#070913' : '#F5F7FF';
+  const chatBg = isDark ? '#070913' : '#F5F7FF';
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -36,6 +36,23 @@ export default function ChatScreen({ route, navigation }: Props) {
   const [newMsgPopup, setNewMsgPopup] = useState<Message | null>(null);
   const notificationAnim = useRef(new Animated.Value(-150)).current; 
   const isFirstLoad = useRef(true);
+
+  const [keyboardActive, setKeyboardActive] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardActive(true)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardActive(false)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!householdId) return;
@@ -164,13 +181,13 @@ export default function ChatScreen({ route, navigation }: Props) {
             maxWidth: '80%',
             paddingHorizontal: 16,
             paddingVertical: 10,
-            backgroundColor: isMe ? '#6366F1' : (isDark ? '#1E293B' : '#FFFFFF'),
+            backgroundColor: isMe ? '#6366F1' : (isDark ? '#0E1324' : '#FFFFFF'),
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             borderBottomLeftRadius: isMe ? 24 : 4,
             borderBottomRightRadius: isMe ? 4 : 24,
             borderWidth: isMe ? 0 : 1,
-            borderColor: isDark ? '#334155' : '#E2E8F0',
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)',
           }}
         >
           {showSenderName && (
@@ -203,13 +220,13 @@ export default function ChatScreen({ route, navigation }: Props) {
       {/* Header */}
       <View 
         style={{ 
-          backgroundColor: isDark ? '#1E293B' : '#FFFFFF', 
+          backgroundColor: isDark ? '#0E1324' : '#FFFFFF', 
           flexDirection: 'row', 
           alignItems: 'center', 
           paddingHorizontal: 16, 
           paddingVertical: 12, 
           borderBottomWidth: 1, 
-          borderBottomColor: isDark ? '#334155' : '#E2E8F0',
+          borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)',
           paddingTop: insets.top + 12,
           zIndex: 10
         }}
@@ -237,8 +254,8 @@ export default function ChatScreen({ route, navigation }: Props) {
 
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1, backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        style={{ flex: 1, backgroundColor: isDark ? '#070913' : '#F5F7FF' }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <View style={{ flex: 1 }}>
           {loading ? (
@@ -261,7 +278,7 @@ export default function ChatScreen({ route, navigation }: Props) {
 
             {/* Quick Emoji Bar */}
             {showEmojis && (
-              <View style={{ backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#E2E8F0', paddingVertical: 10 }}>
+              <View style={{ backgroundColor: isDark ? '#0E1324' : '#FFFFFF', borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)', paddingVertical: 10 }}>
                 <FlatList
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -291,9 +308,9 @@ export default function ChatScreen({ route, navigation }: Props) {
                 alignItems: 'flex-end', 
                 paddingHorizontal: 16, 
                 paddingVertical: 12, 
-                backgroundColor: isDark ? '#1E293B' : '#FFFFFF', 
+                backgroundColor: isDark ? '#0E1324' : '#FFFFFF', 
                 borderTopWidth: 1, 
-                borderTopColor: isDark ? '#334155' : '#E2E8F0', 
+                borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)', 
                 minHeight: 70,
                 paddingBottom: Math.max(insets.bottom, 12)
               }}
@@ -304,8 +321,8 @@ export default function ChatScreen({ route, navigation }: Props) {
               >
                 <Ionicons name={showEmojis ? "keypad" : "happy-outline"} size={24} color={showEmojis ? "#6366F1" : (isDark ? '#64748B' : '#9CA3AF')} />
               </TouchableOpacity>
-
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: isDark ? '#0F172A' : '#F1F5F9', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 4, marginRight: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
+ 
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: isDark ? '#070913' : '#F1F5F9', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 4, marginRight: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)' }}>
                 <TextInput
                   style={{ flex: 1, fontSize: 15, color: isDark ? '#F1F5F9' : '#0F172A', maxHeight: 120, paddingTop: 12, paddingBottom: 12, minHeight: 46 }}
                   placeholder="Type a message..."

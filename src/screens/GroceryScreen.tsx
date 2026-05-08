@@ -47,11 +47,11 @@ export default function GroceryScreen({ navigation }: Props) {
   const { householdId, members, getMemberName } = useHousehold();
   const hid = householdId ?? '';
   const { isDark } = useTheme();
-  const bg      = isDark ? '#0F172A' : '#F8FAFC';
-  const surface = isDark ? '#1E293B' : '#FFFFFF';
-  const text    = isDark ? '#F1F5F9' : '#0F172A';
-  const muted   = isDark ? '#94A3B8' : '#64748B';
-  const bord    = isDark ? '#334155' : '#E2E8F0';
+  const bg      = isDark ? '#070913' : '#F5F7FF';
+  const surface = isDark ? '#0E1324' : '#FFFFFF';
+  const text    = isDark ? '#F1F5F9' : '#1E1B4B';
+  const muted   = isDark ? '#A78BFA' : '#4F46E5';
+  const bord    = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [newItem, setNewItem] = useState('');
   const [newQty, setNewQty] = useState('');

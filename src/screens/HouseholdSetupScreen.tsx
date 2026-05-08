@@ -12,12 +12,12 @@ import {
   doc, setDoc, updateDoc, query, collection,
   where, getDocs, arrayUnion,
 } from 'firebase/firestore';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../types';
+import { useTheme } from '../context/ThemeContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdSetup'>;
 
 export default function HouseholdSetupScreen({ navigation, route }: Props) {
+  const { isDark } = useTheme();
   const initialTab = route.params?.activeTab || 'create';
   const [activeTab, setActiveTab] = useState<'create' | 'join'>(initialTab);
   const [householdName, setHouseholdName] = useState('');
@@ -31,11 +31,11 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
     (route.params?.code || '').split('').concat(Array(6).fill('')).slice(0, 6)
   );
 
-  const bg      = '#0F172A';
-  const surface = '#1E293B';
-  const text    = '#F1F5F9';
-  const muted   = '#94A3B8';
-  const bord    = '#334155';
+  const bg      = isDark ? '#070913' : '#F5F7FF';
+  const surface = isDark ? '#0E1324' : '#FFFFFF';
+  const text    = isDark ? '#F1F5F9' : '#1E1B4B';
+  const muted   = isDark ? '#A78BFA' : '#4F46E5';
+  const bord    = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
   const accent  = '#6366F1';
 
   const generateInviteCode = () => {

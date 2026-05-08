@@ -24,6 +24,14 @@ export interface UserProfile {
   createdAt: string;
 }
 
+export interface HouseholdDetailField {
+  id: string;
+  label: string;
+  value: string;
+  type: 'text' | 'password' | 'time' | 'phone' | 'link';
+  icon: string;
+}
+
 export interface Household {
   id: string;
   name: string;
@@ -37,6 +45,7 @@ export interface Household {
     landlordName?: string;
     landlordPhone?: string;
     other?: string;
+    details?: HouseholdDetailField[];
   };
 }
 
