@@ -314,7 +314,7 @@ export default function DashboardScreen({ navigation }: Props) {
         <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-              <Avatar name={user?.username || 'U'} size={48} bgColor="#FFFFFF" color="#0A1128" style={{ borderRadius: 24 }} />
+              <Avatar name={userData?.username || 'U'} size={48} bgColor="#FFFFFF" color="#0A1128" style={{ borderRadius: 24 }} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setIsSwitchModalVisible(true)}>
               <Text style={{ fontSize: 16, fontWeight: '500', color: textMuted }}>Good evening,</Text>

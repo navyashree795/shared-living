@@ -26,14 +26,18 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
       "eas": {
-        "projectId": "5218b669-c4a7-4168-a271-6d475681f2b7"
+        "projectId": "6e612ca1-cfbc-4727-aadb-4f1283e2636d"
       }
     },
     "owner": "jeevan0714",
@@ -41,7 +45,7 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/5218b669-c4a7-4168-a271-6d475681f2b7"
+      "url": "https://u.expo.dev/6e612ca1-cfbc-4727-aadb-4f1283e2636d"
     },
     "plugins": [
       "@react-native-community/datetimepicker",

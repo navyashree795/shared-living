@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
+import { useUser } from '../context/UserContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -38,6 +39,7 @@ export default function ExpenseScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   
   const { showToast } = useToast();
+  const { profile: userData } = useUser();
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isSettleModalVisible, setIsSettleModalVisible] = useState(false);
@@ -143,6 +145,8 @@ export default function ExpenseScreen({ navigation }: Props) {
     const currentUid = auth.currentUser?.uid;
     if (!currentUid) return;
 
+    const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
+
     try {
       await addDoc(collection(db, 'households', hid, 'expenses'), {
         type: 'payment',
@@ -151,7 +155,7 @@ export default function ExpenseScreen({ navigation }: Props) {
         toReceivedUid: settleWithUid,
         createdAt: serverTimestamp(),
       });
-      logActivity(hid, 'payment_add', `to ${getMemberName(settleWithUid)}`, parsed);
+      logActivity(hid, 'payment_add', `to ${getMemberName(settleWithUid)}`, currentUserName, parsed);
       showToast('Payment recorded', 'success');
       setSettleAmount('');
       setSettleWithUid(null);
