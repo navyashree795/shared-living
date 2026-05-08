@@ -5,13 +5,11 @@
   },
   "build": {
     "development": {
-      "node": "20.19.4",
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development"
     },
     "preview": {
-      "node": "20.19.4",
       "distribution": "internal",
       "channel": "preview",
       "env": {
