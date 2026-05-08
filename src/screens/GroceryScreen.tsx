@@ -8,10 +8,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import SlideModal from '../components/SlideModal';
+import SwipeableRow from '../components/SwipeableRow';
 import { Skeleton } from '../components/Skeleton';
 import { auth, db } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
+import { useToast } from '../context/ToastContext';
 import { useHousehold } from '../context/HouseholdContext';
+import { useTheme } from '../context/ThemeContext';
 import { detectCategory } from '../utils/expenseUtils';
 import { logActivity } from '../utils/activityUtils';
 import {
@@ -20,7 +23,7 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, GroceryItem } from '../types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Grocery'>;
+type Props = { navigation: any; route?: any };
 
 interface Category {
   id: string;
@@ -40,15 +43,22 @@ const CATEGORIES: Category[] = [
   { id: 'misc', name: 'Miscellaneous', icon: 'inventory', bg: '#F9FAFB', color: '#6B7280' },
 ];
 
-export default function GroceryScreen({ route, navigation }: Props) {
-  const { householdId } = route.params;
+export default function GroceryScreen({ navigation }: Props) {
+  const { householdId, members, getMemberName } = useHousehold();
+  const hid = householdId ?? '';
+  const { isDark } = useTheme();
+  const bg      = isDark ? '#0F172A' : '#F8FAFC';
+  const surface = isDark ? '#1E293B' : '#FFFFFF';
+  const text    = isDark ? '#F1F5F9' : '#0F172A';
+  const muted   = isDark ? '#94A3B8' : '#64748B';
+  const bord    = isDark ? '#334155' : '#E2E8F0';
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [newItem, setNewItem] = useState('');
   const [newQty, setNewQty] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(CATEGORIES[0].id);
   const { profile: userData } = useUser();
-  const { members, getMemberName } = useHousehold();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -63,8 +73,9 @@ export default function GroceryScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     if (!householdId) return;
+    const hid = householdId!;
     const q = query(
-      collection(db, 'households', householdId, 'groceries'),
+      collection(db, 'households', hid, 'groceries'),
       orderBy('createdAt', 'desc')
     );
     const unsub = onSnapshot(q, (snap) => {
@@ -88,18 +99,21 @@ export default function GroceryScreen({ route, navigation }: Props) {
     if (!name) return;
 
     const priceNum = parseFloat(newPrice) || 0;
+    const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
+    
     try {
-      await addDoc(collection(db, 'households', householdId, 'groceries'), {
+      await addDoc(collection(db, 'households', hid, 'groceries'), {
         name,
         done: false,
         category: selectedCategoryId,
         qty: newQty.trim(),
         price: priceNum,
-        addedBy: userData?.username ? `@${userData.username}` : (auth.currentUser?.email || 'Unknown'),
+        addedBy: currentUserName,
         expenseLogged: false,
         createdAt: serverTimestamp(),
       });
-      logActivity(householdId, 'grocery_add', name);
+      logActivity(hid, 'grocery_add', name, currentUserName);
+      showToast('Item added', 'success');
       setNewItem(''); setNewQty(''); setNewPrice('');
       setIsAddModalVisible(false);
     } catch {
@@ -108,13 +122,14 @@ export default function GroceryScreen({ route, navigation }: Props) {
   };
 
   const handleToggle = async (item: GroceryItem) => {
+    const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
     try {
       const isFinishing = !item.done;
-      await updateDoc(doc(db, 'households', householdId, 'groceries', item.id), {
+      await updateDoc(doc(db, 'households', hid, 'groceries', item.id), {
         done: isFinishing,
       });
       if (isFinishing) {
-        logActivity(householdId, 'grocery_done', item.name);
+        logActivity(hid, 'grocery_done', item.name, currentUserName);
       }
     } catch {
       Alert.alert('Error', 'Could not update item.');
@@ -123,7 +138,8 @@ export default function GroceryScreen({ route, navigation }: Props) {
 
   const handleDelete = async (itemId: string) => {
     try {
-      await deleteDoc(doc(db, 'households', householdId, 'groceries', itemId));
+      await deleteDoc(doc(db, 'households', hid, 'groceries', itemId));
+      showToast('Item removed', 'success');
     } catch {
       Alert.alert('Error', 'Could not delete item.');
     }
@@ -141,10 +157,11 @@ export default function GroceryScreen({ route, navigation }: Props) {
           try {
             const batch = writeBatch(db);
             done.forEach(item => {
-              const ref = doc(db, 'households', householdId, 'groceries', item.id);
+              const ref = doc(db, 'households', hid, 'groceries', item.id);
               batch.delete(ref);
             });
             await batch.commit();
+            showToast('Cart cleared', 'success');
           } catch {
             Alert.alert('Error', 'Could not clear list.');
           }
@@ -171,7 +188,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
             try {
               // 1. Add Expense
               const categoryMatch = detectCategory(item.name);
-              await addDoc(collection(db, 'households', householdId, 'expenses'), {
+              await addDoc(collection(db, 'households', hid, 'expenses'), {
                 type: 'expense',
                 title: `Groceries: ${item.name}`,
                 amount: item.price,
@@ -183,11 +200,11 @@ export default function GroceryScreen({ route, navigation }: Props) {
               });
 
               // 2. Mark Grocery item as logged so the button disappears
-              await updateDoc(doc(db, 'households', householdId, 'groceries', item.id), {
+              await updateDoc(doc(db, 'households', hid, 'groceries', item.id), {
                 expenseLogged: true,
               });
 
-              Alert.alert('Success', 'Successfully integrated into Household Expenses.');
+              showToast('Logged to Expenses', 'success');
             } catch {
               Alert.alert('Error', 'Could not log to expenses.');
             }
@@ -231,7 +248,8 @@ export default function GroceryScreen({ route, navigation }: Props) {
     const category = CATEGORIES.find(c => c.id === groceryItem.category) || CATEGORIES[CATEGORIES.length - 1];
     
     return (
-      <View className="flex-col bg-white rounded-[24px] p-4 mb-3 border border-border shadow-sm">
+      <SwipeableRow key={groceryItem.id} onDelete={() => handleDelete(groceryItem.id)} onComplete={!groceryItem.done ? () => handleToggle(groceryItem) : undefined} completeLabel="Bought">
+      <View style={{ backgroundColor: surface, borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: bord }}>
         <View className="flex-row items-center">
           <TouchableOpacity className="mr-3" onPress={() => handleToggle(groceryItem)}>
             <MaterialIcons 
@@ -285,11 +303,12 @@ export default function GroceryScreen({ route, navigation }: Props) {
           </View>
         )}
       </View>
+      </SwipeableRow>
     );
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
       <ScreenHeader 
         navigation={navigation as any} 
         title="Grocery"
@@ -298,11 +317,11 @@ export default function GroceryScreen({ route, navigation }: Props) {
       />
 
       <View className="flex-row mx-6 mb-2 gap-3">
-        <View className="flex-1 bg-white border border-border p-4 rounded-2xl shadow-sm items-center">
+        <View className="flex-1 bg-surface border border-border p-4 rounded-2xl shadow-sm items-center">
           <Text className="text-textMuted text-[10px] uppercase font-bold tracking-widest mb-1">To Spend</Text>
           <Text className="text-2xl font-black text-warning">₹{estimatedCost.toFixed(0)}</Text>
         </View>
-        <View className="flex-1 bg-white border border-border p-4 rounded-2xl shadow-sm items-center">
+        <View className="flex-1 bg-surface border border-border p-4 rounded-2xl shadow-sm items-center">
           <Text className="text-textMuted text-[10px] uppercase font-bold tracking-widest mb-1">In Cart Cost</Text>
           <Text className="text-2xl font-black text-success">₹{cartTotalCost.toFixed(0)}</Text>
         </View>
@@ -311,7 +330,7 @@ export default function GroceryScreen({ route, navigation }: Props) {
       {loading ? (
         <View className="px-6 gap-3 pt-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <View key={i} className="flex-row items-center bg-white rounded-2xl p-4 border border-border">
+            <View key={i} className="flex-row items-center bg-surface rounded-2xl p-4 border border-border">
               <Skeleton width={24} height={24} borderRadius={12} style={{ marginRight: 12 }} />
               <View className="flex-1">
                 <Skeleton width="50%" height={16} style={{ marginBottom: 8 }} />

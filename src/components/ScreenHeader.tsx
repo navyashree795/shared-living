@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
 interface ScreenHeaderProps {
   navigation: any;
@@ -19,33 +20,44 @@ const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   title, 
   hideBack = false,
   rightIcon, 
-  rightIconColor = "#FFF",
-  rightIconBg = "bg-primary",
-  rightIconBorder = "border-primary/20",
+  rightIconColor,
+  rightIconBg,
+  rightIconBorder,
   onRightPress, 
   children 
 }) => {
+  const { isDark } = useTheme();
+  const text = isDark ? '#F1F5F9' : '#0F172A';
+  const muted = isDark ? '#94A3B8' : '#64748B';
+  const bord = isDark ? '#334155' : '#E2E8F0';
+  const surfaceBg = isDark ? '#1E293B' : '#FFFFFF';
+
   return (
-    <View className="flex-row items-center px-6 py-4 justify-between">
-      <View className="flex-row items-center">
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, justifyContent: 'space-between' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         {!hideBack && (
           <TouchableOpacity 
             onPress={() => navigation.goBack()}
-            className="w-10 h-10 rounded-full bg-white items-center justify-center mr-4 border border-border shadow-sm"
+            style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: surfaceBg, alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, borderColor: bord }}
           >
-            <MaterialIcons name="arrow-back" size={24} color="#111827" />
+            <MaterialIcons name="arrow-back" size={22} color={text} />
           </TouchableOpacity>
         )}
-        <Text className="text-textMain text-2xl font-black tracking-tight">{title}</Text>
+        <Text style={{ color: text, fontSize: 22, fontWeight: '900', letterSpacing: -0.5 }}>{title}</Text>
       </View>
-      <View className="flex-row items-center gap-3">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         {children}
         {rightIcon && (
           <TouchableOpacity 
             onPress={onRightPress}
-            className={`w-10 h-10 rounded-full ${rightIconBg} items-center justify-center shadow-sm border ${rightIconBorder}`}
+            style={{
+              width: 40, height: 40, borderRadius: 14,
+              backgroundColor: rightIconBg || (isDark ? '#1E1B4B' : '#EEF2FF'),
+              alignItems: 'center', justifyContent: 'center',
+              borderWidth: 1, borderColor: rightIconBorder || bord,
+            }}
           >
-            <MaterialIcons name={rightIcon} size={24} color={rightIconColor} />
+            <MaterialIcons name={rightIcon} size={22} color={rightIconColor || (isDark ? '#818CF8' : '#6366F1')} />
           </TouchableOpacity>
         )}
       </View>

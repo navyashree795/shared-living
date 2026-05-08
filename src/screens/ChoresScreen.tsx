@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   View, Text, FlatList, TextInput, TouchableOpacity, 
   Alert, ScrollView, Switch
@@ -9,23 +9,31 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
 import { getSyncedDate } from '../utils/timeUtils';
+import { useToast } from '../context/ToastContext';
+import { useTheme } from '../context/ThemeContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { Card } from '../components/Card';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import SlideModal from '../components/SlideModal';
+import SwipeableRow from '../components/SwipeableRow';
 import { ChoreSkeleton } from '../components/Skeleton';
 import {
   collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp
 } from 'firebase/firestore';
 import { logActivity } from '../utils/activityUtils';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList, Chore } from '../types';
-
-type Props = NativeStackScreenProps<RootStackParamList, 'Chores'>;
+import { Chore } from '../types';
+type Props = { navigation: any; route?: any };
 
 export default function ChoresScreen({ route, navigation }: Props) {
-  const { householdId } = route.params;
+  const { householdId } = useHousehold();
+  const { isDark } = useTheme();
+  const bg      = isDark ? '#0F172A' : '#F8FAFC';
+  const surface = isDark ? '#1E293B' : '#FFFFFF';
+  const text    = isDark ? '#F1F5F9' : '#0F172A';
+  const muted   = isDark ? '#94A3B8' : '#64748B';
+  const bord    = isDark ? '#334155' : '#E2E8F0';
+  const { showToast } = useToast();
   const [chores, setChores] = useState<Chore[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -38,7 +46,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
   const [isRotationEnabled, setIsRotationEnabled] = useState(false);
   const [rotationOrder, setRotationOrder] = useState<string[]>([]);
   const { profile: userData } = useUser();
-  const { members, getMemberName } = useHousehold();
+  const { members, getMemberName, memberProfiles } = useHousehold();
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -50,6 +58,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
   }, [isModalVisible]);
 
   useEffect(() => {
+    if (!householdId) return;
     const q = query(
       collection(db, 'households', householdId, 'chores'),
       orderBy('createdAt', 'desc')
@@ -63,43 +72,48 @@ export default function ChoresScreen({ route, navigation }: Props) {
 
   const handleAddChore = async () => {
     if (!choreTitle.trim()) { Alert.alert('Error', 'Please enter a chore name.'); return; }
+    if (!householdId) return;
     
     const formattedTime = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
     
+    const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
+    
     try {
-      const choreData = {
+      const baseChoreData = {
         title: choreTitle.trim(),
         assignedToUid: assignedTo,
         done: false,
         createdByUid: auth.currentUser?.uid,
         time: formattedTime,
         createdAt: serverTimestamp(),
+        rotationEnabled: isRotationEnabled,
+        rotationOrder: isRotationEnabled ? rotationOrder : [],
+        currentRotationIndex: 0,
       };
 
       if (selectedDays.length > 0) {
-        // Create ONE chore for all selected days (Consolidated)
-        const daysString = selectedDays.join(', ');
-        await addDoc(collection(db, 'households', householdId, 'chores'), {
-          ...choreData,
-          day: daysString,
-        });
-        logActivity(householdId, 'chore_add', `${choreTitle.trim()} (${daysString})`);
+        // Create SEPARATE chore for each selected day
+        await Promise.all(selectedDays.map(day => 
+          addDoc(collection(db, 'households', householdId, 'chores'), {
+            ...baseChoreData,
+            day: day,
+          })
+        ));
+        logActivity(householdId, 'chore_add', `${choreTitle.trim()} (${selectedDays.join(', ')})`, currentUserName);
       } else {
         // Just create one for today if no days selected
         const today = getSyncedDate().toLocaleDateString('en-US', { weekday: 'short' });
         await addDoc(collection(db, 'households', householdId, 'chores'), {
-          ...choreData,
+          ...baseChoreData,
           day: today,
-          rotationEnabled: isRotationEnabled,
-          rotationOrder: isRotationEnabled ? rotationOrder : [],
-          currentRotationIndex: 0,
         });
-        logActivity(householdId, 'chore_add', choreTitle.trim());
+        logActivity(householdId, 'chore_add', choreTitle.trim(), currentUserName);
       }
 
       setChoreTitle(''); setAssignedTo(auth.currentUser?.uid || ''); setSelectedDays([]);
       setIsRotationEnabled(false); setRotationOrder([]);
       setIsModalVisible(false);
+      showToast('Chore Added', 'success');
     } catch (error: any) {
       console.error('Chore Add Error:', error);
       Alert.alert('Error', 'Could not add chore. ' + error.message);
@@ -107,6 +121,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
   };
 
   const handleToggleDone = useCallback(async (chore: Chore) => {
+    if (!householdId) return;
     try {
       const isFinishing = !chore.done;
       
@@ -120,6 +135,8 @@ export default function ChoresScreen({ route, navigation }: Props) {
           assignedToUid: nextAssignee,
           currentRotationIndex: nextIndex,
         });
+
+        showToast(`Chore rotated to ${getMemberName(nextAssignee)}`, 'info');
         
         logActivity(householdId, 'chore_done', `${chore.title} (Rotated to ${getMemberName(nextAssignee)})`);
         
@@ -135,7 +152,9 @@ export default function ChoresScreen({ route, navigation }: Props) {
         await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
           done: isFinishing,
         });
+        
         if (isFinishing) {
+          showToast('Chore finished!', 'success');
           logActivity(householdId, 'chore_done', chore.title);
         }
       }
@@ -143,9 +162,10 @@ export default function ChoresScreen({ route, navigation }: Props) {
       console.error('Chore Toggle Error:', error);
       Alert.alert('Error', 'Could not update chore.');
     }
-  }, [householdId, getMemberName]);
+  }, [householdId, getMemberName, showToast]);
 
   const handleReminder = useCallback(async (chore: Chore) => {
+    if (!householdId) return;
     try {
       const assigneeName = getMemberName(chore.assignedToUid);
       const nudgerName = userData?.username || 'Roommate';
@@ -157,81 +177,81 @@ export default function ChoresScreen({ route, navigation }: Props) {
         createdAt: serverTimestamp(),
       });
 
-      Alert.alert('Reminder Sent!', `Sent a reminder to ${assigneeName} in the group chat.`, [{ text: 'OK' }]);
+      showToast('Reminder Sent!', 'success');
       logActivity(householdId, 'chore_reminder', `${chore.title} -> ${assigneeName}`);
     } catch (error) {
       console.error('Reminder Error:', error);
       Alert.alert('Error', 'Failed to send reminder.');
     }
-  }, [getMemberName, userData?.username, householdId]);
+  }, [getMemberName, userData?.username, householdId, showToast]);
 
   const handleDelete = useCallback(async (choreId: string) => {
+    if (!householdId) return;
     Alert.alert('Delete Chore', 'Remove this chore?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try {
           await deleteDoc(doc(db, 'households', householdId, 'chores', choreId));
+          showToast('Chore Deleted', 'success');
         } catch {
           Alert.alert('Error', 'Could not delete chore.');
         }
       }}
     ]);
-  }, [householdId]);
+  }, [householdId, showToast]);
 
   const pending = chores.filter(c => !c.done);
   const done = chores.filter(c => c.done);
 
   const renderChore = useCallback(({ item }: { item: Chore }) => (
-    <Card className="flex-row items-center bg-white rounded-2xl p-4 mb-3 border-border shadow-sm">
-      <TouchableOpacity className="mr-3" onPress={() => handleToggleDone(item)}>
+    <SwipeableRow
+      onDelete={() => handleDelete(item.id)}
+      onComplete={!item.done ? () => handleToggleDone(item) : undefined}
+      completeLabel="Done"
+    >
+    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: surface, borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: bord }}>
+      <TouchableOpacity style={{ marginRight: 12 }} onPress={() => handleToggleDone(item)}>
         {item.done
           ? <MaterialIcons name="check-circle" size={28} color="#10B981" />
-          : <MaterialIcons name="radio-button-unchecked" size={28} color="#9CA3AF" />
+          : <MaterialIcons name="radio-button-unchecked" size={28} color={muted} />
         }
       </TouchableOpacity>
       
-      <View className="flex-1">
-        <Text className={`text-base font-bold ${item.done ? 'text-textMuted line-through' : 'text-textMain'}`}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 15, fontWeight: '700', color: item.done ? muted : text, textDecorationLine: item.done ? 'line-through' : 'none' }}>
           {item.title}
         </Text>
-        <View className="flex-row items-center mt-1 flex-wrap">
-          <View className="flex-row items-center bg-secondary/30 px-2 py-0.5 rounded-md mr-2 mt-1">
-            <MaterialIcons name="person-outline" size={14} color="#6B7280" />
-            <Text className="text-textMuted text-xs font-medium ml-1">
-              {getMemberName(item.assignedToUid)}
-            </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6, gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#334155' : '#EEF2FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+            <MaterialIcons name="person-outline" size={12} color={muted} />
+            <Text style={{ color: muted, fontSize: 11, fontWeight: '600', marginLeft: 4 }}>{getMemberName(item.assignedToUid)}</Text>
           </View>
-          <View className="flex-row items-center bg-primary/10 px-2 py-0.5 rounded-md mt-1 border border-primary/20 mr-2">
-            <MaterialIcons name="schedule" size={12} color="#4F46E5" />
-            <Text className="text-primary text-[10px] font-bold ml-1">
-              {item.time}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+            <MaterialIcons name="schedule" size={12} color="#6366F1" />
+            <Text style={{ color: '#6366F1', fontSize: 11, fontWeight: '700', marginLeft: 4 }}>{item.time}</Text>
           </View>
           {!!item.day && (
-            <View className="flex-row items-center bg-warning/10 px-2 py-0.5 rounded-md mt-1 border border-warning/20">
-              <Text className="text-warning text-[10px] font-black ml-1 uppercase">{item.day}</Text>
+            <View style={{ backgroundColor: isDark ? '#431407' : '#FFF7ED', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+              <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '800', textTransform: 'uppercase' }}>{item.day}</Text>
             </View>
           )}
         </View>
       </View>
 
-      <TouchableOpacity onPress={() => handleDelete(item.id)} className="p-2 ml-2">
-        <MaterialIcons name="delete-outline" size={24} color="#EF4444" />
-      </TouchableOpacity>
-
       {!item.done && (
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => handleReminder(item)}
-          className="bg-warning/10 p-2 rounded-xl ml-1 border border-warning/20"
+          style={{ backgroundColor: isDark ? '#431407' : '#FFF7ED', padding: 8, borderRadius: 12, marginLeft: 8 }}
         >
-          <MaterialIcons name="notifications-active" size={20} color="#D97706" />
+          <MaterialIcons name="notifications-active" size={18} color="#D97706" />
         </TouchableOpacity>
       )}
-    </Card>
-  ), [getMemberName, handleToggleDone, handleDelete, handleReminder]);
+    </View>
+    </SwipeableRow>
+  ), [getMemberName, handleToggleDone, handleDelete, handleReminder, surface, bord, text, muted, isDark]);
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
       <ScreenHeader 
         navigation={navigation as any} 
         title="Chores" 
@@ -243,15 +263,15 @@ export default function ChoresScreen({ route, navigation }: Props) {
       />
 
       <View className="flex-row items-center gap-3 px-6 mb-6">
-        <View className="flex-1 bg-white rounded-2xl p-4 items-center border border-border shadow-sm">
+        <View className="flex-1 bg-surface rounded-2xl p-4 items-center border border-border shadow-sm">
           <Text className="text-3xl font-extrabold text-textMain leading-none">{pending.length}</Text>
           <Text className="text-textMuted text-xs font-bold mt-1 tracking-wider uppercase">Pending</Text>
         </View>
-        <View className="flex-1 bg-white rounded-2xl p-4 items-center border border-border shadow-sm">
+        <View className="flex-1 bg-surface rounded-2xl p-4 items-center border border-border shadow-sm">
           <Text className="text-3xl font-extrabold text-success leading-none">{done.length}</Text>
           <Text className="text-textMuted text-xs font-bold mt-1 tracking-wider uppercase">Done</Text>
         </View>
-        <View className="flex-1 bg-white rounded-2xl p-4 items-center border border-border shadow-sm">
+        <View className="flex-1 bg-surface rounded-2xl p-4 items-center border border-border shadow-sm">
           <Text className="text-3xl font-extrabold text-textMain leading-none">{chores.length}</Text>
           <Text className="text-textMuted text-xs font-bold mt-1 tracking-wider uppercase">Total</Text>
         </View>
@@ -264,7 +284,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
       ) : (
         <FlatList
           data={[...pending, ...done]}
-          extraData={getMemberName}
+          extraData={memberProfiles}
           keyExtractor={i => i.id}
           renderItem={renderChore}
           contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
@@ -318,7 +338,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                             setSelectedDays([...selectedDays, d]);
                           }
                         }}
-                        className={`w-9 h-9 rounded-full items-center justify-center border ${isSelected ? 'bg-warning border-warning' : 'bg-slate-50 border-slate-200'}`}
+                        className={`w-9 h-9 rounded-full items-center justify-center border ${isSelected ? 'bg-warning border-warning' : 'bg-surfaceRaised border-border'}`}
                       >
                         <Text className={`text-[10px] font-black ${isSelected ? 'text-white' : 'text-slate-400'}`}>{d}</Text>
                       </TouchableOpacity>
@@ -350,7 +370,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                 </View>
               )}
 
-              <View className="flex-row items-center justify-between mb-6 bg-slate-50 p-4 rounded-3xl border border-slate-100">
+              <View className="flex-row items-center justify-between mb-6 bg-surfaceRaised p-4 rounded-3xl border border-border/50">
                 <View className="flex-1">
                   <Text className="text-textMain font-bold text-sm">Automated Rotation</Text>
                   <Text className="text-textMuted text-[10px]">Rotates between members automatically</Text>

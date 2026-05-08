@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
 import { useHousehold } from '../context/HouseholdContext';
+import { useTheme } from '../context/ThemeContext';
 import { Avatar } from '../components/Avatar';
 import {
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, limit, doc, arrayUnion, writeBatch
@@ -15,10 +16,14 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Message } from '../types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
+type Props = { navigation: any; route?: any };
 
 export default function ChatScreen({ route, navigation }: Props) {
-  const { householdId } = route.params;
+  const { householdId } = useHousehold();
+  const hid = householdId ?? '';
+  const { isDark } = useTheme();
+  const bg     = isDark ? '#0F172A' : '#FFFFFF';
+  const chatBg = isDark ? '#0F172A' : '#FAFAFA';
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -33,14 +38,10 @@ export default function ChatScreen({ route, navigation }: Props) {
   const isFirstLoad = useRef(true);
 
   useEffect(() => {
-    if (!householdId) {
-      Alert.alert('Error', 'Missing household information.');
-      navigation.goBack();
-      return;
-    }
+    if (!householdId) return;
 
     const q = query(
-      collection(db, 'households', householdId, 'messages'),
+      collection(db, 'households', hid, 'messages'),
       orderBy('createdAt', 'desc'),
       limit(50)
     );
@@ -86,7 +87,7 @@ export default function ChatScreen({ route, navigation }: Props) {
           if (unreadMsgs.length > 0) {
             const batch = writeBatch(db);
             unreadMsgs.forEach(msg => {
-              batch.update(doc(db, 'households', householdId, 'messages', msg.id), {
+              batch.update(doc(db, 'households', hid, 'messages', msg.id), {
                 readBy: arrayUnion(currentUid)
               });
             });
@@ -116,7 +117,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     setInputText('');
 
     try {
-      await addDoc(collection(db, 'households', householdId, 'messages'), {
+      await addDoc(collection(db, 'households', hid, 'messages'), {
         text,
         senderId: user.uid,
         senderName: userData?.username ? `${userData.username}` : (user.email?.split('@')[0] || 'Member'),
@@ -132,14 +133,26 @@ export default function ChatScreen({ route, navigation }: Props) {
 
   const renderMessage = ({ item, index }: { item: Message, index: number }) => {
     const isMe = item.senderId === auth.currentUser?.uid;
+    const isSystem = item.senderId === 'system';
     const previousMessage = index < messages.length - 1 ? messages[index + 1] : null;
-    const showSenderName = !isMe && (!previousMessage || previousMessage.senderId !== item.senderId);
+    const showSenderName = !isMe && !isSystem && (!previousMessage || previousMessage.senderId !== item.senderId);
 
     const timeString = item.createdAt 
       ? new Date(item.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : '';
 
     const isReadByOthers = item.readBy && item.readBy.length > 1;
+
+    // System message pill
+    if (isSystem) {
+      return (
+        <View style={{ alignItems: 'center', marginVertical: 8 }}>
+          <View style={{ backgroundColor: isDark ? '#334155' : '#E2E8F0', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: isDark ? '#94A3B8' : '#64748B' }}>{item.text}</Text>
+          </View>
+        </View>
+      );
+    }
 
     return (
       <View style={{ flexDirection: 'row', marginBottom: 6, justifyContent: isMe ? 'flex-end' : 'flex-start', alignItems: 'flex-end' }}>
@@ -151,40 +164,31 @@ export default function ChatScreen({ route, navigation }: Props) {
             maxWidth: '80%',
             paddingHorizontal: 16,
             paddingVertical: 10,
-            backgroundColor: isMe ? '#5145CD' : '#FFFFFF',
+            backgroundColor: isMe ? '#6366F1' : (isDark ? '#1E293B' : '#FFFFFF'),
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
-            borderBottomLeftRadius: isMe ? 24 : 0,
-            borderBottomRightRadius: isMe ? 0 : 24,
+            borderBottomLeftRadius: isMe ? 24 : 4,
+            borderBottomRightRadius: isMe ? 4 : 24,
             borderWidth: isMe ? 0 : 1,
-            borderColor: '#F3F4F6',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.1,
-            shadowRadius: 2,
-            elevation: 2,
+            borderColor: isDark ? '#334155' : '#E2E8F0',
           }}
         >
           {showSenderName && (
-            <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#818CF8', marginBottom: 2, textTransform: 'uppercase' }}>
+            <Text style={{ fontSize: 10, fontWeight: '800', color: '#818CF8', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 1 }}>
               {item.senderName}
             </Text>
           )}
           <View>
-            <Text style={{ fontSize: 15, color: isMe ? '#FFFFFF' : '#1F2937', lineHeight: 22 }}>
+            <Text style={{ fontSize: 15, color: isMe ? '#FFFFFF' : (isDark ? '#F1F5F9' : '#0F172A'), lineHeight: 22 }}>
               {item.text}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 2 }}>
-              <Text style={{ fontSize: 10, color: isMe ? 'rgba(255,255,255,0.7)' : '#9CA3AF' }}>
+              <Text style={{ fontSize: 10, color: isMe ? 'rgba(255,255,255,0.6)' : (isDark ? '#64748B' : '#9CA3AF') }}>
                 {timeString}
               </Text>
               {isMe && (
                 <View style={{ marginLeft: 4 }}>
-                  <Ionicons 
-                    name="checkmark-done" 
-                    size={16} 
-                    color={isReadByOthers ? "#38BDF8" : "rgba(255,255,255,0.5)"} 
-                  />
+                  <Ionicons name="checkmark-done" size={16} color={isReadByOthers ? "#38BDF8" : "rgba(255,255,255,0.5)"} />
                 </View>
               )}
             </View>
@@ -195,51 +199,51 @@ export default function ChatScreen({ route, navigation }: Props) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: 'white' }}>
-      {/* Header - Moved outside KeyboardAvoidingView for stability */}
+    <View style={{ flex: 1, backgroundColor: bg }}>
+      {/* Header */}
       <View 
         style={{ 
-          backgroundColor: 'white', 
+          backgroundColor: isDark ? '#1E293B' : '#FFFFFF', 
           flexDirection: 'row', 
           alignItems: 'center', 
           paddingHorizontal: 16, 
           paddingVertical: 12, 
           borderBottomWidth: 1, 
-          borderBottomColor: '#F3F4F6',
+          borderBottomColor: isDark ? '#334155' : '#E2E8F0',
           paddingTop: insets.top + 12,
           zIndex: 10
         }}
       >
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
-          style={{ marginRight: 12, width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#F3F4F6' }}
+          style={{ marginRight: 12, width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#0F172A' : '#F1F5F9', borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}
         >
-          <Ionicons name="arrow-back" size={20} color="#000" />
+          <Ionicons name="arrow-back" size={20} color={isDark ? '#F1F5F9' : '#0F172A'} />
         </TouchableOpacity>
 
         <View style={{ flex: 1, justifyContent: 'center' }}>
-          <Text style={{ color: 'black', fontSize: 18, fontWeight: 'bold' }} numberOfLines={1}>
+          <Text style={{ color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 18, fontWeight: '800' }} numberOfLines={1}>
             {householdData?.name || 'Household Chat'}
           </Text>
-          <Text style={{ color: '#6B7280', fontSize: 12, fontWeight: 'medium', marginTop: 2 }}>
+          <Text style={{ color: isDark ? '#64748B' : '#94A3B8', fontSize: 12, fontWeight: '600', marginTop: 2 }}>
             {householdData?.members?.length || 0} members
           </Text>
         </View>
 
-        <TouchableOpacity style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#F3F4F6' }}>
-          <Ionicons name="information" size={20} color="#000" />
+        <TouchableOpacity style={{ width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#0F172A' : '#F1F5F9', borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
+          <Ionicons name="information" size={20} color={isDark ? '#818CF8' : '#6366F1'} />
         </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1, backgroundColor: '#FAFAFA' }}
+        style={{ flex: 1, backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={{ flex: 1 }}>
           {loading ? (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <ActivityIndicator color="#000" />
+              <ActivityIndicator color={isDark ? '#818CF8' : '#6366F1'} />
             </View>
           ) : (
             <FlatList
@@ -257,7 +261,7 @@ export default function ChatScreen({ route, navigation }: Props) {
 
             {/* Quick Emoji Bar */}
             {showEmojis && (
-              <View style={{ backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingVertical: 10 }}>
+              <View style={{ backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#E2E8F0', paddingVertical: 10 }}>
                 <FlatList
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -287,9 +291,9 @@ export default function ChatScreen({ route, navigation }: Props) {
                 alignItems: 'flex-end', 
                 paddingHorizontal: 16, 
                 paddingVertical: 12, 
-                backgroundColor: 'white', 
+                backgroundColor: isDark ? '#1E293B' : '#FFFFFF', 
                 borderTopWidth: 1, 
-                borderTopColor: '#F3F4F6', 
+                borderTopColor: isDark ? '#334155' : '#E2E8F0', 
                 minHeight: 70,
                 paddingBottom: Math.max(insets.bottom, 12)
               }}
@@ -298,14 +302,14 @@ export default function ChatScreen({ route, navigation }: Props) {
                 onPress={() => setShowEmojis(!showEmojis)}
                 style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 8, marginBottom: 2 }}
               >
-                <Ionicons name={showEmojis ? "keypad" : "happy-outline"} size={24} color={showEmojis ? "#5145CD" : "#9CA3AF"} />
+                <Ionicons name={showEmojis ? "keypad" : "happy-outline"} size={24} color={showEmojis ? "#6366F1" : (isDark ? '#64748B' : '#9CA3AF')} />
               </TouchableOpacity>
 
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: '#F3F4F6', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 4, marginRight: 12, borderWidth: 1, borderColor: '#E5E7EB' }}>
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: isDark ? '#0F172A' : '#F1F5F9', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 4, marginRight: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
                 <TextInput
-                  style={{ flex: 1, fontSize: 15, color: 'black', maxHeight: 120, paddingTop: 12, paddingBottom: 12, minHeight: 46 }}
+                  style={{ flex: 1, fontSize: 15, color: isDark ? '#F1F5F9' : '#0F172A', maxHeight: 120, paddingTop: 12, paddingBottom: 12, minHeight: 46 }}
                   placeholder="Type a message..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={isDark ? '#475569' : '#94A3B8'}
                   value={inputText}
                   onChangeText={setInputText}
                   multiline
@@ -317,21 +321,13 @@ export default function ChatScreen({ route, navigation }: Props) {
                 onPress={handleSend}
                 disabled={!inputText.trim()}
                 style={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: 24, 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  backgroundColor: inputText.trim() ? '#5145CD' : '#F3F4F6',
+                  width: 48, height: 48, borderRadius: 24, 
+                  alignItems: 'center', justifyContent: 'center', 
+                  backgroundColor: inputText.trim() ? '#6366F1' : (isDark ? '#334155' : '#F1F5F9'),
                   marginBottom: 2 
                 }}
               >
-                <Ionicons 
-                  name="send" 
-                  size={18} 
-                  color={inputText.trim() ? "#FFF" : "#9CA3AF"} 
-                  style={{ marginLeft: 2 }} 
-                />
+                <Ionicons name="send" size={18} color={inputText.trim() ? "#FFF" : (isDark ? '#64748B' : '#9CA3AF')} style={{ marginLeft: 2 }} />
               </TouchableOpacity>
             </View>
           </View>

@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, FlatList, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { useHousehold } from '../context/HouseholdContext';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import ScreenHeader from '../components/ScreenHeader';
-import EmptyState from '../components/EmptyState';
-import { HouseholdSkeleton } from '../components/Skeleton';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Household } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdSelection'>;
+
+const bg      = '#0F172A';
+const surface = '#1E293B';
+const text    = '#F1F5F9';
+const muted   = '#94A3B8';
+const bord    = '#334155';
+const accent  = '#6366F1';
 
 export default function HouseholdSelectionScreen({ navigation }: Props) {
   const [households, setHouseholds] = useState<Household[]>([]);
@@ -20,111 +24,103 @@ export default function HouseholdSelectionScreen({ navigation }: Props) {
 
   useEffect(() => {
     if (!auth.currentUser) return;
-
-    // Discovery query for households where the user is a member
-    const q = query(
-      collection(db, 'households'),
-      where('members', 'array-contains', auth.currentUser.uid)
-    );
-
+    const q = query(collection(db, 'households'), where('members', 'array-contains', auth.currentUser.uid));
     const unsub = onSnapshot(q, (snap) => {
       setHouseholds(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Household)));
       setLoading(false);
-    }, (err) => {
-      console.error("Error fetching households:", err);
-      setLoading(false);
-    });
-
+    }, () => setLoading(false));
     return unsub;
   }, []);
 
   const handleSelect = (hh: Household) => {
     setHouseholdId(hh.id);
-    navigation.replace('Dashboard', { householdId: hh.id, householdData: hh });
+    const state = navigation.getState();
+    if (state?.routeNames?.includes('MainTabs')) {
+      navigation.navigate('MainTabs');
+    }
   };
 
   const renderItem = ({ item }: { item: Household }) => (
     <TouchableOpacity 
       onPress={() => handleSelect(item)}
-      activeOpacity={0.7}
-      className="bg-white rounded-[32px] p-6 mb-4 border border-border shadow-sm flex-row items-center"
+      activeOpacity={0.85}
+      style={{ backgroundColor: surface, borderRadius: 24, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: bord, flexDirection: 'row', alignItems: 'center' }}
     >
-      <View className="w-12 h-12 rounded-2xl bg-secondary items-center justify-center mr-4">
-        <MaterialIcons name="home" size={24} color="#4B5563" />
+      <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: accent + '20', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+        <MaterialIcons name="home" size={24} color={accent} />
       </View>
-      <View className="flex-1">
-        <Text className="text-lg font-bold text-textMain tracking-tight">{item.name}</Text>
-        <Text className="text-textMuted text-xs font-medium mt-0.5">
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 17, fontWeight: '800', color: text, letterSpacing: -0.3 }}>{item.name}</Text>
+        <Text style={{ fontSize: 12, fontWeight: '600', color: muted, marginTop: 3 }}>
           {item.members?.length || 0} Member{(item.members?.length !== 1) ? 's' : ''}
         </Text>
       </View>
-      <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
+      <View style={{ width: 32, height: 32, borderRadius: 12, backgroundColor: bg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: bord }}>
+        <MaterialIcons name="chevron-right" size={20} color={muted} />
+      </View>
     </TouchableOpacity>
   );
 
-  if (loading) {
-    return (
-      <SafeAreaView className="flex-1 bg-background px-6">
-        <ScreenHeader 
-          navigation={navigation as any} 
-          title="My Projects" 
-          hideBack={true}
-        />
-        <Text className="text-textMuted text-base font-medium px-6 mb-10 -mt-4">Discovering households...</Text>
-        <View>
-          {[1, 2, 3].map((i) => <HouseholdSkeleton key={i} />)}
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SafeAreaView className="flex-1 bg-background px-6">
-      <ScreenHeader 
-        navigation={navigation} 
-        title="My Projects" 
-        hideBack={true}
-        rightIcon="logout"
-        rightIconColor="#EF4444"
-        rightIconBg="bg-danger/10"
-        rightIconBorder="border-danger/20"
-        onRightPress={() => {
-          Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+    <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
+      {/* Header */}
+      <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View>
+          <Text style={{ fontSize: 24, fontWeight: '900', color: text, letterSpacing: -0.5 }}>My Households</Text>
+          <Text style={{ fontSize: 14, fontWeight: '500', color: muted, marginTop: 4 }}>Select a household to continue</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => Alert.alert("Sign Out", "Are you sure?", [
             { text: "Cancel", style: "cancel" },
             { text: "Sign Out", style: "destructive", onPress: () => auth.signOut() }
-          ]);
-        }}
-      />
-      <Text className="text-textMuted text-base font-medium px-6 mb-10 -mt-4">Select a household to continue</Text>
+          ])}
+          style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: '#1C1917', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#7F1D1D' }}
+        >
+          <MaterialIcons name="logout" size={20} color="#EF4444" />
+        </TouchableOpacity>
+      </View>
 
-      <FlatList
-        data={households}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <EmptyState 
-            icon="house-siding" 
-            title="No households joined" 
-            description="Create your own project or join an existing one using an invite code."
+      {/* List */}
+      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
+        {loading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator color={accent} size="large" />
+          </View>
+        ) : (
+          <FlatList
+            data={households}
+            keyExtractor={item => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={{ paddingBottom: 120 }}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={{ alignItems: 'center', paddingTop: 60 }}>
+                <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: surface, alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: bord }}>
+                  <MaterialIcons name="house-siding" size={32} color={muted} />
+                </View>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: text, marginBottom: 8 }}>No households yet</Text>
+                <Text style={{ fontSize: 14, color: muted, textAlign: 'center', lineHeight: 22, maxWidth: 280 }}>
+                  Create your own space or join an existing one using an invite code.
+                </Text>
+              </View>
+            }
           />
-        }
-      />
+        )}
+      </View>
 
       {/* Action Footer */}
-      <View className="absolute bottom-10 left-6 right-6 flex-row gap-4">
+      <View style={{ position: 'absolute', bottom: 40, left: 24, right: 24, flexDirection: 'row', gap: 12 }}>
         <TouchableOpacity 
-          onPress={() => navigation.navigate('HouseholdSetup', { householdId: null })} // Pass null to indicate brand new setup
-          className="flex-1 bg-primary py-4 rounded-2xl items-center shadow-lg shadow-primary/30"
+          onPress={() => navigation.navigate('HouseholdSetup', { householdId: null })}
+          style={{ flex: 1, backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center' }}
         >
-          <Text className="text-white font-bold text-base">Create New</Text>
+          <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Create New</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           onPress={() => navigation.navigate('HouseholdSetup', { activeTab: 'join' })}
-          className="flex-1 bg-white py-4 rounded-2xl items-center border border-border shadow-sm"
+          style={{ flex: 1, backgroundColor: surface, paddingVertical: 16, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: bord }}
         >
-          <Text className="text-textMain font-bold text-base">Join Existing</Text>
+          <Text style={{ color: text, fontSize: 15, fontWeight: '800' }}>Join Existing</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -4,12 +4,16 @@ export type RootStackParamList = {
   Login: undefined;
   HouseholdSelection: undefined;
   HouseholdSetup: { householdId?: string | null; activeTab?: 'create' | 'join'; code?: string };
-  Dashboard: { householdId: string; householdData?: Household };
-  Grocery: { householdId: string; members: string[] };
-  Expenses: { householdId: string; members: string[] };
-  Chores: { householdId: string; members: string[] };
-  Chat: { householdId: string; members: string[]; householdData?: Household };
+  MainTabs: undefined;
+  Profile: undefined;
+  // Tab screens — householdId comes from HouseholdContext, not params
+  Dashboard: undefined;
+  Grocery: undefined;
+  Expenses: undefined;
+  Chores: undefined;
+  Chat: undefined;
 };
+
 
 export interface UserProfile {
   uid: string;
