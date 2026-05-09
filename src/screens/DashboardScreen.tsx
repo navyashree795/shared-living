@@ -48,6 +48,7 @@ export default function DashboardScreen({ navigation }: Props) {
   const [isMembersModalVisible, setIsMembersModalVisible] = useState(false);
   const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
   const [isInfoModalVisible, setIsInfoModalVisible] = useState(false);
+  const [isNotificationsModalVisible, setIsNotificationsModalVisible] = useState(false);
   const { user, profile: userData } = useUser();
   const { householdData, memberProfiles } = useHousehold();
 
@@ -67,6 +68,7 @@ export default function DashboardScreen({ navigation }: Props) {
   const [loadingActivities, setLoadingActivities] = useState(true);
   const [chores, setChores] = useState<any[]>([]);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const [hasUnreadChores, setHasUnreadChores] = useState(false);
 
   useEffect(() => {
     if (userData?.username) {
@@ -96,7 +98,7 @@ export default function DashboardScreen({ navigation }: Props) {
     const q = query(
       collection(db, 'households', hid, 'activities'),
       orderBy('createdAt', 'desc'),
-      limit(15)
+      limit(30)
     );
     const unsub = onSnapshot(q, (snap) => {
       setActivities(snap.docs.map(d => ({ id: d.id, ...d.data() } as Activity)));
@@ -193,6 +195,22 @@ export default function DashboardScreen({ navigation }: Props) {
     });
     return unsub;
   }, [householdId]);
+
+  useEffect(() => {
+    if (!householdId || !user?.uid) return;
+    const q = query(
+      collection(db, 'households', hid, 'chores'),
+      where('assignedToUid', '==', user.uid)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const unread = snap.docs.some(doc => {
+        const data = doc.data();
+        return !data.seenBy || !data.seenBy.includes(user.uid);
+      });
+      setHasUnreadChores(unread);
+    });
+    return unsub;
+  }, [householdId, user?.uid]);
 
   useEffect(() => {
     const checkUpcomingChores = async () => {
@@ -386,10 +404,12 @@ export default function DashboardScreen({ navigation }: Props) {
                 <MaterialIcons name="people" size={20} color={isDark ? '#C084FC' : '#4F46E5'} />
               </BlurView>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => {}}>
+            <TouchableOpacity onPress={() => setIsNotificationsModalVisible(true)}>
               <BlurView intensity={25} tint={blurTint} style={{ width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
                 <MaterialIcons name="notifications" size={20} color={isDark ? '#C084FC' : '#4F46E5'} />
-                <View style={{ position: 'absolute', top: 10, right: 11, width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444', borderWidth: 1, borderColor: isDark ? '#070913' : '#FFFFFF' }} />
+                {(hasUnreadMessages || hasUnreadChores) && (
+                  <View style={{ position: 'absolute', top: 10, right: 11, width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444', borderWidth: 1, borderColor: isDark ? '#070913' : '#FFFFFF' }} />
+                )}
               </BlurView>
             </TouchableOpacity>
           </View>
@@ -410,7 +430,10 @@ export default function DashboardScreen({ navigation }: Props) {
                   </BlurView>
                 ))
               ) : activities.length > 0 ? (
-                activities.slice(0, 6).map((activity, idx) => {
+                activities
+                  .filter(a => a.userId === user?.uid) // ONLY own notifications on Dashboard
+                  .slice(0, 6)
+                  .map((activity, idx) => {
                   const config = getActivityConfig(activity.type);
                   return (
                     <BlurView key={activity.id || idx} intensity={20} tint={blurTint} style={{ borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 10, overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
@@ -689,6 +712,69 @@ export default function DashboardScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
       </SlideModal>
+      {/* Notifications Modal */}
+      <SlideModal
+        visible={isNotificationsModalVisible}
+        onClose={() => setIsNotificationsModalVisible(false)}
+        title="Notifications"
+      >
+        <View style={{ paddingBottom: 20 }}>
+          {activities.filter(a => {
+            const isFromOther = a.userId !== user?.uid;
+            const isForMe = !a.targetUid || a.targetUid === user?.uid;
+            return isFromOther && isForMe;
+          }).length === 0 ? (
+            <View style={{ alignItems: 'center', py: 40 }}>
+              <MaterialIcons name="notifications-none" size={48} color={muted} style={{ opacity: 0.5 }} />
+              <Text style={{ color: muted, fontSize: 14, mt: 12 }}>No new notifications from roommates</Text>
+            </View>
+          ) : (
+            <View style={{ gap: 10 }}>
+              {activities
+                .filter(a => {
+                  const isFromOther = a.userId !== user?.uid;
+                  const isForMe = !a.targetUid || a.targetUid === user?.uid;
+                  return isFromOther && isForMe;
+                }) // ONLY roommates' notifications in Bell icon, and only if for me
+                .map((item, idx) => {
+                const config = getActivityConfig(item.type);
+                return (
+                  <View 
+                    key={item.id} 
+                    style={{ 
+                      flexDirection: 'row', 
+                      alignItems: 'center', 
+                      padding: 16, 
+                      borderRadius: 20, 
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(99,102,241,0.03)',
+                      borderWidth: 1,
+                      borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(99,102,241,0.05)'
+                    }}
+                  >
+                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: config.color + '20', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                      <MaterialIcons name={config.icon} size={20} color={config.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <Text style={{ color: textMain, fontWeight: '800', fontSize: 13 }}>{item.userName}</Text>
+                        <Text style={{ color: textMuted, fontSize: 13, marginHorizontal: 4 }}>{config.label}</Text>
+                        <Text style={{ color: textMain, fontWeight: '700', fontSize: 13 }}>{item.title}</Text>
+                      </View>
+                      <Text style={{ color: textMuted, fontSize: 10, marginTop: 4, fontWeight: '600' }}>
+                        {item.createdAt?.seconds 
+                          ? new Date(item.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) 
+                          : 'Just now'
+                        }
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </SlideModal>
+
       </SafeAreaView>
     </LinearGradient>
   );

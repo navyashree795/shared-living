@@ -98,6 +98,7 @@ export interface Chore {
   rotationOrder?: string[];
   currentRotationIndex?: number;
   reminderSent?: boolean;
+  seenBy?: string[];
 }
 
 export interface Message {
