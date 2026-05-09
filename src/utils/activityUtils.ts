@@ -15,7 +15,8 @@ export const logActivity = async (
   type: ActivityType, 
   title: string, 
   userName?: string,
-  amount: number = 0
+  amount: number = 0,
+  targetUid?: string
 ) => {
   if (!householdId || !auth.currentUser) return;
 
@@ -28,6 +29,7 @@ export const logActivity = async (
       userName: finalUserName,
       amount,
       userId: auth.currentUser.uid,
+      targetUid: targetUid || null,
       createdAt: serverTimestamp(),
     });
   } catch (e) {

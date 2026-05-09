@@ -69,7 +69,7 @@ export default function ChatScreen({ route, navigation }: Props) {
         snap.docChanges().forEach((change) => {
           if (change.type === "added" && !isFirstLoad.current && !snap.metadata.hasPendingWrites) {
              const msg = { id: change.doc.id, ...change.doc.data() } as Message;
-             if (msg.senderId !== auth.currentUser?.uid) {
+             if (msg.senderId !== auth.currentUser?.uid && msg.senderName !== 'Chore Bot' && msg.senderName !== 'Reminder Bot') {
                 setNewMsgPopup(msg);
                 Animated.spring(notificationAnim, {
                   toValue: insets.top + 10,
@@ -89,7 +89,10 @@ export default function ChatScreen({ route, navigation }: Props) {
           }
         });
 
-        const fetchedMessages = snap.docs.map(d => ({ id: d.id, ...d.data() } as Message));
+        const fetchedMessages = snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as Message))
+          .filter(msg => msg.senderName !== 'Chore Bot' && msg.senderName !== 'Reminder Bot');
+          
         setMessages(fetchedMessages);
         setLoading(false);
         isFirstLoad.current = false;
@@ -154,60 +157,107 @@ export default function ChatScreen({ route, navigation }: Props) {
     const previousMessage = index < messages.length - 1 ? messages[index + 1] : null;
     const showSenderName = !isMe && !isSystem && (!previousMessage || previousMessage.senderId !== item.senderId);
 
+    const isReadByOthers = item.readBy && item.readBy.length > 1;
+
     const timeString = item.createdAt 
       ? new Date(item.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : '';
+      : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const isReadByOthers = item.readBy && item.readBy.length > 1;
+    // Date grouping logic
+    const showDateHeader = () => {
+      const currentMsgDate = item.createdAt ? new Date(item.createdAt.seconds * 1000) : new Date();
+      const nextMsg = index < messages.length - 1 ? messages[index + 1] : null;
+      if (!nextMsg) return true;
+      const nextMsgDate = nextMsg.createdAt ? new Date(nextMsg.createdAt.seconds * 1000) : new Date();
+      return currentMsgDate.toDateString() !== nextMsgDate.toDateString();
+    };
+
+    const formatDateHeader = (date: Date) => {
+      const now = new Date();
+      if (date.toDateString() === now.toDateString()) return 'Today';
+      const yesterday = new Date();
+      yesterday.setDate(now.getDate() - 1);
+      if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+      return date.toLocaleDateString([], { month: 'long', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+    };
+
+    const nextMessageFromSameSender = index > 0 && messages[index - 1].senderId === item.senderId;
+    const showAvatar = !isMe && !isSystem && (!previousMessage || previousMessage.senderId !== item.senderId);
 
     // System message pill
     if (isSystem) {
       return (
-        <View style={{ alignItems: 'center', marginVertical: 8 }}>
-          <View style={{ backgroundColor: isDark ? '#334155' : '#E2E8F0', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: isDark ? '#94A3B8' : '#64748B' }}>{item.text}</Text>
+        <View>
+          {showDateHeader() && (
+            <View style={{ alignItems: 'center', marginVertical: 16 }}>
+              <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B' }}>
+                  {formatDateHeader(item.createdAt ? new Date(item.createdAt.seconds * 1000) : new Date())}
+                </Text>
+              </View>
+            </View>
+          )}
+          <View style={{ alignItems: 'center', marginVertical: 8 }}>
+            <View style={{ backgroundColor: isDark ? '#334155' : '#E2E8F0', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: isDark ? '#94A3B8' : '#64748B' }}>{item.text}</Text>
+            </View>
           </View>
         </View>
       );
     }
 
     return (
-      <View style={{ flexDirection: 'row', marginBottom: 6, justifyContent: isMe ? 'flex-end' : 'flex-start', alignItems: 'flex-end' }}>
-        {!isMe && (
-          <Avatar name={item.senderName} style={{ marginRight: 8, marginBottom: 4 }} />
-        )}
-        <View 
-          style={{
-            maxWidth: '80%',
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            backgroundColor: isMe ? '#6366F1' : (isDark ? '#0E1324' : '#FFFFFF'),
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            borderBottomLeftRadius: isMe ? 24 : 4,
-            borderBottomRightRadius: isMe ? 4 : 24,
-            borderWidth: isMe ? 0 : 1,
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)',
-          }}
-        >
-          {showSenderName && (
-            <Text style={{ fontSize: 10, fontWeight: '800', color: '#818CF8', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 1 }}>
-              {item.senderName}
-            </Text>
-          )}
-          <View>
-            <Text style={{ fontSize: 15, color: isMe ? '#FFFFFF' : (isDark ? '#F1F5F9' : '#0F172A'), lineHeight: 22 }}>
-              {item.text}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 2 }}>
-              <Text style={{ fontSize: 10, color: isMe ? 'rgba(255,255,255,0.6)' : (isDark ? '#64748B' : '#9CA3AF') }}>
-                {timeString}
+      <View>
+        {showDateHeader() && (
+          <View style={{ alignItems: 'center', marginVertical: 16 }}>
+            <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B' }}>
+                {formatDateHeader(item.createdAt ? new Date(item.createdAt.seconds * 1000) : new Date())}
               </Text>
-              {isMe && (
-                <View style={{ marginLeft: 4 }}>
-                  <Ionicons name="checkmark-done" size={16} color={isReadByOthers ? "#38BDF8" : "rgba(255,255,255,0.5)"} />
-                </View>
-              )}
+            </View>
+          </View>
+        )}
+        <View style={{ flexDirection: 'row', marginBottom: nextMessageFromSameSender ? 2 : 8, justifyContent: isMe ? 'flex-end' : 'flex-start', alignItems: 'flex-end' }}>
+          {!isMe && (
+            showAvatar ? (
+              <Avatar name={item.senderName} size={32} style={{ marginRight: 8, marginBottom: 2 }} />
+            ) : (
+              <View style={{ width: 32, marginRight: 8 }} />
+            )
+          )}
+          <View 
+            style={{
+              maxWidth: '75%',
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              backgroundColor: isMe ? '#6366F1' : (isDark ? '#1E293B' : '#FFFFFF'),
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              borderBottomLeftRadius: isMe ? 20 : (showAvatar ? 4 : 20),
+              borderBottomRightRadius: isMe ? (showAvatar ? 4 : 20) : 20,
+              borderWidth: isMe ? 0 : 1,
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)',
+            }}
+          >
+            {showSenderName && (
+              <Text style={{ fontSize: 10, fontWeight: '800', color: '#818CF8', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 1 }}>
+                {item.senderName}
+              </Text>
+            )}
+            <View>
+              <Text style={{ fontSize: 15, color: isMe ? '#FFFFFF' : (isDark ? '#F1F5F9' : '#0F172A'), lineHeight: 20 }}>
+                {item.text}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 2 }}>
+                <Text style={{ fontSize: 9, color: isMe ? 'rgba(255,255,255,0.6)' : (isDark ? '#64748B' : '#9CA3AF'), fontWeight: '600' }}>
+                  {timeString}
+                </Text>
+                {isMe && (
+                  <View style={{ marginLeft: 4 }}>
+                    <Ionicons name="checkmark-done" size={14} color={isReadByOthers ? "#38BDF8" : "rgba(255,255,255,0.5)"} />
+                  </View>
+                )}
+              </View>
             </View>
           </View>
         </View>

@@ -19,7 +19,7 @@ import SlideModal from '../components/SlideModal';
 import SwipeableRow from '../components/SwipeableRow';
 import { ChoreSkeleton } from '../components/Skeleton';
 import {
-  collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp
+  collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, arrayUnion
 } from 'firebase/firestore';
 import { logActivity } from '../utils/activityUtils';
 import { Chore } from '../types';
@@ -64,8 +64,24 @@ export default function ChoresScreen({ route, navigation }: Props) {
       orderBy('createdAt', 'desc')
     );
     const unsub = onSnapshot(q, (snap) => {
-      setChores(snap.docs.map(d => ({ id: d.id, ...d.data() } as Chore)));
+      const fetchedChores = snap.docs.map(d => ({ id: d.id, ...d.data() } as Chore));
+      setChores(fetchedChores);
       setLoading(false);
+
+      // Mark unread chores assigned to me as seen
+      const myUid = auth.currentUser?.uid;
+      if (myUid) {
+        const unseenChores = fetchedChores.filter(c => 
+          c.assignedToUid === myUid && (!c.seenBy || !c.seenBy.includes(myUid))
+        );
+        if (unseenChores.length > 0) {
+          unseenChores.forEach(c => {
+            updateDoc(doc(db, 'households', householdId, 'chores', c.id), {
+              seenBy: arrayUnion(myUid)
+            });
+          });
+        }
+      }
     });
     return unsub;
   }, [householdId]);
@@ -89,6 +105,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         rotationEnabled: isRotationEnabled,
         rotationOrder: isRotationEnabled ? rotationOrder : [],
         currentRotationIndex: 0,
+        seenBy: [auth.currentUser?.uid],
       };
 
       if (selectedDays.length > 0) {
@@ -178,7 +195,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
       });
 
       showToast('Reminder Sent!', 'success');
-      logActivity(householdId, 'chore_reminder', `${chore.title} -> ${assigneeName}`);
+      logActivity(householdId, 'chore_reminder', `${chore.title} -> ${assigneeName}`, userData?.username || 'Roommate', 0, chore.assignedToUid);
     } catch (error) {
       console.error('Reminder Error:', error);
       Alert.alert('Error', 'Failed to send reminder.');

@@ -204,6 +204,7 @@ export default function GroceryScreen({ navigation }: Props) {
                 expenseLogged: true,
               });
 
+              logActivity(hid, 'expense_add', `Groceries: ${item.name}`, getMemberName(currentUid), item.price);
               showToast('Logged to Expenses', 'success');
             } catch {
               Alert.alert('Error', 'Could not log to expenses.');
