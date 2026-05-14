@@ -30,10 +30,12 @@ export default function ExpenseScreen({ navigation }: Props) {
   const hid = householdId ?? '';
   const { isDark } = useTheme();
   const bg      = isDark ? '#070913' : '#F4F7FF';
-  const surface = isDark ? '#0E1324' : '#FFFFFF';
+  const surface = isDark ? '#111827' : '#FFFFFF';
+  const cardBg  = isDark ? '#1E293B' : '#FFFFFF';
   const textMain = isDark ? '#F1F5F9' : '#0F172A';
   const textMuted = isDark ? '#94A3B8' : '#64748B';
-  const primary = '#4F46E5';
+  const primary = isDark ? '#818CF8' : '#4F46E5';
+  const border = isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9';
   
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,15 +188,15 @@ export default function ExpenseScreen({ navigation }: Props) {
       
       return (
         <SwipeableRow onDelete={() => handleDelete(item.id)}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: surface, borderRadius: 24, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
-            <View style={{ width: 44, height: 44, borderRadius: 16, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
-               <MaterialIcons name="check" size={20} color={primary} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: cardBg, borderRadius: 28, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: isDark ? 0.3 : 0.03, shadowRadius: 10, elevation: 3 }}>
+            <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+               <MaterialIcons name="check" size={22} color={primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: '800', color: textMain }}>{primaryText}</Text>
-              <Text style={{ fontSize: 9, fontWeight: '800', color: textMuted, marginTop: 2, textTransform: 'uppercase' }}>Settlement</Text>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: textMain }}>{primaryText}</Text>
+              <Text style={{ fontSize: 10, fontWeight: '900', color: textMuted, marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Settlement</Text>
             </View>
-            <Text style={{ fontSize: 16, fontWeight: '900', color: primary }}>
+            <Text style={{ fontSize: 18, fontWeight: '900', color: primary }}>
               ₹{item.amount.toFixed(0)}
             </Text>
           </View>
@@ -212,44 +214,44 @@ export default function ExpenseScreen({ navigation }: Props) {
     let relationshipColor = textMuted;
 
     if (iPaid) {
-      relationshipText = splitCount > 1 ? `You lent ₹${(item.amount - individualShare).toFixed(0)}` : `You paid for yourself`;
+      relationshipText = splitCount > 1 ? `YOU LENT ₹${(item.amount - individualShare).toFixed(0)}` : `PAID FOR SELF`;
       relationshipColor = splitCount > 1 ? '#10B981' : textMuted;
     } else if (amIInvolved) {
-      relationshipText = `You owe ₹${individualShare.toFixed(0)}`;
+      relationshipText = `YOU OWE ₹${individualShare.toFixed(0)}`;
       relationshipColor = '#EF4444';
     } else {
-      relationshipText = `Not involved`;
+      relationshipText = `NOT INVOLVED`;
     }
 
     return (
       <SwipeableRow onDelete={() => handleDelete(item.id)}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: surface, borderRadius: 24, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
-          <View style={{ width: 44, height: 44, borderRadius: 16, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, borderColor: '#F1F5F9' }}>
-             <MaterialIcons name={iconName} size={20} color={textMuted} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: cardBg, borderRadius: 28, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: isDark ? 0.3 : 0.03, shadowRadius: 10, elevation: 3 }}>
+          <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: isDark ? '#F8FAFC' : '#F8FAFC', alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, borderColor: isDark ? '#E2E8F0' : '#F1F5F9' }}>
+             <MaterialIcons name={iconName} size={22} color="#64748B" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: textMain }}>{item.title}</Text>
-            <Text style={{ fontSize: 9, fontWeight: '800', color: textMuted, marginTop: 2, textTransform: 'uppercase' }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: textMain }}>{item.title}</Text>
+            <Text style={{ fontSize: 10, fontWeight: '900', color: textMuted, marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 }}>
               {iPaid ? 'Paid by You' : `By ${getMemberName(item.paidByUid!)}`}
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={{ fontSize: 16, fontWeight: '900', color: textMain, marginBottom: 2 }}>
+            <Text style={{ fontSize: 18, fontWeight: '900', color: textMain, marginBottom: 4 }}>
               ₹{item.amount.toFixed(0)}
             </Text>
-            <Text style={{ fontSize: 8, fontWeight: '800', color: relationshipColor, textTransform: 'uppercase' }}>
+            <Text style={{ fontSize: 9, fontWeight: '900', color: relationshipColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               {relationshipText}
             </Text>
           </View>
         </View>
       </SwipeableRow>
     );
-  }, [getMemberName, handleDelete, textMain, textMuted, surface, primary]);
+  }, [getMemberName, handleDelete, textMain, textMuted, cardBg, border, primary, isDark]);
 
   const renderHeader = () => (
     <View style={{ paddingHorizontal: 24 }}>
       {/* Dark Summary Card */}
-      <View style={{ backgroundColor: '#0F172A', borderRadius: 32, padding: 24, marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 }}>
+      <View style={{ backgroundColor: isDark ? '#111827' : '#0F172A', borderRadius: 32, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 }}>
         <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Total Household Spending</Text>
         <Text style={{ color: '#FFFFFF', fontSize: 44, fontWeight: '900', letterSpacing: -1 }}>₹{totalHouseholdSpent.toLocaleString()}</Text>
         
@@ -274,9 +276,9 @@ export default function ExpenseScreen({ navigation }: Props) {
       {/* Settle Up Action Button */}
       <TouchableOpacity onPress={() => setIsSettleModalVisible(true)} activeOpacity={0.8}>
         <LinearGradient
-          colors={['#818CF8', '#A78BFA']}
+          colors={isDark ? ['#6366F1', '#4F46E5'] : ['#818CF8', '#A78BFA']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 24, paddingVertical: 18, marginBottom: 32, shadowColor: '#818CF8', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 15, elevation: 8 }}
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 24, paddingVertical: 18, marginBottom: 32, shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 15, elevation: 8 }}
         >
           <MaterialIcons name="credit-card" size={24} color="#FFFFFF" style={{ marginRight: 12 }} />
           <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 14, textTransform: 'uppercase', letterSpacing: 1.5 }}>Settle Up Now</Text>
@@ -286,18 +288,18 @@ export default function ExpenseScreen({ navigation }: Props) {
       {/* Your Balances Section */}
       <View style={{ marginBottom: 28 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-           <Text style={{ color: '#0F172A', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Your Balances</Text>
-           <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
+           <Text style={{ color: textMain, fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Your Balances</Text>
+           <View style={{ backgroundColor: isDark ? 'rgba(99,102,241,0.1)' : '#EEF2FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
               <Text style={{ color: primary, fontSize: 9, fontWeight: '900' }}>{Object.entries(peerBalances).filter(([_, amount]) => Math.abs(amount) > 0.01).length} active</Text>
            </View>
         </View>
         
         {Object.entries(peerBalances).filter(([_, amount]) => Math.abs(amount) > 0.01).length === 0 ? (
-          <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: '#FFFFFF', borderRadius: 24, borderWidth: 1, borderColor: '#F1F5F9' }}>
-            <View style={{ backgroundColor: '#F0FDF4', padding: 12, borderRadius: 20, marginBottom: 12 }}>
+          <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: cardBg, borderRadius: 24, borderWidth: 1, borderColor: border }}>
+            <View style={{ backgroundColor: isDark ? 'rgba(34,197,94,0.1)' : '#F0FDF4', padding: 12, borderRadius: 20, marginBottom: 12 }}>
                <MaterialIcons name="verified" size={32} color="#22C55E" />
             </View>
-            <Text style={{ color: '#15803D', fontSize: 14, fontWeight: '800' }}>You are all settled up! 🎉</Text>
+            <Text style={{ color: '#22C55E', fontSize: 14, fontWeight: '800' }}>You are all settled up! 🎉</Text>
           </View>
         ) : (
           <View style={{ gap: 12 }}>
@@ -305,26 +307,22 @@ export default function ExpenseScreen({ navigation }: Props) {
               if (Math.abs(amount) < 0.01) return null;
               const isOwedToMe = amount < 0;
               const color = isOwedToMe ? '#10B981' : '#F87171';
-              const bgColor = isOwedToMe ? '#F0FDF4' : '#FEF2F2';
+              const iconBg = isOwedToMe ? (isDark ? 'rgba(16,185,129,0.1)' : '#F0FDF4') : (isDark ? 'rgba(248,113,113,0.1)' : '#FEF2FF');
               const name = getMemberName(uid);
               const displayName = name.startsWith('@') ? name : `@${name.toLowerCase().replace(/\s+/g, '')}`;
 
               return (
-                <View key={uid} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 12, borderRadius: 28, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 2, overflow: 'hidden' }}>
-                  {/* Thin Left Indicator */}
+                <View key={uid} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: cardBg, padding: 12, borderRadius: 28, borderWidth: 1, borderColor: border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: isDark ? 0.3 : 0.04, shadowRadius: 12, elevation: 2, overflow: 'hidden' }}>
                   <View style={{ position: 'absolute', left: 0, top: 16, bottom: 16, width: 4, backgroundColor: color, borderRadius: 2 }} />
-                  
-                  <View style={{ width: 56, height: 56, borderRadius: 20, backgroundColor: bgColor, alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+                  <View style={{ width: 56, height: 56, borderRadius: 20, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
                     <MaterialIcons name={isOwedToMe ? "arrow-downward" : "arrow-upward"} size={22} color={color} />
                   </View>
-                  
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#0F172A', fontSize: 17, fontWeight: '900' }}>{displayName}</Text>
+                    <Text style={{ color: textMain, fontSize: 17, fontWeight: '900' }}>{displayName}</Text>
                     <Text style={{ color: color, fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 }}>
                       {isOwedToMe ? 'THEY OWE YOU' : 'YOU OWE THEM'}
                     </Text>
                   </View>
-                  
                   <Text style={{ fontSize: 22, fontWeight: '900', color: color, marginRight: 8 }}>
                     ₹{Math.abs(amount).toLocaleString()}
                   </Text>
@@ -336,7 +334,7 @@ export default function ExpenseScreen({ navigation }: Props) {
       </View>
 
       <View style={{ marginBottom: 16 }}>
-        <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Transactions</Text>
+        <Text style={{ color: textMuted, fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Transactions</Text>
       </View>
     </View>
   );
@@ -345,7 +343,7 @@ export default function ExpenseScreen({ navigation }: Props) {
     <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['top']}>
       {/* Custom Header */}
       <View style={{ height: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: surface, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: surface, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.4 : 0.05, shadowRadius: 5, elevation: 2, borderWidth: 1, borderColor: border }}>
           <MaterialIcons name="chevron-left" size={28} color={textMain} />
         </TouchableOpacity>
         <Text style={{ fontSize: 18, fontWeight: '900', color: textMain }}>Expenses</Text>
@@ -362,7 +360,7 @@ export default function ExpenseScreen({ navigation }: Props) {
         ListEmptyComponent={
           !loading && expenses.length === 0 ? (
             <View style={{ paddingHorizontal: 24, alignItems: 'center', marginTop: 40 }}>
-              <MaterialIcons name="receipt-long" size={64} color="#E2E8F0" />
+              <MaterialIcons name="receipt-long" size={64} color={isDark ? '#1E293B' : '#E2E8F0'} />
               <Text style={{ color: textMuted, fontSize: 16, fontWeight: '700', marginTop: 16 }}>No transactions yet</Text>
             </View>
           ) : loading ? (
@@ -381,16 +379,16 @@ export default function ExpenseScreen({ navigation }: Props) {
           <View style={{ gap: 20 }}>
             <View>
               <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginLeft: 4 }}>Description</Text>
-              <TextInput ref={expenseInputRef} style={{ backgroundColor: '#F8FAFC', borderRadius: 20, padding: 18, color: textMain, fontSize: 16, fontWeight: '700', borderWidth: 1, borderColor: '#F1F5F9' }} placeholder="What was this for?" value={title} onChangeText={setTitle} />
+              <TextInput ref={expenseInputRef} style={{ backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderRadius: 20, padding: 18, color: textMain, fontSize: 16, fontWeight: '700', borderWidth: 1, borderColor: border }} placeholder="What was this for?" placeholderTextColor={textMuted} value={title} onChangeText={setTitle} />
             </View>
             <View>
               <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginLeft: 4 }}>Amount</Text>
-              <View style={{ backgroundColor: '#F8FAFC', borderRadius: 20, paddingHorizontal: 18, height: 60, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' }}>
+              <View style={{ backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderRadius: 20, paddingHorizontal: 18, height: 60, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: border }}>
                 <Text style={{ color: primary, fontSize: 20, fontWeight: '900', marginRight: 10 }}>₹</Text>
-                <TextInput style={{ flex: 1, color: textMain, fontSize: 22, fontWeight: '900' }} placeholder="0" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+                <TextInput style={{ flex: 1, color: textMain, fontSize: 22, fontWeight: '900' }} placeholder="0" placeholderTextColor={textMuted} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
               </View>
             </View>
-            <TouchableOpacity onPress={() => setShowSplitOptions(true)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', padding: 16, borderRadius: 20 }}>
+            <TouchableOpacity onPress={() => setShowSplitOptions(true)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(129,140,248,0.1)' : '#EEF2FF', padding: 16, borderRadius: 20 }}>
               <MaterialIcons name="groups" size={24} color={primary} style={{ marginRight: 12 }} />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: textMain, fontSize: 14, fontWeight: '800' }}>Split Among</Text>
@@ -399,7 +397,7 @@ export default function ExpenseScreen({ navigation }: Props) {
               <MaterialIcons name="chevron-right" size={20} color={primary} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleAddExpense}>
-              <LinearGradient colors={['#4F46E5', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}>
+              <LinearGradient colors={isDark ? ['#4F46E5', '#6366F1'] : ['#4F46E5', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '900', textTransform: 'uppercase' }}>Log Expense</Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -408,8 +406,8 @@ export default function ExpenseScreen({ navigation }: Props) {
           <View>
             <ScrollView style={{ maxHeight: 350 }}>
               {members.map(uid => (
-                <TouchableOpacity key={uid} onPress={() => setSelectedMembers(prev => ({...prev, [uid]: !prev[uid]}))} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, backgroundColor: selectedMembers[uid] ? '#EEF2FF' : '#F8FAFC', borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: selectedMembers[uid] ? 'rgba(79, 70, 229, 0.1)' : 'transparent' }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                <TouchableOpacity key={uid} onPress={() => setSelectedMembers(prev => ({...prev, [uid]: !prev[uid]}))} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, backgroundColor: selectedMembers[uid] ? (isDark ? 'rgba(129,140,248,0.1)' : '#EEF2FF') : (isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC'), borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: selectedMembers[uid] ? primary : border }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: isDark ? '#0F172A' : '#FFF', alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
                     <MaterialIcons name="person" size={20} color={selectedMembers[uid] ? primary : textMuted} />
                   </View>
                   <Text style={{ flex: 1, color: textMain, fontSize: 16, fontWeight: '800' }}>{getMemberName(uid)}</Text>
@@ -417,7 +415,7 @@ export default function ExpenseScreen({ navigation }: Props) {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-            <TouchableOpacity onPress={() => setShowSplitOptions(false)} style={{ backgroundColor: '#0F172A', height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginTop: 20 }}>
+            <TouchableOpacity onPress={() => setShowSplitOptions(false)} style={{ backgroundColor: isDark ? '#1E293B' : '#0F172A', height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginTop: 20 }}>
               <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '800' }}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -430,8 +428,8 @@ export default function ExpenseScreen({ navigation }: Props) {
             <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Pay Someone</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, paddingHorizontal: 20 }}>
               {members.filter(uid => uid !== auth.currentUser?.uid).map(uid => (
-                <TouchableOpacity key={uid} onPress={() => setSettleWithUid(uid)} style={{ alignItems: 'center', marginRight: 20, padding: 12, borderRadius: 20, backgroundColor: settleWithUid === uid ? '#EEF2FF' : 'transparent', borderWidth: 1, borderColor: settleWithUid === uid ? primary : 'transparent' }}>
-                  <View style={{ width: 56, height: 56, borderRadius: 20, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                <TouchableOpacity key={uid} onPress={() => setSettleWithUid(uid)} style={{ alignItems: 'center', marginRight: 20, padding: 12, borderRadius: 20, backgroundColor: settleWithUid === uid ? (isDark ? 'rgba(99,102,241,0.1)' : '#EEF2FF') : 'transparent', borderWidth: 1, borderColor: settleWithUid === uid ? primary : 'transparent' }}>
+                  <View style={{ width: 56, height: 56, borderRadius: 20, backgroundColor: isDark ? '#0F172A' : '#F8FAFC', alignItems: 'center', justifyContent: 'center', marginBottom: 8, borderWidth: 1, borderColor: border }}>
                     <Text style={{ fontSize: 18, fontWeight: '900', color: primary }}>{getMemberName(uid)[0]}</Text>
                   </View>
                   <Text style={{ fontSize: 11, fontWeight: '800', color: textMain }}>{getMemberName(uid).split(' ')[0]}</Text>
@@ -441,9 +439,9 @@ export default function ExpenseScreen({ navigation }: Props) {
           </View>
           <View>
              <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Amount Paid</Text>
-             <View style={{ backgroundColor: '#F8FAFC', borderRadius: 20, paddingHorizontal: 18, height: 60, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' }}>
+             <View style={{ backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderRadius: 20, paddingHorizontal: 18, height: 60, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: border }}>
                <Text style={{ color: primary, fontSize: 20, fontWeight: '900', marginRight: 10 }}>₹</Text>
-               <TextInput ref={settleInputRef} style={{ flex: 1, color: textMain, fontSize: 22, fontWeight: '900' }} placeholder="0" keyboardType="decimal-pad" value={settleAmount} onChangeText={setSettleAmount} />
+               <TextInput ref={settleInputRef} style={{ flex: 1, color: textMain, fontSize: 22, fontWeight: '900' }} placeholder="0" placeholderTextColor={textMuted} keyboardType="decimal-pad" value={settleAmount} onChangeText={setSettleAmount} />
              </View>
           </View>
           <TouchableOpacity onPress={handleAddSettlement}>
@@ -456,4 +454,3 @@ export default function ExpenseScreen({ navigation }: Props) {
     </SafeAreaView>
   );
 }
-
