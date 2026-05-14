@@ -47,6 +47,9 @@ export default function ChoresScreen({ route, navigation }: Props) {
   const [rotationOrder, setRotationOrder] = useState<string[]>([]);
   const { profile: userData } = useUser();
   const { members, getMemberName, memberProfiles } = useHousehold();
+  const [editingChore, setEditingChore] = useState<Chore | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [recentlyNudged, setRecentlyNudged] = useState<Set<string>>(new Set());
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -86,121 +89,166 @@ export default function ChoresScreen({ route, navigation }: Props) {
     return unsub;
   }, [householdId]);
 
+  const openEditModal = (chore: Chore) => {
+    setEditingChore(chore);
+    setChoreTitle(chore.title);
+    setAssignedTo(chore.assignedToUid);
+    setIsRotationEnabled(chore.rotationEnabled || false);
+    setRotationOrder(chore.rotationOrder || []);
+    
+    // Robust parsing for "HH:MM AM/PM" or "HH:MM:SS"
+    try {
+      const timeMatch = chore.time.match(/(\d+):(\d+)(?::\d+)?\s*(AM|PM)?/i);
+      if (timeMatch) {
+        let hours = parseInt(timeMatch[1], 10);
+        const minutes = parseInt(timeMatch[2], 10);
+        const ampm = timeMatch[3]?.toUpperCase();
+
+        if (ampm === 'PM' && hours < 12) hours += 12;
+        if (ampm === 'AM' && hours === 12) hours = 0;
+
+        const d = new Date();
+        d.setHours(hours, minutes, 0, 0);
+        
+        // Final safety check
+        if (isNaN(d.getTime())) throw new Error("Invalid time");
+        setTime(d);
+      } else {
+        setTime(new Date());
+      }
+    } catch (e) {
+      console.warn("Time parsing failed, defaulting to now:", e);
+      setTime(new Date());
+    }
+    
+    setIsModalVisible(true);
+  };
+
   const handleAddChore = async () => {
     if (!choreTitle.trim()) { Alert.alert('Error', 'Please enter a chore name.'); return; }
     if (!householdId) return;
+    if (isRotationEnabled && rotationOrder.length === 0) {
+      Alert.alert('Error', 'Please select at least one person for the rotation.');
+      return;
+    }
     
     const formattedTime = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-    
-    const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
+    const currentUserName = userData?.username ? userData.username : (auth.currentUser?.email?.split('@')[0] || 'Member');
     
     try {
       const baseChoreData = {
         title: choreTitle.trim(),
         assignedToUid: assignedTo,
-        done: false,
-        createdByUid: auth.currentUser?.uid,
         time: formattedTime,
-        createdAt: serverTimestamp(),
         rotationEnabled: isRotationEnabled,
         rotationOrder: isRotationEnabled ? rotationOrder : [],
-        currentRotationIndex: 0,
-        seenBy: [auth.currentUser?.uid],
       };
 
-      if (selectedDays.length > 0) {
-        // Create SEPARATE chore for each selected day
-        await Promise.all(selectedDays.map(day => 
-          addDoc(collection(db, 'households', householdId, 'chores'), {
-            ...baseChoreData,
-            day: day,
-          })
-        ));
-        logActivity(householdId, 'chore_add', `${choreTitle.trim()} (${selectedDays.join(', ')})`, currentUserName);
+      if (editingChore) {
+        await updateDoc(doc(db, 'households', householdId, 'chores', editingChore.id), baseChoreData);
+        showToast('Chore Updated', 'success');
       } else {
-        // Just create one for today if no days selected
-        const today = getSyncedDate().toLocaleDateString('en-US', { weekday: 'short' });
-        await addDoc(collection(db, 'households', householdId, 'chores'), {
+        const fullChoreData = {
           ...baseChoreData,
-          day: today,
-        });
-        logActivity(householdId, 'chore_add', choreTitle.trim(), currentUserName);
+          done: false,
+          createdByUid: auth.currentUser?.uid,
+          createdAt: serverTimestamp(),
+          currentRotationIndex: 0,
+          seenBy: [auth.currentUser?.uid],
+        };
+
+        if (selectedDays.length > 0) {
+          await Promise.all(selectedDays.map(day => 
+            addDoc(collection(db, 'households', householdId, 'chores'), {
+              ...fullChoreData,
+              day: day,
+            })
+          ));
+          logActivity(householdId, 'chore_add', `${choreTitle.trim()} (${selectedDays.join(', ')})`, currentUserName);
+        } else {
+          const today = getSyncedDate().toLocaleDateString('en-US', { weekday: 'short' });
+          await addDoc(collection(db, 'households', householdId, 'chores'), {
+            ...fullChoreData,
+            day: today,
+          });
+          logActivity(householdId, 'chore_add', choreTitle.trim(), currentUserName);
+        }
+        showToast('Chore Added', 'success');
       }
 
       setChoreTitle(''); setAssignedTo(auth.currentUser?.uid || ''); setSelectedDays([]);
-      setIsRotationEnabled(false); setRotationOrder([]);
+      setIsRotationEnabled(false); setRotationOrder([]); setEditingChore(null);
       setIsModalVisible(false);
-      showToast('Chore Added', 'success');
     } catch (error: any) {
-      console.error('Chore Add Error:', error);
-      Alert.alert('Error', 'Could not add chore. ' + error.message);
+      console.error('Chore Save Error:', error);
+      Alert.alert('Error', 'Could not save chore. ' + error.message);
     }
   };
 
   const handleToggleDone = useCallback(async (chore: Chore) => {
     if (!householdId) return;
     try {
-      const isFinishing = !chore.done;
+      const isMarkingDone = !chore.done;
       
-      if (isFinishing && chore.rotationEnabled && chore.rotationOrder && chore.rotationOrder.length > 0) {
-        // CIRCULAR QUEUE LOGIC: Move to next person
-        const nextIndex = ((chore.currentRotationIndex || 0) + 1) % chore.rotationOrder.length;
-        const nextAssignee = chore.rotationOrder[nextIndex];
-        
-        await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
-          done: false, // Reset to not done for the next person
-          assignedToUid: nextAssignee,
-          currentRotationIndex: nextIndex,
-        });
-
-        showToast(`Chore rotated to ${getMemberName(nextAssignee)}`, 'info');
-        
-        logActivity(householdId, 'chore_done', `${chore.title} (Rotated to ${getMemberName(nextAssignee)})`);
-        
-        // Notify the next person in chat
-        await addDoc(collection(db, 'households', householdId, 'messages'), {
-          text: `🔄 ${chore.title} is done! It's now @${getMemberName(nextAssignee)}'s turn.`,
-          senderId: 'system',
-          senderName: 'Chore Bot',
-          createdAt: serverTimestamp(),
-        });
-
+      // Simple toggle for all chores - this ensures the strikethrough appears as requested
+      await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
+        done: isMarkingDone,
+      });
+      
+      if (isMarkingDone) {
+        showToast('Chore finished!', 'success');
+        logActivity(householdId, 'chore_done', chore.title);
       } else {
-        await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
-          done: isFinishing,
-        });
-        
-        if (isFinishing) {
-          showToast('Chore finished!', 'success');
-          logActivity(householdId, 'chore_done', chore.title);
-        }
+        showToast('Chore reopened', 'info');
       }
     } catch (error) {
       console.error('Chore Toggle Error:', error);
       Alert.alert('Error', 'Could not update chore.');
+    }
+  }, [householdId, showToast]);
+
+  const handleRotate = useCallback(async (chore: Chore) => {
+    if (!householdId) return;
+    if (!chore.rotationEnabled || !chore.rotationOrder || chore.rotationOrder.length === 0) return;
+
+    try {
+      const nextIndex = ((chore.currentRotationIndex || 0) + 1) % chore.rotationOrder.length;
+      const nextAssignee = chore.rotationOrder[nextIndex];
+      
+      await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
+        done: false, // Reset to pending for the next person
+        assignedToUid: nextAssignee,
+        currentRotationIndex: nextIndex,
+      });
+
+      showToast(`Rotated to ${getMemberName(nextAssignee)}`, 'info');
+      logActivity(householdId, 'chore_rotate', chore.title, undefined, 0, nextAssignee);
+    } catch (error) {
+      console.error('Chore Rotate Error:', error);
+      Alert.alert('Error', 'Could not rotate chore.');
     }
   }, [householdId, getMemberName, showToast]);
 
   const handleReminder = useCallback(async (chore: Chore) => {
     if (!householdId) return;
     try {
-      const assigneeName = getMemberName(chore.assignedToUid);
-      const nudgerName = userData?.username || 'Roommate';
+      logActivity(householdId, 'chore_reminder', chore.title, undefined, 0, chore.assignedToUid);
+      
+      // Visual feedback state
+      setRecentlyNudged(prev => new Set(prev).add(chore.id));
+      setTimeout(() => {
+        setRecentlyNudged(prev => {
+          const next = new Set(prev);
+          next.delete(chore.id);
+          return next;
+        });
+      }, 2000);
 
-      await addDoc(collection(db, 'households', householdId, 'messages'), {
-        text: `🔔 ${assigneeName}, don't forget to ${chore.title}! (From ${nudgerName})`,
-        senderId: 'system',
-        senderName: 'Reminder Bot',
-        createdAt: serverTimestamp(),
-      });
-
-      showToast('Reminder Sent!', 'success');
-      logActivity(householdId, 'chore_reminder', `${chore.title} -> ${assigneeName}`, userData?.username || 'Roommate', 0, chore.assignedToUid);
+      showToast('Nudge sent!', 'success');
     } catch (error) {
-      console.error('Reminder Error:', error);
-      Alert.alert('Error', 'Failed to send reminder.');
+      console.error('Chore Reminder Error:', error);
     }
-  }, [getMemberName, userData?.username, householdId, showToast]);
+  }, [householdId, showToast]);
 
   const handleDelete = useCallback(async (choreId: string) => {
     if (!householdId) return;
@@ -220,52 +268,205 @@ export default function ChoresScreen({ route, navigation }: Props) {
   const pending = chores.filter(c => !c.done);
   const done = chores.filter(c => c.done);
 
-  const renderChore = useCallback(({ item }: { item: Chore }) => (
-    <SwipeableRow
-      onDelete={() => handleDelete(item.id)}
-      onComplete={!item.done ? () => handleToggleDone(item) : undefined}
-      completeLabel="Done"
-    >
-    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: surface, borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: bord }}>
-      <TouchableOpacity style={{ marginRight: 12 }} onPress={() => handleToggleDone(item)}>
-        {item.done
-          ? <MaterialIcons name="check-circle" size={28} color="#10B981" />
-          : <MaterialIcons name="radio-button-unchecked" size={28} color={muted} />
-        }
-      </TouchableOpacity>
-      
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 15, fontWeight: '700', color: item.done ? muted : text, textDecorationLine: item.done ? 'line-through' : 'none' }}>
-          {item.title}
-        </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6, gap: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#334155' : '#EEF2FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-            <MaterialIcons name="person-outline" size={12} color={muted} />
-            <Text style={{ color: muted, fontSize: 11, fontWeight: '600', marginLeft: 4 }}>{getMemberName(item.assignedToUid)}</Text>
+  const renderChore = useCallback(({ item }: { item: Chore }) => {
+    const isDone = item.done;
+    const isExpanded = expandedId === item.id;
+
+    return (
+      <SwipeableRow
+        onDelete={() => handleDelete(item.id)}
+        onEdit={() => openEditModal(item)}
+        onComplete={item.rotationEnabled ? () => handleRotate(item) : () => handleToggleDone(item)}
+        isRotation={item.rotationEnabled}
+      >
+        <TouchableOpacity 
+          activeOpacity={0.9}
+          onPress={() => setExpandedId(isExpanded ? null : item.id)}
+          style={{ 
+            backgroundColor: isDone ? (isDark ? 'rgba(255,255,255,0.02)' : '#F9FAFB') : surface, 
+            borderRadius: 24, 
+            padding: 16, 
+            marginBottom: 12, 
+            borderWidth: 1, 
+            borderColor: isDone ? (isDark ? 'rgba(255,255,255,0.05)' : '#E5E7EB') : bord,
+            overflow: 'hidden',
+            elevation: isDone ? 0 : 3,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: isDone ? 0 : (isDark ? 0.2 : 0.05),
+            shadowRadius: 8,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {/* Left Priority Indicator */}
+            {!isDone && (
+              <View style={{ 
+                position: 'absolute', 
+                left: -16, 
+                top: -16, 
+                bottom: -16, 
+                width: 4, 
+                backgroundColor: '#EF4444', 
+                borderTopRightRadius: 4, 
+                borderBottomRightRadius: 4 
+              }} />
+            )}
+
+            {/* Status Circle */}
+            <TouchableOpacity 
+              activeOpacity={0.7}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleToggleDone(item);
+              }}
+              style={{ 
+                width: 32, 
+                height: 32, 
+                borderRadius: 16, 
+                borderWidth: isDone ? 0 : 1.5, 
+                borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)',
+                backgroundColor: isDone ? '#10B981' : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 16,
+                marginLeft: 4,
+                zIndex: 10
+              }} 
+            >
+              {isDone && <MaterialIcons name="check" size={18} color="white" />}
+            </TouchableOpacity>
+            
+            {/* Chore Info */}
+            <View style={{ flex: 1 }}>
+              <Text 
+                numberOfLines={1}
+                style={{ 
+                  fontSize: 16, 
+                  fontWeight: '700', 
+                  color: isDone ? (isDark ? 'rgba(255,255,255,0.3)' : '#9CA3AF') : text, 
+                  textDecorationLine: isDone ? 'line-through' : 'none',
+                  marginBottom: 6 
+                }}
+              >
+                {item.title}
+              </Text>
+              
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {/* Assignee Pill */}
+                <View style={{ 
+                  backgroundColor: isDark ? 'rgba(79, 70, 229, 0.15)' : '#EEF2FF', 
+                  paddingHorizontal: 10, 
+                  paddingVertical: 4, 
+                  borderRadius: 12 
+                }}>
+                  <Text style={{ color: isDark ? '#818CF8' : '#4F46E5', fontSize: 11, fontWeight: '700' }}>
+                    {getMemberName(item.assignedToUid).toLowerCase()}
+                  </Text>
+                </View>
+
+                {/* Time Pill */}
+                <View style={{ 
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6', 
+                  paddingHorizontal: 10, 
+                  paddingVertical: 4, 
+                  borderRadius: 12 
+                }}>
+                  <Text style={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#6B7280', fontSize: 11, fontWeight: '600' }}>
+                    {item.time}
+                  </Text>
+                </View>
+
+                {/* Day Pill */}
+                {!!item.day && (
+                  <View style={{ 
+                    backgroundColor: isDone 
+                      ? (isDark ? 'rgba(255,255,255,0.03)' : '#F9FAFB') 
+                      : (isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2'), 
+                    paddingHorizontal: 10, 
+                    paddingVertical: 4, 
+                    borderRadius: 12 
+                  }}>
+                    <Text style={{ 
+                      color: isDone 
+                        ? (isDark ? 'rgba(255,255,255,0.2)' : '#D1D5DB') 
+                        : (isDark ? '#F87171' : '#EF4444'), 
+                      fontSize: 10, 
+                      fontWeight: '900', 
+                      textTransform: 'uppercase' 
+                    }}>
+                      {item.day}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            <MaterialIcons 
+              name={isExpanded ? "keyboard-arrow-up" : "keyboard-arrow-down"} 
+              size={20} 
+              color={isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"} 
+            />
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-            <MaterialIcons name="schedule" size={12} color="#6366F1" />
-            <Text style={{ color: '#6366F1', fontSize: 11, fontWeight: '700', marginLeft: 4 }}>{item.time}</Text>
-          </View>
-          {!!item.day && (
-            <View style={{ backgroundColor: isDark ? '#431407' : '#FFF7ED', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-              <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '800', textTransform: 'uppercase' }}>{item.day}</Text>
+
+          {/* Expanded Details */}
+          {isExpanded && (
+            <View style={{ 
+              marginTop: 16, 
+              paddingTop: 16, 
+              borderTopWidth: 1, 
+              borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' 
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                  <Text style={{ fontSize: 10, fontWeight: '900', color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.4)', textTransform: 'uppercase', marginBottom: 4 }}>Rotation Status</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: text }}>
+                    {item.rotationEnabled ? `Cycle: ${item.rotationOrder?.length} members` : 'Fixed assignment'}
+                  </Text>
+                </View>
+                
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {!isDone && (
+                    <TouchableOpacity
+                      onPress={(e) => { e.stopPropagation(); handleReminder(item); }}
+                      style={{ 
+                        backgroundColor: recentlyNudged.has(item.id) ? 'rgba(245, 158, 11, 0.15)' : (isDark ? 'rgba(255, 255, 255, 0.05)' : '#F9FAFB'), 
+                        paddingHorizontal: 12, 
+                        paddingVertical: 8, 
+                        borderRadius: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        borderWidth: isDark ? 0 : 1,
+                        borderColor: recentlyNudged.has(item.id) ? 'rgba(245, 158, 11, 0.3)' : '#F3F4F6'
+                      }}
+                    >
+                      <MaterialIcons 
+                        name={recentlyNudged.has(item.id) ? "notifications" : "notifications-none"} 
+                        size={16} 
+                        color={recentlyNudged.has(item.id) ? "#F59E0B" : (isDark ? "#A78BFA" : "#4F46E5")} 
+                      />
+                      <Text style={{ 
+                        color: recentlyNudged.has(item.id) ? "#F59E0B" : (isDark ? "#A78BFA" : "#4F46E5"), 
+                        fontSize: 11, 
+                        fontWeight: '700', 
+                        marginLeft: 6 
+                      }}>
+                        {recentlyNudged.has(item.id) ? "Sent!" : "Nudge"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+              
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ fontSize: 10, fontWeight: '900', color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.4)', textTransform: 'uppercase', marginBottom: 4 }}>Created By</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: text }}>{getMemberName(item.createdByUid || '') || 'System'}</Text>
+              </View>
             </View>
           )}
-        </View>
-      </View>
-
-      {!item.done && (
-        <TouchableOpacity
-          onPress={() => handleReminder(item)}
-          style={{ backgroundColor: isDark ? '#431407' : '#FFF7ED', padding: 8, borderRadius: 12, marginLeft: 8 }}
-        >
-          <MaterialIcons name="notifications-active" size={18} color="#D97706" />
         </TouchableOpacity>
-      )}
-    </View>
-    </SwipeableRow>
-  ), [getMemberName, handleToggleDone, handleDelete, handleReminder, surface, bord, text, muted, isDark]);
+      </SwipeableRow>
+    );
+  }, [getMemberName, handleToggleDone, handleRotate, handleDelete, handleReminder, surface, bord, text, muted, isDark, openEditModal, expandedId, recentlyNudged]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
@@ -279,18 +480,98 @@ export default function ChoresScreen({ route, navigation }: Props) {
         onRightPress={() => setIsModalVisible(true)} 
       />
 
-      <View className="flex-row items-center gap-3 px-6 mb-6">
-        <View className="flex-1 bg-surface rounded-2xl p-4 items-center border border-border shadow-sm">
-          <Text className="text-3xl font-extrabold text-textMain leading-none">{pending.length}</Text>
-          <Text className="text-textMuted text-xs font-bold mt-1 tracking-wider uppercase">Pending</Text>
+      <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 24, marginBottom: 16 }}>
+        <View style={{ 
+          flex: 1, 
+          backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF', 
+          borderRadius: 20, 
+          padding: 16, 
+          alignItems: 'center', 
+          borderWidth: 1, 
+          borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: isDark ? 0 : 0.05,
+          shadowRadius: 5,
+          elevation: 2
+        }}>
+          <Text style={{ fontSize: 24, fontWeight: '900', color: text }}>{pending.length}</Text>
+          <Text style={{ fontSize: 10, fontWeight: '800', color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.4)', marginTop: 2, textTransform: 'uppercase' }}>Pending</Text>
         </View>
-        <View className="flex-1 bg-surface rounded-2xl p-4 items-center border border-border shadow-sm">
-          <Text className="text-3xl font-extrabold text-success leading-none">{done.length}</Text>
-          <Text className="text-textMuted text-xs font-bold mt-1 tracking-wider uppercase">Done</Text>
+        <View style={{ 
+          flex: 1, 
+          backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : '#ECFDF5', 
+          borderRadius: 20, 
+          padding: 16, 
+          alignItems: 'center', 
+          borderWidth: 1, 
+          borderColor: isDark ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.1)',
+          shadowColor: '#10B981',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: isDark ? 0 : 0.05,
+          shadowRadius: 5,
+          elevation: 2
+        }}>
+          <Text style={{ fontSize: 24, fontWeight: '900', color: '#10B981' }}>{done.length}</Text>
+          <Text style={{ fontSize: 10, fontWeight: '800', color: isDark ? 'rgba(16, 185, 129, 0.5)' : '#059669', marginTop: 2, textTransform: 'uppercase' }}>Done</Text>
         </View>
-        <View className="flex-1 bg-surface rounded-2xl p-4 items-center border border-border shadow-sm">
-          <Text className="text-3xl font-extrabold text-textMain leading-none">{chores.length}</Text>
-          <Text className="text-textMuted text-xs font-bold mt-1 tracking-wider uppercase">Total</Text>
+        <View style={{ 
+          flex: 1, 
+          backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF', 
+          borderRadius: 20, 
+          padding: 16, 
+          alignItems: 'center', 
+          borderWidth: 1, 
+          borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: isDark ? 0 : 0.05,
+          shadowRadius: 5,
+          elevation: 2
+        }}>
+          <Text style={{ fontSize: 24, fontWeight: '900', color: text }}>{chores.length}</Text>
+          <Text style={{ fontSize: 10, fontWeight: '800', color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.4)', marginTop: 2, textTransform: 'uppercase' }}>Total</Text>
+        </View>
+      </View>
+
+      {/* Weekly Progress Card */}
+      <View style={{ paddingHorizontal: 24, marginBottom: 24 }}>
+        <View style={{ 
+          backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF', 
+          borderRadius: 28, 
+          padding: 20, 
+          borderWidth: 1, 
+          borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: isDark ? 0.2 : 0.08,
+          shadowRadius: 20,
+          elevation: 5
+        }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14 }}>
+            <View>
+              <Text style={{ color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)', fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.5 }}>Weekly Progress</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 4 }}>
+                <Text style={{ color: text, fontSize: 32, fontWeight: '900' }}>{chores.length > 0 ? Math.round((done.length / chores.length) * 100) : 0}</Text>
+                <Text style={{ color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)', fontSize: 18, fontWeight: '700', marginLeft: 2 }}>%</Text>
+              </View>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <View style={{ backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#ECFDF5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginBottom: 4 }}>
+                 <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '800' }}>TARGET: 100%</Text>
+              </View>
+              <Text style={{ color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.4)', fontSize: 11, fontWeight: '600' }}>{done.length} of {chores.length} chores done</Text>
+            </View>
+          </View>
+          
+          <View style={{ height: 10, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6', borderRadius: 5, overflow: 'hidden' }}>
+            <View style={{ 
+              height: '100%', 
+              width: `${chores.length > 0 ? (done.length / chores.length) * 100 : 0}%`, 
+              backgroundColor: '#10B981', 
+              borderRadius: 5,
+            }} />
+          </View>
         </View>
       </View>
 
@@ -304,10 +585,24 @@ export default function ChoresScreen({ route, navigation }: Props) {
           extraData={memberProfiles}
           keyExtractor={i => i.id}
           renderItem={renderChore}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
           keyboardShouldPersistTaps="handled"
+          decelerationRate="fast"
+          scrollEventThrottle={16}
           ListHeaderComponent={
-            chores.length > 0 ? <Text className="text-textMuted text-xs font-bold tracking-widest mb-3 ml-1">TASKS</Text> : null
+            chores.length > 0 ? (
+              <Text style={{ 
+                color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.3)', 
+                fontSize: 10, 
+                fontWeight: '900', 
+                letterSpacing: 1.5, 
+                marginBottom: 16, 
+                marginLeft: 4, 
+                textTransform: 'uppercase' 
+              }}>
+                Household Tasks
+              </Text>
+            ) : null
           }
           ListEmptyComponent={
             <EmptyState 
@@ -321,8 +616,8 @@ export default function ChoresScreen({ route, navigation }: Props) {
 
       <SlideModal
         visible={isModalVisible}
-        onClose={() => setIsModalVisible(false)}
-        title="Add Chore"
+        onClose={() => { setIsModalVisible(false); setEditingChore(null); setChoreTitle(''); }}
+        title={editingChore ? "Edit Chore" : "Add Chore"}
         scrollEnabled={!showTimePicker}
       >
         <View className="pt-2 pb-2">
@@ -396,9 +691,9 @@ export default function ChoresScreen({ route, navigation }: Props) {
                   value={isRotationEnabled}
                   onValueChange={(val) => {
                     setIsRotationEnabled(val);
-                    if (val && rotationOrder.length === 0) {
-                      setRotationOrder([auth.currentUser?.uid || '']);
-                      setAssignedTo(auth.currentUser?.uid || '');
+                    if (val && (rotationOrder.length <= 1)) {
+                      setRotationOrder(members || []);
+                      if (members && members.length > 0) setAssignedTo(members[0]);
                     }
                   }}
                   trackColor={{ false: '#E2E8F0', true: '#F59E0B' }}
@@ -439,25 +734,39 @@ export default function ChoresScreen({ route, navigation }: Props) {
           ) : (
             <View>
               <View className="flex-row items-center justify-between mb-6">
-                <Text className="text-textMain text-lg font-black">Assign to</Text>
+                <View>
+                  <Text className="text-textMain text-lg font-black">Assign to</Text>
+                  {isRotationEnabled && (
+                    <TouchableOpacity onPress={() => setRotationOrder(members || [])}>
+                      <Text className="text-primary text-[10px] font-black uppercase mt-1">Select All Members</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
                 <TouchableOpacity onPress={() => setShowSplitOptions(false)} className="bg-primary/10 px-3 py-1.5 rounded-full">
                    <Text className="text-primary font-bold text-xs uppercase">Done</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView style={{ maxHeight: 290 }} nestedScrollEnabled showsVerticalScrollIndicator={true}>
+              <View style={{ maxHeight: 300 }}>
                 {(members || []).map(uid => {
-                  const isSelected = assignedTo === uid;
+                  const isInRotation = rotationOrder.includes(uid);
+                  const isPrimaryAssignee = assignedTo === uid;
+                  const isSelected = isRotationEnabled ? isInRotation : isPrimaryAssignee;
+
                   return (
                     <TouchableOpacity 
                       key={uid} 
                       className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-warning/10 border-warning/30' : 'bg-background border-border'} `}
                       onPress={() => {
                         if (isRotationEnabled) {
-                          if (rotationOrder.includes(uid)) {
-                            setRotationOrder(rotationOrder.filter(id => id !== uid));
+                          if (isInRotation) {
+                            const newOrder = rotationOrder.filter(id => id !== uid);
+                            setRotationOrder(newOrder);
+                            // If we removed the current assignee, pick the next available or first
+                            if (isPrimaryAssignee) setAssignedTo(newOrder[0] || '');
                           } else {
-                            setRotationOrder([...rotationOrder, uid]);
-                            setAssignedTo(rotationOrder[0] || uid); // Default assigned to first in list
+                            const newOrder = [...rotationOrder, uid];
+                            setRotationOrder(newOrder);
+                            if (!assignedTo) setAssignedTo(uid);
                           }
                         } else {
                           setAssignedTo(uid);
@@ -474,7 +783,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                           {getMemberName(uid)}
                         </Text>
                       </View>
-                      {isRotationEnabled && rotationOrder.includes(uid) && (
+                      {isRotationEnabled && isInRotation && (
                         <View className="bg-warning w-6 h-6 rounded-full items-center justify-center">
                           <Text className="text-white text-[10px] font-black">{rotationOrder.indexOf(uid) + 1}</Text>
                         </View>
@@ -482,7 +791,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                     </TouchableOpacity>
                   );
                 })}
-              </ScrollView>
+              </View>
             </View>
           )}
         </View>

@@ -33,8 +33,6 @@ export default function ChatScreen({ route, navigation }: Props) {
   const flatListRef = useRef<FlatList>(null);
   const insets = useSafeAreaInsets();
   
-  const [newMsgPopup, setNewMsgPopup] = useState<Message | null>(null);
-  const notificationAnim = useRef(new Animated.Value(-150)).current; 
   const isFirstLoad = useRef(true);
 
   const [keyboardActive, setKeyboardActive] = useState(false);
@@ -68,30 +66,12 @@ export default function ChatScreen({ route, navigation }: Props) {
         // Detect new messages for notification
         snap.docChanges().forEach((change) => {
           if (change.type === "added" && !isFirstLoad.current && !snap.metadata.hasPendingWrites) {
-             const msg = { id: change.doc.id, ...change.doc.data() } as Message;
-             if (msg.senderId !== auth.currentUser?.uid && msg.senderName !== 'Chore Bot' && msg.senderName !== 'Reminder Bot') {
-                setNewMsgPopup(msg);
-                Animated.spring(notificationAnim, {
-                  toValue: insets.top + 10,
-                  useNativeDriver: true,
-                  tension: 40,
-                  friction: 8
-                }).start();
-
-                setTimeout(() => {
-                  Animated.timing(notificationAnim, {
-                    toValue: -150,
-                    duration: 500,
-                    useNativeDriver: true
-                  }).start(() => setNewMsgPopup(null));
-                }, 4000);
-             }
+             // Notification logic removed
           }
         });
 
         const fetchedMessages = snap.docs
-          .map(d => ({ id: d.id, ...d.data() } as Message))
-          .filter(msg => msg.senderName !== 'Chore Bot' && msg.senderName !== 'Reminder Bot');
+          .map(d => ({ id: d.id, ...d.data() } as Message));
           
         setMessages(fetchedMessages);
         setLoading(false);
@@ -123,7 +103,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     );
 
     return unsub;
-  }, [householdId, navigation, insets.top, notificationAnim]);
+  }, [householdId, navigation, insets.top]);
 
   const handleSend = async () => {
     const user = auth.currentUser;
@@ -323,6 +303,8 @@ export default function ChatScreen({ route, navigation }: Props) {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"
+              decelerationRate="fast"
+              scrollEventThrottle={16}
             />
             )}
 
@@ -400,46 +382,6 @@ export default function ChatScreen({ route, navigation }: Props) {
           </View>
       </KeyboardAvoidingView>
 
-      {/* NEW: Top Floating Message Notification */}
-      {newMsgPopup && (
-        <Animated.View 
-          style={{ 
-            position: 'absolute',
-            top: 0,
-            left: 16,
-            right: 16,
-            zIndex: 9999,
-            transform: [{ translateY: notificationAnim }]
-          }}
-        >
-          <TouchableOpacity 
-            activeOpacity={0.9}
-            onPress={() => {
-              Animated.timing(notificationAnim, {
-                toValue: -150,
-                duration: 300,
-                useNativeDriver: true
-              }).start(() => setNewMsgPopup(null));
-            }}
-            className="bg-indigo-600 rounded-2xl p-3 shadow-2xl flex-row items-center border border-white/20"
-          >
-            <View className="w-10 h-10 bg-white/20 rounded-full items-center justify-center mr-3">
-              <Ionicons name="chatbubble-ellipses" size={20} color="#FFF" />
-            </View>
-            <View className="flex-1">
-              <Text className="text-white text-[9px] font-black uppercase tracking-widest opacity-80">
-                New Message
-              </Text>
-              <Text className="text-white font-bold text-sm" numberOfLines={1}>
-                {newMsgPopup.senderName}: {newMsgPopup.text}
-              </Text>
-            </View>
-            <View className="bg-white/10 p-1.5 rounded-full">
-              <Ionicons name="close" size={16} color="#FFF" />
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
     </View>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, memo, useRef } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, TextInput, Image, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, TextInput, Image, Linking, Animated } from 'react-native';
 import { createAudioPlayer } from 'expo-audio';
 import { TimeWheelPicker } from '../components/TimeWheelPicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,7 +20,7 @@ import {
   doc, onSnapshot, updateDoc, arrayRemove, collection, query, orderBy, limit,
   addDoc, serverTimestamp, where
 } from 'firebase/firestore';
-import { getActivityConfig } from '../utils/activityUtils';
+import { getActivityConfig, logActivity } from '../utils/activityUtils';
 import { getSyncedDate } from '../utils/timeUtils';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Activity } from '../types';
@@ -38,9 +38,9 @@ export default function DashboardScreen({ navigation }: Props) {
   const { householdId, setHouseholdId } = useHousehold();
   const hid = householdId ?? '';
   const { isDark } = useTheme();
-  const bg      = isDark ? '#070913' : '#F5F7FF';
+  const bg      = isDark ? '#070913' : '#F4F7FF';
   const surface = isDark ? '#0E1324' : '#FFFFFF';
-  const text    = isDark ? '#F1F5F9' : '#1E1B4B';
+  const text    = isDark ? '#F1F5F9' : '#0F172A';
   const muted   = isDark ? '#A78BFA' : '#4F46E5';
   const bord    = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
   const { showToast } = useToast();
@@ -69,6 +69,8 @@ export default function DashboardScreen({ navigation }: Props) {
   const [chores, setChores] = useState<any[]>([]);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [hasUnreadChores, setHasUnreadChores] = useState(false);
+  const [unreadActivityCount, setUnreadActivityCount] = useState(0);
+  const bellAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (userData?.username) {
@@ -101,14 +103,37 @@ export default function DashboardScreen({ navigation }: Props) {
       limit(30)
     );
     const unsub = onSnapshot(q, (snap) => {
-      setActivities(snap.docs.map(d => ({ id: d.id, ...d.data() } as Activity)));
+      const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as Activity));
+      setActivities(fetched);
       setLoadingActivities(false);
+
+      // Notification logic
+      if (user?.uid) {
+        const relevantNew = fetched.filter(a => 
+          a.userId !== user.uid && (!a.targetUid || a.targetUid === user.uid)
+        );
+        
+        if (relevantNew.length > unreadActivityCount) {
+          try {
+            const beep = createAudioPlayer({ uri: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3' });
+            beep.play();
+          } catch (e) {
+            console.warn("Could not play notification beep", e);
+          }
+          
+          Animated.sequence([
+            Animated.timing(bellAnim, { toValue: 1.4, duration: 150, useNativeDriver: true }),
+            Animated.spring(bellAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+          ]).start();
+        }
+        setUnreadActivityCount(relevantNew.length);
+      }
     }, (err) => {
       console.error("Error subscribing to activities:", err);
       setLoadingActivities(false);
     });
     return unsub;
-  }, [householdId]);
+  }, [householdId, user?.uid, unreadActivityCount]);
 
   // TRASH COUNTDOWN & NOTIFICATION LOGIC (NTP SYNCED)
   const isMounted = useRef(true);
@@ -145,12 +170,7 @@ export default function DashboardScreen({ navigation }: Props) {
             player.play();
             
             if (isMounted.current) {
-              await addDoc(collection(db, 'households', hid, 'messages'), {
-                text: `🚚 TRASH ALERT: The truck is arriving in 10 minutes (${info.trashArrivalTime})! Get the bins ready!`,
-                senderId: 'system',
-                senderName: 'Trash Bot',
-                createdAt: serverTimestamp(),
-              });
+              await logActivity(householdId, 'chore_reminder', `Trash Truck in 10m!`, 'Trash Bot');
             }
           } catch (e) {
             console.error("Error in trash reminder:", e);
@@ -235,12 +255,7 @@ export default function DashboardScreen({ navigation }: Props) {
              const profile = memberProfiles[chore.assignedToUid];
              const assigneeName = profile?.username ? `${profile.username}` : 'Member';
              await updateDoc(doc(db, 'households', hid, 'chores', chore.id), { reminderSent: true });
-             await addDoc(collection(db, 'households', hid, 'messages'), {
-               text: `⏰ ${assigneeName}, don't forget to ${chore.title} in 5 minutes`,
-               senderId: 'system',
-               senderName: 'Household Assistant',
-               createdAt: serverTimestamp(),
-             });
+             await logActivity(householdId, 'chore_reminder', `${chore.title} in 5m`, 'Assistant', 0, chore.assignedToUid);
           }
         } catch (e) {
           console.error("Error in Dashboard reminder engine:", e);
@@ -376,237 +391,206 @@ export default function DashboardScreen({ navigation }: Props) {
 
   return (
     <LinearGradient colors={bgColors} style={{ flex: 1 }}>
-      {/* Glowing Ambient Backdrops */}
-      <View style={{ position: 'absolute', top: -60, right: -60, width: 260, height: 260, borderRadius: 130, backgroundColor: isDark ? 'rgba(124, 58, 237, 0.18)' : 'rgba(99, 102, 241, 0.08)', zIndex: 0 }} />
-      <View style={{ position: 'absolute', top: 380, left: -60, width: 240, height: 240, borderRadius: 120, backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.04)', zIndex: 0 }} />
-
-      <SafeAreaView style={{ flex: 1, zIndex: 1 }} edges={['top']}>
-        {/* Sleek Premium Header */}
-        <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        {/* Premium Header */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{ position: 'relative' }}>
-              <View style={{ padding: 2.5, borderRadius: 24, borderWidth: 1.5, borderColor: isDark ? '#A78BFA' : '#4F46E5', backgroundColor: 'transparent' }}>
-                <Avatar name={userData?.username || 'U'} size={38} bgColor={isDark ? '#1E1B4B' : '#EEF2FF'} color={isDark ? '#A78BFA' : '#4F46E5'} style={{ borderRadius: 19 }} />
-              </View>
-              <View style={{ position: 'absolute', bottom: 1, right: 1, width: 10, height: 10, borderRadius: 5, backgroundColor: '#10B981', borderWidth: 2, borderColor: isDark ? '#070913' : '#F5F7FF' }} />
+            <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+              <Avatar name={userData?.username || 'U'} size={42} bgColor={isDark ? '#1E1B4B' : '#F1F5F9'} color={isDark ? '#A78BFA' : '#4F46E5'} style={{ borderRadius: 12 }} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setIsSwitchModalVisible(true)}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 1 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: textMuted, textTransform: 'uppercase', letterSpacing: 0.8 }}>Household Hub</Text>
-                <MaterialIcons name="keyboard-arrow-down" size={13} color={textMuted} />
-              </View>
-              <Text style={{ fontSize: 20, fontWeight: '900', color: textMain, letterSpacing: -0.6 }}>{householdData?.name || 'Loading...'}</Text>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: isDark ? '#94A3B8' : '#64748B', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>HOUSEHOLD HUB</Text>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: textMain, letterSpacing: -0.5 }}>{householdData?.name || 'Loading...'}</Text>
             </TouchableOpacity>
           </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
             <TouchableOpacity onPress={() => setIsMembersModalVisible(true)}>
-              <BlurView intensity={25} tint={blurTint} style={{ width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
-                <MaterialIcons name="people" size={20} color={isDark ? '#C084FC' : '#4F46E5'} />
-              </BlurView>
+              <MaterialIcons name="people-outline" size={24} color={isDark ? '#A78BFA' : '#4F46E5'} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setIsNotificationsModalVisible(true)}>
-              <BlurView intensity={25} tint={blurTint} style={{ width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
-                <MaterialIcons name="notifications" size={20} color={isDark ? '#C084FC' : '#4F46E5'} />
-                {(hasUnreadMessages || hasUnreadChores) && (
-                  <View style={{ position: 'absolute', top: 10, right: 11, width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444', borderWidth: 1, borderColor: isDark ? '#070913' : '#FFFFFF' }} />
+            <TouchableOpacity onPress={() => { setIsNotificationsModalVisible(true); setUnreadActivityCount(0); }}>
+              <Animated.View style={{ transform: [{ scale: bellAnim }] }}>
+                <MaterialIcons 
+                  name={unreadActivityCount > 0 ? "notifications" : "notifications-none"} 
+                  size={24} 
+                  color={unreadActivityCount > 0 ? '#F59E0B' : (isDark ? '#A78BFA' : '#4F46E5')} 
+                />
+                {unreadActivityCount > 0 && (
+                  <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: '#EF4444', borderRadius: 8, minWidth: 14, height: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: bg }}>
+                    <Text style={{ color: 'white', fontSize: 7, fontWeight: '900' }}>{unreadActivityCount}</Text>
+                  </View>
                 )}
-              </BlurView>
+              </Animated.View>
             </TouchableOpacity>
           </View>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 110 }}>
-          {/* Horizontal Activity Stream */}
-          <View style={{ marginTop: 8, marginBottom: 16 }}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
-              {loadingActivities ? (
-                [1, 2, 3].map(i => (
-                  <BlurView key={i} intensity={15} tint={blurTint} style={{ borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 140, overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
-                    <View style={{ width: 24, height: 24, borderRadius: 8, backgroundColor: glassBg }} />
-                    <View>
-                      <View style={{ width: 60, height: 8, borderRadius: 3, backgroundColor: glassBg, marginBottom: 4 }} />
-                      <View style={{ width: 40, height: 6, borderRadius: 3, backgroundColor: glassBg }} />
-                    </View>
-                  </BlurView>
-                ))
-              ) : activities.length > 0 ? (
-                activities
-                  .filter(a => a.userId === user?.uid) // ONLY own notifications on Dashboard
-                  .slice(0, 6)
-                  .map((activity, idx) => {
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          style={{ flex: 1 }} 
+          contentContainerStyle={{ paddingBottom: 40 }}
+        >
+          {/* Activity Section */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: '900', color: textMain, marginBottom: 12 }}>Activity</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
+              {activities.length > 0 ? (
+                activities.slice(0, 5).map((activity, idx) => {
                   const config = getActivityConfig(activity.type);
                   return (
-                    <BlurView key={activity.id || idx} intensity={20} tint={blurTint} style={{ borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 10, overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
-                      <View style={{ backgroundColor: isDark ? 'rgba(192, 132, 252, 0.15)' : 'rgba(99, 102, 241, 0.08)', padding: 6, borderRadius: 8 }}>
-                        <MaterialIcons name={config.icon} size={14} color={isDark ? '#C084FC' : '#4F46E5'} />
+                    <View key={activity.id || idx} style={{ backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: bord, minWidth: 220 }}>
+                      <View style={{ backgroundColor: config.color + '20', padding: 8, borderRadius: 14 }}>
+                        <MaterialIcons name={config.icon} size={20} color={config.color} />
                       </View>
-                      <View>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: textMain }} numberOfLines={1}>{activity.userName} {config.label.toLowerCase()}</Text>
-                        <Text style={{ fontSize: 10, fontWeight: '600', color: isDark ? '#94A3B8' : '#64748B' }}>{activity.createdAt?.toDate ? activity.createdAt.toDate().toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Just now'}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: textMain }} numberOfLines={1}>{activity.userName} {config.label}</Text>
+                        <Text style={{ fontSize: 10, color: isDark ? '#94A3B8' : '#64748B', marginTop: 2 }}>{activity.title}</Text>
                       </View>
-                    </BlurView>
+                    </View>
                   );
                 })
               ) : (
-                <BlurView intensity={20} tint={blurTint} style={{ borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, overflow: 'hidden', borderWidth: 1, borderColor: glassBorder }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#A78BFA' : '#4F46E5' }}>✨ All caught up! No recent activity.</Text>
-                </BlurView>
+                <View style={{ backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: bord }}>
+                  <Text style={{ fontSize: 12, color: isDark ? '#94A3B8' : '#64748B' }}>No recent activity</Text>
+                </View>
               )}
             </ScrollView>
           </View>
-
-          {/* Futuristic Glassy Household Hub Card */}
-          <View style={{ paddingHorizontal: 16, marginBottom: 18 }}>
-            <BlurView intensity={25} tint={blurTint} style={{ borderRadius: 24, overflow: 'hidden', borderWidth: 1.5, borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(99, 102, 241, 0.1)' }}>
-              <LinearGradient colors={isDark ? ['rgba(14, 19, 36, 0.9)', 'rgba(7, 9, 19, 0.95)'] : ['rgba(255, 255, 255, 0.95)', 'rgba(240, 244, 255, 0.95)']} style={{ padding: 16 }}>
-                {/* Hub Header */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View style={{ width: 4, height: 16, borderRadius: 2, backgroundColor: isDark ? '#A78BFA' : '#4F46E5' }} />
-                    <Text style={{ fontSize: 12, fontWeight: '900', color: textMain, textTransform: 'uppercase', letterSpacing: 1 }}>Household Details</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => { setInfoModalTab('all'); setIsEditMode(true); setIsInfoModalVisible(true); }} style={{ padding: 6, borderRadius: 10, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }}>
-                    <MaterialIcons name="edit" size={16} color={isDark ? '#C084FC' : '#4F46E5'} />
-                  </TouchableOpacity>
+          {/* Household Details Section (Image-Matched Design) */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+            <View 
+              style={{ 
+                backgroundColor: isDark ? '#0E1324' : '#FFFFFF', 
+                borderRadius: 32, 
+                padding: 20,
+                borderWidth: 1,
+                borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(99,102,241,0.05)',
+                shadowColor: '#4F46E5',
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: isDark ? 0 : 0.04,
+                shadowRadius: 20,
+                elevation: isDark ? 0 : 2
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ width: 4, height: 16, backgroundColor: '#4F46E5', borderRadius: 2 }} />
+                  <Text style={{ fontSize: 13, fontWeight: '900', color: isDark ? '#F1F5F9' : '#1E1B4B', textTransform: 'uppercase', letterSpacing: 1 }}>HOUSEHOLD DETAILS</Text>
                 </View>
+                <TouchableOpacity onPress={() => { setIsEditMode(true); setIsInfoModalVisible(true); }}>
+                  <MaterialIcons name="edit" size={18} color="#4F46E5" />
+                </TouchableOpacity>
+              </View>
 
-                {/* Info Grid (Fixed-height Scrollable Widget) */}
-                <View style={{ height: 140 }}>
-                  <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                    {detailsList.length > 0 ? (
-                      detailsList.map((field: any) => {
-                        const isTrashAndHasCountdown = field.type === 'time' && field.icon === 'delete-outline' && trashCountdown;
-                        return (
-                          <View key={field.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: isTrashAndHasCountdown ? 'rgba(245, 158, 11, 0.2)' : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)') }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
-                              <View style={{ backgroundColor: isTrashAndHasCountdown ? 'rgba(245, 158, 11, 0.18)' : (isDark ? 'rgba(192, 132, 252, 0.15)' : 'rgba(99, 102, 241, 0.08)'), padding: 8, borderRadius: 12 }}>
-                                <MaterialIcons name={field.icon || 'description'} size={18} color={isTrashAndHasCountdown ? '#FBBF24' : (isDark ? '#C084FC' : '#4F46E5')} />
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 9, color: isTrashAndHasCountdown ? '#FBBF24' : (isDark ? '#94A3B8' : '#64748B'), fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>{isTrashAndHasCountdown ? 'Truck Arriving' : field.label}</Text>
-                                <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '800', color: isTrashAndHasCountdown ? '#FBBF24' : textMain }}>
-                                  {isTrashAndHasCountdown 
-                                    ? `${trashCountdown}` 
-                                    : (field.type === 'password' && field.value 
-                                        ? (revealedFields.includes(field.id) ? field.value : '••••••••') 
-                                        : (field.value || 'Not Set'))}
-                                </Text>
-                              </View>
-                            </View>
-                            
-                            {field.type === 'password' && field.value ? (
-                              <View style={{ flexDirection: 'row', gap: 6 }}>
-                                <TouchableOpacity onPress={() => toggleFieldVisibility(field.id)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
-                                  <MaterialIcons name={revealedFields.includes(field.id) ? "visibility" : "visibility-off"} size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(field.value); showToast('Copied to clipboard', 'success'); }} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
-                                  <MaterialIcons name="content-copy" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
-                                </TouchableOpacity>
-                              </View>
-                            ) : null}
-                            {field.type === 'phone' && field.value ? (
-                              <TouchableOpacity onPress={() => handlePhoneCall(field.value)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
-                                <MaterialIcons name="call" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
-                              </TouchableOpacity>
-                            ) : null}
-                            {field.type === 'link' && field.value ? (
-                              <TouchableOpacity onPress={() => handleOpenLink(field.value)} style={{ padding: 7, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
-                                <MaterialIcons name="link" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
-                              </TouchableOpacity>
-                            ) : null}
-                          </View>
-                        );
-                      })
-                    ) : (
-                      <View style={{ alignItems: 'center', paddingVertical: 36 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B' }}>No details set yet. Tap Edit to add!</Text>
+              <ScrollView 
+                style={{ maxHeight: 160 }} 
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled={true}
+              >
+                <View style={{ gap: 8 }}>
+                  {detailsList.map((field: any) => (
+                    <View 
+                      key={field.id} 
+                      style={{ 
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC', 
+                        borderRadius: 20, 
+                        padding: 14, 
+                        flexDirection: 'row', 
+                        alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)'
+                      }}
+                    >
+                      <View style={{ backgroundColor: isDark ? 'rgba(79, 70, 229, 0.15)' : '#EEF2FF', padding: 10, borderRadius: 14, marginRight: 14 }}>
+                        <MaterialIcons name={field.icon} size={18} color="#4F46E5" />
                       </View>
-                    )}
-                  </ScrollView>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 8, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: 2 }}>{field.label}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: isDark ? '#F1F5F9' : '#0F172A' }} numberOfLines={1}>
+                          {field.type === 'password' && !revealedFields.includes(field.id) ? '••••••••' : field.value}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {field.type === 'password' && (
+                          <TouchableOpacity onPress={() => toggleFieldVisibility(field.id)}>
+                            <MaterialIcons name={revealedFields.includes(field.id) ? "visibility" : "visibility-off"} size={16} color="#94A3B8" />
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(field.value); showToast('Copied', 'success'); }}>
+                          <MaterialIcons name="content-copy" size={16} color="#94A3B8" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
                 </View>
-              </LinearGradient>
-            </BlurView>
+              </ScrollView>
+            </View>
           </View>
 
-          {/* Interactive Navigation Grid */}
-          <View style={{ paddingHorizontal: 16, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
-            {/* Grocery */}
-            <TouchableOpacity onPress={() => handleNav('Grocery')} style={{ width: '48%', aspectRatio: 1.05 }}>
-              <BlurView intensity={cardIntensity} tint="light" style={{ flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: groceryBorder }}>
-                <LinearGradient colors={groceryGrad} style={{ flex: 1, padding: 14 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <View>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: -0.3, marginBottom: 2 }}>Grocery</Text>
-                      <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '600' }}>View shared list →</Text>
-                    </View>
-                    <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 7, borderRadius: 10 }}>
-                      <MaterialIcons name="shopping-cart" size={16} color="#FFFFFF" />
-                    </View>
-                  </View>
-                  <MaterialIcons name="shopping-cart" size={54} color="rgba(255, 255, 255, 0.12)" style={{ position: 'absolute', bottom: -6, right: -6 }} />
-                </LinearGradient>
-              </BlurView>
+          {/* Navigation Grid */}
+          <View style={{ paddingHorizontal: 20, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
+            <TouchableOpacity onPress={() => handleNav('Grocery')} style={{ width: '48%', height: 160, backgroundColor: '#059669', borderRadius: 32, padding: 20, justifyContent: 'space-between' }}>
+              <View>
+                <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900' }}>Grocery</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', marginTop: 4 }}>View shared list →</Text>
+              </View>
+              <View style={{ alignSelf: 'flex-end', backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
+                <MaterialIcons name="shopping-cart" size={20} color="#FFF" />
+              </View>
             </TouchableOpacity>
 
-            {/* Expenses */}
-            <TouchableOpacity onPress={() => handleNav('Expenses')} style={{ width: '48%', aspectRatio: 1.05 }}>
-              <BlurView intensity={cardIntensity} tint="light" style={{ flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: expenseBorder }}>
-                <LinearGradient colors={expenseGrad} style={{ flex: 1, padding: 14 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <View>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: -0.3, marginBottom: 2 }}>Expenses</Text>
-                      <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '600' }}>Split bills easily →</Text>
-                    </View>
-                    <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 7, borderRadius: 10 }}>
-                      <MaterialIcons name="attach-money" size={16} color="#FFFFFF" />
-                    </View>
-                  </View>
-                  <MaterialIcons name="bar-chart" size={54} color="rgba(255, 255, 255, 0.12)" style={{ position: 'absolute', bottom: -6, right: -6 }} />
-                </LinearGradient>
-              </BlurView>
+            <TouchableOpacity onPress={() => handleNav('Expenses')} style={{ width: '48%', height: 160, backgroundColor: '#2563EB', borderRadius: 32, padding: 20, justifyContent: 'space-between' }}>
+              <View>
+                <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900' }}>Expenses</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Split bills easily →</Text>
+              </View>
+              <View style={{ alignSelf: 'flex-end', backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
+                <MaterialIcons name="account-balance-wallet" size={20} color="#FFF" />
+              </View>
             </TouchableOpacity>
 
-            {/* Chores */}
-            <TouchableOpacity onPress={() => handleNav('Chores')} style={{ width: '48%', aspectRatio: 1.05 }}>
-              <BlurView intensity={cardIntensity} tint="light" style={{ flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: choresBorder }}>
-                <LinearGradient colors={choresGrad} style={{ flex: 1, padding: 14 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <View style={{ flex: 1, paddingRight: 4 }}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: -0.3, marginBottom: 2 }}>Chores</Text>
-                      <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '600' }}>
-                        {chores.filter(c => !c.done).length > 0 
-                          ? `${chores.filter(c => !c.done).length} active tasks` 
-                          : "All tasks done ✨"}
-                      </Text>
-                    </View>
-                    <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 7, borderRadius: 10 }}>
-                      <MaterialIcons name="cleaning-services" size={16} color="#FFFFFF" />
-                    </View>
-                  </View>
-                  <MaterialIcons name="format-list-bulleted" size={54} color="rgba(255, 255, 255, 0.12)" style={{ position: 'absolute', bottom: -6, right: -6 }} />
-                </LinearGradient>
-              </BlurView>
+            <TouchableOpacity onPress={() => handleNav('Chores')} style={{ width: '48%', height: 160, backgroundColor: '#92400E', borderRadius: 32, padding: 20, justifyContent: 'space-between' }}>
+              <View>
+                <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900' }}>Chores</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', marginTop: 4 }}>{chores.filter(c => !c.done).length} active tasks</Text>
+              </View>
+              <View style={{ alignSelf: 'flex-end', backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
+                <MaterialIcons name="cleaning-services" size={20} color="#FFF" />
+              </View>
             </TouchableOpacity>
 
-            {/* Chat */}
-            <TouchableOpacity onPress={() => handleNav('Chat')} style={{ width: '48%', aspectRatio: 1.05 }}>
-              <BlurView intensity={cardIntensity} tint="light" style={{ flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: chatBorder }}>
-                <LinearGradient colors={chatGrad} style={{ flex: 1, padding: 14 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <View>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: -0.3, marginBottom: 2 }}>Chat</Text>
-                      <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '700' }}>
-                        {hasUnreadMessages ? "New messages 💬" : "Join chat →"}
-                      </Text>
-                    </View>
-                    <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 7, borderRadius: 10 }}>
-                      <MaterialIcons name="chat" size={16} color="#FFFFFF" />
-                    </View>
-                  </View>
-                  <MaterialIcons name="chat" size={54} color="rgba(255, 255, 255, 0.12)" style={{ position: 'absolute', bottom: -6, right: -6 }} />
-                </LinearGradient>
-              </BlurView>
+            <TouchableOpacity onPress={() => handleNav('Chat')} style={{ width: '48%', height: 160, backgroundColor: '#3B82F6', borderRadius: 32, padding: 20, justifyContent: 'space-between' }}>
+              <View>
+                <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900' }}>Chat</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', marginTop: 4 }}>{hasUnreadMessages ? "New messages" : "Discuss ideas"}</Text>
+              </View>
+              <View style={{ alignSelf: 'flex-end', backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
+                <MaterialIcons name="chat" size={20} color="#FFF" />
+              </View>
             </TouchableOpacity>
+          </View>
+
+          {/* Living Status Banner */}
+          <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
+            <View style={{ borderRadius: 32, overflow: 'hidden', height: 180, position: 'relative' }}>
+              <Image 
+                source={{ uri: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' }} 
+                style={{ width: '100%', height: '100%', opacity: 0.8 }} 
+              />
+              <LinearGradient 
+                colors={['transparent', 'rgba(0,0,0,0.8)']} 
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, padding: 24, justifyContent: 'flex-end' }}
+              >
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>LIVING STATUS</Text>
+                <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '900' }}>"Peaceful Vibes" Household</Text>
+              </LinearGradient>
+              
+              <TouchableOpacity 
+                style={{ position: 'absolute', bottom: 16, right: 16, width: 44, height: 44, borderRadius: 14, backgroundColor: '#4F46E5', alignItems: 'center', justifyContent: 'center', shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 }}
+                onPress={() => setIsMenuVisible(true)}
+              >
+                <MaterialIcons name="add" size={24} color="#FFF" />
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
 
@@ -670,7 +654,12 @@ export default function DashboardScreen({ navigation }: Props) {
       </SlideModal>
 
       {/* Info Modal */}
-      <SlideModal visible={isInfoModalVisible} onClose={() => { setIsInfoModalVisible(false); setIsEditMode(false); }} title={isEditMode ? "Edit Household" : "Household Info"}>
+      <SlideModal 
+        visible={isInfoModalVisible} 
+        onClose={() => { setIsInfoModalVisible(false); setIsEditMode(false); }} 
+        title={isEditMode ? "Edit Household" : "Household Info"}
+        scrollEnabled={!isEditMode}
+      >
         <HouseholdInfoModalContent 
           tab={infoModalTab} 
           isEdit={isEditMode} 
@@ -724,9 +713,9 @@ export default function DashboardScreen({ navigation }: Props) {
             const isForMe = !a.targetUid || a.targetUid === user?.uid;
             return isFromOther && isForMe;
           }).length === 0 ? (
-            <View style={{ alignItems: 'center', py: 40 }}>
+            <View style={{ alignItems: 'center', paddingVertical: 40 }}>
               <MaterialIcons name="notifications-none" size={48} color={muted} style={{ opacity: 0.5 }} />
-              <Text style={{ color: muted, fontSize: 14, mt: 12 }}>No new notifications from roommates</Text>
+              <Text style={{ color: muted, fontSize: 14, marginTop: 12 }}>No new notifications from roommates</Text>
             </View>
           ) : (
             <View style={{ gap: 10 }}>
