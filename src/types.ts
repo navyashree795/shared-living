@@ -56,6 +56,7 @@ export interface Activity {
   userName: string;
   amount: number;
   userId: string;
+  targetUid?: string;
   createdAt: Timestamp;
 }
 

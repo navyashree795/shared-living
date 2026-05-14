@@ -11,10 +11,10 @@ interface EmptyStateProps {
 
 const EmptyState: React.FC<EmptyStateProps> = ({ icon, title, description }) => {
   const { isDark } = useTheme();
-  const text = isDark ? '#F1F5F9' : '#0F172A';
-  const muted = isDark ? '#94A3B8' : '#64748B';
-  const iconBg = isDark ? '#1E293B' : '#F1F5F9';
-  const iconColor = isDark ? '#64748B' : '#94A3B8';
+  const text = isDark ? '#E2E8F0' : '#0F172A';
+  const muted = isDark ? '#818CF8' : '#64748B';
+  const iconBg = isDark ? '#0F1320' : '#F1F5F9';
+  const iconColor = isDark ? '#4F46E5' : '#94A3B8';
 
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 40 }}>

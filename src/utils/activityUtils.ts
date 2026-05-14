@@ -8,7 +8,8 @@ export type ActivityType =
   | 'payment_add' 
   | 'chore_add' 
   | 'chore_done'
-  | 'chore_reminder';
+  | 'chore_reminder'
+  | 'chore_rotate';
 
 export const logActivity = async (
   householdId: string | undefined, 
@@ -59,6 +60,8 @@ export const getActivityConfig = (type: string): ActivityConfig => {
       return { icon: 'task-alt', color: '#059669', label: 'finished' };
     case 'chore_reminder':
       return { icon: 'notifications-active', color: '#D97706', label: 'reminded for' };
+    case 'chore_rotate':
+      return { icon: 'loop', color: '#3B82F6', label: 'rotated turn for' };
     default:
       return { icon: 'info', color: '#6B7280', label: 'updated' };
   }

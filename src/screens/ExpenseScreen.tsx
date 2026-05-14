@@ -1,18 +1,16 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  Alert, Switch, Modal, KeyboardAvoidingView, Platform, ScrollView
+  Alert, ScrollView, Animated, Dimensions
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Feather } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import { Card } from '../components/Card';
-import ScreenHeader from '../components/ScreenHeader';
-import EmptyState from '../components/EmptyState';
 import SlideModal from '../components/SlideModal';
 import SwipeableRow from '../components/SwipeableRow';
 import { ExpenseSkeleton } from '../components/Skeleton';
@@ -21,20 +19,22 @@ import {
 } from 'firebase/firestore';
 import { logActivity } from '../utils/activityUtils';
 import { detectCategory, getCategoryIcon } from '../utils/expenseUtils';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList, Expense } from '../types';
+import { Expense } from '../types';
 
 type Props = { navigation: any; route?: any };
+
+const { width } = Dimensions.get('window');
 
 export default function ExpenseScreen({ navigation }: Props) {
   const { householdId, members, getMemberName } = useHousehold();
   const hid = householdId ?? '';
   const { isDark } = useTheme();
-  const bg      = isDark ? '#070913' : '#F5F7FF';
+  const bg      = isDark ? '#070913' : '#F4F7FF';
   const surface = isDark ? '#0E1324' : '#FFFFFF';
-  const text    = isDark ? '#F1F5F9' : '#1E1B4B';
-  const muted   = isDark ? '#A78BFA' : '#4F46E5';
-  const bord    = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
+  const textMain = isDark ? '#F1F5F9' : '#0F172A';
+  const textMuted = isDark ? '#94A3B8' : '#64748B';
+  const primary = '#4F46E5';
+  
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -48,10 +48,7 @@ export default function ExpenseScreen({ navigation }: Props) {
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   
-  // Splitting state
   const [selectedMembers, setSelectedMembers] = useState<Record<string, boolean>>({});
-
-  // Settling state
   const [settleAmount, setSettleAmount] = useState('');
   const [settleWithUid, setSettleWithUid] = useState<string | null>(null);
 
@@ -59,37 +56,22 @@ export default function ExpenseScreen({ navigation }: Props) {
   const settleInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
-    if (isModalVisible) {
-      setTimeout(() => {
-        expenseInputRef.current?.focus();
-      }, 250);
-    }
+    if (isModalVisible) setTimeout(() => expenseInputRef.current?.focus(), 250);
   }, [isModalVisible]);
 
   useEffect(() => {
-    if (isSettleModalVisible) {
-      setTimeout(() => {
-        settleInputRef.current?.focus();
-      }, 250);
-    }
+    if (isSettleModalVisible) setTimeout(() => settleInputRef.current?.focus(), 250);
   }, [isSettleModalVisible]);
 
   useEffect(() => {
-    // Select everyone by default
     const initialSelection: Record<string, boolean> = {};
     members.forEach(uid => initialSelection[uid] = true);
     setSelectedMembers(initialSelection);
   }, [members, isModalVisible]);
 
   useEffect(() => {
-    if (!hid) {
-      setLoading(false);
-      return;
-    }
-    const q = query(
-      collection(db, 'households', hid, 'expenses'),
-      orderBy('createdAt', 'desc')
-    );
+    if (!hid) { setLoading(false); return; }
+    const q = query(collection(db, 'households', hid, 'expenses'), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
       setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense)));
       setLoading(false);
@@ -103,25 +85,20 @@ export default function ExpenseScreen({ navigation }: Props) {
       Alert.alert('Error', 'Please enter a valid title and amount.');
       return;
     }
-    
     const splitAmongUids = Object.keys(selectedMembers).filter(uid => selectedMembers[uid]);
     if (splitAmongUids.length === 0) {
-      Alert.alert('Error', 'Please select at least one person to split with.');
+      Alert.alert('Error', 'Please select at least one person.');
       return;
     }
-
     const currentUid = auth.currentUser?.uid;
     if (!currentUid) return;
-
     const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
-    const category = detectCategory(title.trim());
-
     try {
       await addDoc(collection(db, 'households', hid, 'expenses'), {
         type: 'expense',
         title: title.trim(),
         amount: parsed,
-        category,
+        category: detectCategory(title.trim()),
         paidByUid: currentUid,
         payerName: getMemberName(currentUid), 
         splitAmong: splitAmongUids,
@@ -129,24 +106,19 @@ export default function ExpenseScreen({ navigation }: Props) {
       });
       logActivity(hid, 'expense_add', title.trim(), currentUserName, parsed);
       showToast('Expense logged', 'success');
-      setTitle(''); setAmount('');
-      setIsModalVisible(false);
-    } catch {
-      Alert.alert('Error', 'Could not add expense.');
-    }
+      setTitle(''); setAmount(''); setIsModalVisible(false);
+    } catch { Alert.alert('Error', 'Could not add expense.'); }
   };
 
   const handleAddSettlement = async () => {
     const parsed = parseFloat(settleAmount);
     if (isNaN(parsed) || parsed <= 0 || !settleWithUid) {
-      Alert.alert('Error', 'Please select a person and enter a valid amount.');
+      Alert.alert('Error', 'Select a person and enter amount.');
       return;
     }
     const currentUid = auth.currentUser?.uid;
     if (!currentUid) return;
-
     const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
-
     try {
       await addDoc(collection(db, 'households', hid, 'expenses'), {
         type: 'payment',
@@ -157,73 +129,45 @@ export default function ExpenseScreen({ navigation }: Props) {
       });
       logActivity(hid, 'payment_add', `to ${getMemberName(settleWithUid)}`, currentUserName, parsed);
       showToast('Payment recorded', 'success');
-      setSettleAmount('');
-      setSettleWithUid(null);
-      setIsSettleModalVisible(false);
-    } catch {
-      Alert.alert('Error', 'Could not record settlement.');
-    }
+      setSettleAmount(''); setSettleWithUid(null); setIsSettleModalVisible(false);
+    } catch { Alert.alert('Error', 'Could not record settlement.'); }
   };
 
   const handleDelete = useCallback(async (id: string) => {
-    Alert.alert('Delete Expense', 'Are you sure you want to delete this transaction?', [
+    Alert.alert('Delete Transaction', 'Remove this from history?', [
       { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Delete', 
-        style: 'destructive', 
-        onPress: async () => {
-          try {
-            await deleteDoc(doc(db, 'households', hid, 'expenses', id));
-            showToast('Transaction removed', 'success');
-          } catch {
-            Alert.alert('Error', 'Could not delete expense.');
-          }
-        } 
-      }
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await deleteDoc(doc(db, 'households', hid, 'expenses', id));
+          showToast('Deleted', 'success');
+        } catch { Alert.alert('Error', 'Failed to delete.'); }
+      }}
     ]);
   }, [householdId]);
 
-  // -------------------------------------------------------------
-  // Directed Calculation Engine
-  // -------------------------------------------------------------
   const { totalHouseholdSpent, peerBalances } = useMemo(() => {
     const currentUid = auth.currentUser?.uid || '';
     let totalHouseholdSpent = 0;
-    
-    // balances[otherUid] indicates how much *currentUid* owes *otherUid* (positive = owe them, negative = they owe me)
     const peerBalances: Record<string, number> = {};
     members.forEach(uid => { if (uid !== currentUid) peerBalances[uid] = 0; });
 
     expenses.forEach(exp => {
       if (exp.type === 'expense' && exp.amount) {
         totalHouseholdSpent += exp.amount;
-        
         if (exp.splitAmong && exp.splitAmong.length > 0 && exp.paidByUid) {
           const share = exp.amount / exp.splitAmong.length;
-          
           exp.splitAmong.forEach(splitUid => {
-            if (splitUid !== exp.paidByUid) { // You don't owe yourself
-              if (splitUid === currentUid) {
-                // I owe the payer
-                peerBalances[exp.paidByUid!] = (peerBalances[exp.paidByUid!] || 0) + share;
-              } else if (exp.paidByUid === currentUid) {
-                // Payer is me, so someone else owes me (negative value in peerBalances means they owe me)
-                peerBalances[splitUid] = (peerBalances[splitUid] || 0) - share;
-              }
+            if (splitUid !== exp.paidByUid) {
+              if (splitUid === currentUid) peerBalances[exp.paidByUid!] = (peerBalances[exp.paidByUid!] || 0) + share;
+              else if (exp.paidByUid === currentUid) peerBalances[splitUid] = (peerBalances[splitUid] || 0) - share;
             }
           });
         }
       } else if (exp.type === 'payment' && exp.amount && exp.fromPaidUid && exp.toReceivedUid) {
-        if (exp.fromPaidUid === currentUid) {
-          // I paid someone -> my debt to them decreases
-          peerBalances[exp.toReceivedUid] = (peerBalances[exp.toReceivedUid] || 0) - exp.amount;
-        } else if (exp.toReceivedUid === currentUid) {
-          // Someone paid me -> their debt to me decreases (which means my "negative debt" becomes more positive towards 0)
-          peerBalances[exp.fromPaidUid] = (peerBalances[exp.fromPaidUid] || 0) + exp.amount;
-        }
+        if (exp.fromPaidUid === currentUid) peerBalances[exp.toReceivedUid] = (peerBalances[exp.toReceivedUid] || 0) - exp.amount;
+        else if (exp.toReceivedUid === currentUid) peerBalances[exp.fromPaidUid] = (peerBalances[exp.fromPaidUid] || 0) + exp.amount;
       }
     });
-
     return { totalHouseholdSpent, peerBalances };
   }, [expenses, members]);
 
@@ -242,25 +186,22 @@ export default function ExpenseScreen({ navigation }: Props) {
       
       return (
         <SwipeableRow onDelete={() => handleDelete(item.id)}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
-            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-               <MaterialIcons name="done" size={20} color="#6366F1" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: surface, borderRadius: 24, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
+            <View style={{ width: 44, height: 44, borderRadius: 16, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+               <MaterialIcons name="check" size={20} color={primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: isDark ? '#F1F5F9' : '#0F172A' }}>{primaryText}</Text>
-              <Text style={{ fontSize: 12, fontWeight: '500', color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 }}>Settlement</Text>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: textMain }}>{primaryText}</Text>
+              <Text style={{ fontSize: 9, fontWeight: '800', color: textMuted, marginTop: 2, textTransform: 'uppercase' }}>Settlement</Text>
             </View>
-            <View style={{ alignItems: 'flex-end', paddingLeft: 8 }}>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: '#6366F1' }}>
-                ₹{item.amount.toFixed(2)}
-              </Text>
-            </View>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: primary }}>
+              ₹{item.amount.toFixed(0)}
+            </Text>
           </View>
         </SwipeableRow>
       );
     }
     
-    // Expense Rendering
     const iconName = getCategoryIcon(item.category);
     const splitCount = item.splitAmong?.length || 1;
     const individualShare = item.amount / splitCount;
@@ -268,297 +209,251 @@ export default function ExpenseScreen({ navigation }: Props) {
     const amIInvolved = Boolean(item.splitAmong?.includes(currentUid!));
 
     let relationshipText = '';
-    let relationshipColor = isDark ? '#94A3B8' : '#64748B';
+    let relationshipColor = textMuted;
 
     if (iPaid) {
-      if (splitCount > 1) {
-        relationshipText = `You lent ₹${(item.amount - individualShare).toFixed(2)}`;
-        relationshipColor = '#10B981'; // text-success
-      } else {
-        relationshipText = `You paid for yourself`;
-      }
+      relationshipText = splitCount > 1 ? `You lent ₹${(item.amount - individualShare).toFixed(0)}` : `You paid for yourself`;
+      relationshipColor = splitCount > 1 ? '#10B981' : textMuted;
     } else if (amIInvolved) {
-      relationshipText = `You owe ₹${individualShare.toFixed(2)}`;
-      relationshipColor = '#EF4444'; // text-danger
+      relationshipText = `You owe ₹${individualShare.toFixed(0)}`;
+      relationshipColor = '#EF4444';
     } else {
       relationshipText = `Not involved`;
-      relationshipColor = isDark ? '#94A3B8' : '#64748B';
     }
 
     return (
       <SwipeableRow onDelete={() => handleDelete(item.id)}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
-          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? '#0F172A' : '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
-             <MaterialIcons name={iconName} size={20} color={isDark ? '#94A3B8' : '#64748B'} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: surface, borderRadius: 24, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
+          <View style={{ width: 44, height: 44, borderRadius: 16, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, borderColor: '#F1F5F9' }}>
+             <MaterialIcons name={iconName} size={20} color={textMuted} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontWeight: '700', color: isDark ? '#F1F5F9' : '#0F172A' }}>{item.title}</Text>
-            <Text style={{ fontSize: 12, fontWeight: '500', color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 }}>
-              Paid by {iPaid ? 'You' : getMemberName(item.paidByUid!)}
+            <Text style={{ fontSize: 15, fontWeight: '800', color: textMain }}>{item.title}</Text>
+            <Text style={{ fontSize: 9, fontWeight: '800', color: textMuted, marginTop: 2, textTransform: 'uppercase' }}>
+              {iPaid ? 'Paid by You' : `By ${getMemberName(item.paidByUid!)}`}
             </Text>
           </View>
-          <View style={{ alignItems: 'flex-end', paddingLeft: 8 }}>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: isDark ? '#F1F5F9' : '#0F172A', marginBottom: 4 }}>
-              ₹{item.amount.toFixed(2)}
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: textMain, marginBottom: 2 }}>
+              ₹{item.amount.toFixed(0)}
             </Text>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: relationshipColor }}>
+            <Text style={{ fontSize: 8, fontWeight: '800', color: relationshipColor, textTransform: 'uppercase' }}>
               {relationshipText}
             </Text>
           </View>
         </View>
       </SwipeableRow>
     );
-  }, [getMemberName, handleDelete]);
+  }, [getMemberName, handleDelete, textMain, textMuted, surface, primary]);
 
   const renderHeader = () => (
-    <>
-      {/* Total Spending Card */}
-      <View style={{ backgroundColor: '#6366F1', borderRadius: 24, padding: 24, marginBottom: 16, shadowColor: '#6366F1', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8 }}>
-        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Total Household Spending</Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 32, fontWeight: '900', letterSpacing: -1 }}>₹{totalHouseholdSpent.toFixed(2)}</Text>
+    <View style={{ paddingHorizontal: 24 }}>
+      {/* Dark Summary Card */}
+      <View style={{ backgroundColor: '#0F172A', borderRadius: 32, padding: 24, marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 }}>
+        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Total Household Spending</Text>
+        <Text style={{ color: '#FFFFFF', fontSize: 44, fontWeight: '900', letterSpacing: -1 }}>₹{totalHouseholdSpent.toLocaleString()}</Text>
+        
+        <View style={{ flexDirection: 'row', marginTop: 24, justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 20 }}>
+          <View>
+            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '800', marginBottom: 6 }}>You owe</Text>
+            <Text style={{ color: '#F87171', fontSize: 15, fontWeight: '900' }}>₹{Object.values(peerBalances).reduce((acc, val) => val > 0 ? acc + val : acc, 0).toLocaleString()}</Text>
+          </View>
+          <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.05)', height: 30, alignSelf: 'center' }} />
+          <View>
+            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '800', marginBottom: 6 }}>Active balances</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900' }}>{Object.entries(peerBalances).filter(([_, val]) => Math.abs(val) > 0.01).length}</Text>
+          </View>
+          <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.05)', height: 30, alignSelf: 'center' }} />
+          <View>
+            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '800', marginBottom: 6 }}>This month</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900' }}>{new Date().toLocaleString('default', { month: 'long' })} {new Date().getFullYear()}</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Action Button */}
-      <TouchableOpacity 
-        onPress={() => setIsSettleModalVisible(true)}
-        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 24, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}
-      >
-        <MaterialIcons name="account-balance-wallet" size={20} color="#6366F1" />
-        <Text style={{ color: '#6366F1', fontWeight: '800', marginLeft: 8, fontSize: 15 }}>Settle Up</Text>
+      {/* Settle Up Action Button */}
+      <TouchableOpacity onPress={() => setIsSettleModalVisible(true)} activeOpacity={0.8}>
+        <LinearGradient
+          colors={['#818CF8', '#A78BFA']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 24, paddingVertical: 18, marginBottom: 32, shadowColor: '#818CF8', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 15, elevation: 8 }}
+        >
+          <MaterialIcons name="credit-card" size={24} color="#FFFFFF" style={{ marginRight: 12 }} />
+          <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 14, textTransform: 'uppercase', letterSpacing: 1.5 }}>Settle Up Now</Text>
+        </LinearGradient>
       </TouchableOpacity>
 
-      {/* Directed Liabilities Dashboard */}
-      <View style={{ backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 24, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
-        <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 }}>Your Balances</Text>
+      {/* Your Balances Section */}
+      <View style={{ marginBottom: 28 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+           <Text style={{ color: '#0F172A', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Your Balances</Text>
+           <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
+              <Text style={{ color: primary, fontSize: 9, fontWeight: '900' }}>{Object.entries(peerBalances).filter(([_, amount]) => Math.abs(amount) > 0.01).length} active</Text>
+           </View>
+        </View>
         
         {Object.entries(peerBalances).filter(([_, amount]) => Math.abs(amount) > 0.01).length === 0 ? (
-          <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 14, fontWeight: '600', paddingVertical: 8 }}>You are all settled up! 🎉</Text>
+          <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: '#FFFFFF', borderRadius: 24, borderWidth: 1, borderColor: '#F1F5F9' }}>
+            <View style={{ backgroundColor: '#F0FDF4', padding: 12, borderRadius: 20, marginBottom: 12 }}>
+               <MaterialIcons name="verified" size={32} color="#22C55E" />
+            </View>
+            <Text style={{ color: '#15803D', fontSize: 14, fontWeight: '800' }}>You are all settled up! 🎉</Text>
+          </View>
         ) : (
-          Object.entries(peerBalances).map(([uid, amount]) => {
-            if (Math.abs(amount) < 0.01) return null; // Ignore floats close to 0
+          <View style={{ gap: 12 }}>
+            {Object.entries(peerBalances).map(([uid, amount]) => {
+              if (Math.abs(amount) < 0.01) return null;
+              const isOwedToMe = amount < 0;
+              const color = isOwedToMe ? '#10B981' : '#F87171';
+              const bgColor = isOwedToMe ? '#F0FDF4' : '#FEF2F2';
+              const name = getMemberName(uid);
+              const displayName = name.startsWith('@') ? name : `@${name.toLowerCase().replace(/\s+/g, '')}`;
 
-            const isOwedToMe = amount < 0; // If I owe them a negative amount, they owe me.
-            const absAmount = Math.abs(amount).toFixed(2);
-            
-            return (
-              <View key={uid} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#E2E8F0' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 12, backgroundColor: isOwedToMe ? (isDark ? '#064E3B' : '#D1FAE5') : (isDark ? '#7F1D1D' : '#FEE2E2') }}>
-                    <MaterialIcons name={isOwedToMe ? "arrow-downward" : "arrow-upward"} size={16} color={isOwedToMe ? "#10B981" : "#EF4444"} />
+              return (
+                <View key={uid} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 12, borderRadius: 28, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 2, overflow: 'hidden' }}>
+                  {/* Thin Left Indicator */}
+                  <View style={{ position: 'absolute', left: 0, top: 16, bottom: 16, width: 4, backgroundColor: color, borderRadius: 2 }} />
+                  
+                  <View style={{ width: 56, height: 56, borderRadius: 20, backgroundColor: bgColor, alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+                    <MaterialIcons name={isOwedToMe ? "arrow-downward" : "arrow-upward"} size={22} color={color} />
                   </View>
-                  <Text style={{ color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 14, fontWeight: '700' }}>
-                    {isOwedToMe ? `${getMemberName(uid)} owes you` : `You owe ${getMemberName(uid)}`}
+                  
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#0F172A', fontSize: 17, fontWeight: '900' }}>{displayName}</Text>
+                    <Text style={{ color: color, fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 }}>
+                      {isOwedToMe ? 'THEY OWE YOU' : 'YOU OWE THEM'}
+                    </Text>
+                  </View>
+                  
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: color, marginRight: 8 }}>
+                    ₹{Math.abs(amount).toLocaleString()}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: isOwedToMe ? '#10B981' : '#EF4444' }}>
-                  ₹{absAmount}
-                </Text>
-              </View>
-            );
-          })
+              );
+            })}
+          </View>
         )}
       </View>
 
-      <View style={{ marginBottom: 12 }}>
-        <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginLeft: 4 }}>Transactions</Text>
+      <View style={{ marginBottom: 16 }}>
+        <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Transactions</Text>
       </View>
-    </>
+    </View>
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
-      <ScreenHeader 
-        navigation={navigation as any} 
-        title="Expenses" 
-        rightIcon="add" 
-        onRightPress={() => setIsModalVisible(true)} 
-      />
+    <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['top']}>
+      {/* Custom Header */}
+      <View style={{ height: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: surface, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 }}>
+          <MaterialIcons name="chevron-left" size={28} color={textMain} />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: textMain }}>Expenses</Text>
+        <TouchableOpacity onPress={() => setIsModalVisible(true)} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: primary, alignItems: 'center', justifyContent: 'center', shadowColor: primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}>
+          <MaterialIcons name="add" size={24} color="#FFF" />
+        </TouchableOpacity>
+      </View>
 
       <FlatList
-        className="flex-1"
         data={expenses}
         keyExtractor={item => item.id}
         renderItem={renderExpense}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
           !loading && expenses.length === 0 ? (
-            <View className="px-6">
-              <EmptyState 
-                icon="receipt-long" 
-                title="No expenses yet" 
-                description="Add a shared expense to split it automatically."
-              />
+            <View style={{ paddingHorizontal: 24, alignItems: 'center', marginTop: 40 }}>
+              <MaterialIcons name="receipt-long" size={64} color="#E2E8F0" />
+              <Text style={{ color: textMuted, fontSize: 16, fontWeight: '700', marginTop: 16 }}>No transactions yet</Text>
             </View>
           ) : loading ? (
-            <View className="px-6">
-              {[1, 2, 3, 4, 5].map((i) => <ExpenseSkeleton key={i} />)}
+            <View style={{ paddingHorizontal: 24 }}>
+              {[1, 2, 3, 4].map((i) => <ExpenseSkeleton key={i} />)}
             </View>
           ) : null
         }
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Add Expense Minimalist Modal */}
-      <Modal visible={isModalVisible} transparent animationType="fade">
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <View className="flex-1 bg-black/50 justify-center px-6">
-            
-            {!showSplitOptions && <Text className="text-white text-2xl font-black mb-4 ml-2 shadow-sm">Add new expense</Text>}
-
-            <View className="bg-surface rounded-[32px] p-6 shadow-xl relative overflow-hidden">
-              { !showSplitOptions ? (
-                <View>
-                  <Text className="text-textMuted text-xs font-bold mb-1">Enter expense name</Text>
-                  <TextInput
-                    ref={expenseInputRef}
-                    className="text-textMain text-lg font-bold border-b border-border/60 pb-2 mb-8"
-                    placeholder="e.g. Swiggy, Uber"
-                    placeholderTextColor="#D1D5DB"
-                    value={title}
-                    onChangeText={setTitle}
-                  />
-
-                  <View className="border-b border-border/60 pb-2 mb-8 mt-2">
-                    <Text className="text-textMuted text-xs font-bold mb-1">Total Amount</Text>
-                    <View className="flex-row items-center mt-1">
-                       <Text className="text-textMain text-2xl font-black mr-2">₹</Text>
-                       <TextInput
-                         className="flex-1 text-textMain text-2xl font-black"
-                         placeholder="0.00"
-                         placeholderTextColor="#D1D5DB"
-                         keyboardType="decimal-pad"
-                         value={amount}
-                         onChangeText={setAmount}
-                       />
-                    </View>
-                  </View>
-
-                  <TouchableOpacity 
-                    onPress={() => setShowSplitOptions(true)}
-                    className="bg-secondary/30 rounded-2xl py-3.5 items-center border border-border/50 mb-6"
-                  >
-                    <Text className="text-textMain font-bold text-sm">Split: {Object.values(selectedMembers).filter(Boolean).length === members.length ? 'Everyone' : 'Custom'} (Edit)</Text>
-                  </TouchableOpacity>
-
-                  <View className="flex-row justify-between mt-2">
-                    <TouchableOpacity 
-                      className="flex-1 bg-background py-3.5 rounded-2xl items-center mr-3 border border-border/40"
-                      onPress={() => { setIsModalVisible(false); setShowSplitOptions(false); setTitle(''); setAmount(''); }}
-                    >
-                      <Text className="text-textMuted font-bold text-sm">Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      className="flex-1 bg-textMain py-3.5 rounded-2xl items-center"
-                      onPress={() => { setShowSplitOptions(false); handleAddExpense(); }}
-                    >
-                      <Text className="text-white font-bold text-sm">Save</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <View>
-                  <View className="flex-row items-center justify-between mb-6">
-                    <Text className="text-textMain text-lg font-black">Split among</Text>
-                    <TouchableOpacity onPress={() => setShowSplitOptions(false)} className="bg-primary/10 px-3 py-1.5 rounded-full">
-                       <Text className="text-primary font-bold text-xs uppercase">Done</Text>
-                    </TouchableOpacity>
-                  </View>
-                  
-                  <View className="flex-row items-center justify-between mb-4 border-b border-border pb-3">
-                    <Text className="text-textMuted text-xs font-bold">Select / Deselect</Text>
-                    <TouchableOpacity 
-                      onPress={() => {
-                        const allSelected = members.every(m => selectedMembers[m]);
-                        const nextState: Record<string, boolean> = {};
-                        members.forEach(m => nextState[m] = !allSelected);
-                        setSelectedMembers(nextState);
-                      }}
-                    >
-                      <Text className="text-primary text-[10px] font-bold uppercase">{members.every(m => selectedMembers[m]) ? 'Deselect All' : 'Select All'}</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled showsVerticalScrollIndicator={true}>
-                    {members.map(uid => (
-                      <View key={uid} className="flex-row items-center justify-between mb-3 last:mb-0">
-                        <Text className="text-textMain font-bold text-base">{getMemberName(uid)}</Text>
-                        <Switch 
-                          value={selectedMembers[uid] || false}
-                          onValueChange={(val) => setSelectedMembers(prev => ({...prev, [uid]: val}))}
-                          trackColor={{ false: "#E5E7EB", true: "#4F46E5" }}
-                          thumbColor="#fff"
-                        />
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
+      {/* Slide Modals */}
+      <SlideModal visible={isModalVisible} onClose={() => { setIsModalVisible(false); setShowSplitOptions(false); setTitle(''); setAmount(''); }} title={showSplitOptions ? "Split Among" : "Add Expense"}>
+        {!showSplitOptions ? (
+          <View style={{ gap: 20 }}>
+            <View>
+              <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginLeft: 4 }}>Description</Text>
+              <TextInput ref={expenseInputRef} style={{ backgroundColor: '#F8FAFC', borderRadius: 20, padding: 18, color: textMain, fontSize: 16, fontWeight: '700', borderWidth: 1, borderColor: '#F1F5F9' }} placeholder="What was this for?" value={title} onChangeText={setTitle} />
             </View>
-
+            <View>
+              <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginLeft: 4 }}>Amount</Text>
+              <View style={{ backgroundColor: '#F8FAFC', borderRadius: 20, paddingHorizontal: 18, height: 60, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' }}>
+                <Text style={{ color: primary, fontSize: 20, fontWeight: '900', marginRight: 10 }}>₹</Text>
+                <TextInput style={{ flex: 1, color: textMain, fontSize: 22, fontWeight: '900' }} placeholder="0" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setShowSplitOptions(true)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', padding: 16, borderRadius: 20 }}>
+              <MaterialIcons name="groups" size={24} color={primary} style={{ marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: textMain, fontSize: 14, fontWeight: '800' }}>Split Among</Text>
+                <Text style={{ color: primary, fontSize: 12, fontWeight: '700' }}>{Object.values(selectedMembers).filter(Boolean).length === members.length ? 'Everyone' : `${Object.values(selectedMembers).filter(Boolean).length} Selected`}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={primary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleAddExpense}>
+              <LinearGradient colors={['#4F46E5', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '900', textTransform: 'uppercase' }}>Log Expense</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Settle Up Modal */}
-      <SlideModal
-        visible={isSettleModalVisible}
-        onClose={() => setIsSettleModalVisible(false)}
-        title="Settle Up"
-      >
-        <View>
-          <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-2 border-t border-border/60 pt-4 mt-2">Who are you paying?</Text>
-          <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled showsVerticalScrollIndicator={true} className="mb-6 border-b border-border/60 pb-4">
-            {members.filter(uid => uid !== auth.currentUser?.uid).map(uid => {
-              // Show how much you owe them specifically
-               const oweThem = peerBalances[uid] > 0 ? peerBalances[uid] : 0;
-               return (
-                <TouchableOpacity 
-                  key={uid}
-                  onPress={() => setSettleWithUid(uid)}
-                  className={`flex-row items-center justify-between p-3 mb-2 rounded-xl border ${settleWithUid === uid ? 'bg-primary/5 border-primary' : 'bg-background border-border/50'}`}
-                >
-                  <Text className={`font-bold ${settleWithUid === uid ? 'text-primary' : 'text-textMain'}`}>
-                    {getMemberName(uid)}
-                  </Text>
-                  {oweThem > 0 && <Text className="text-xs font-bold text-danger">You owe ₹{oweThem.toFixed(2)}</Text>}
+        ) : (
+          <View>
+            <ScrollView style={{ maxHeight: 350 }}>
+              {members.map(uid => (
+                <TouchableOpacity key={uid} onPress={() => setSelectedMembers(prev => ({...prev, [uid]: !prev[uid]}))} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, backgroundColor: selectedMembers[uid] ? '#EEF2FF' : '#F8FAFC', borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: selectedMembers[uid] ? 'rgba(79, 70, 229, 0.1)' : 'transparent' }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                    <MaterialIcons name="person" size={20} color={selectedMembers[uid] ? primary : textMuted} />
+                  </View>
+                  <Text style={{ flex: 1, color: textMain, fontSize: 16, fontWeight: '800' }}>{getMemberName(uid)}</Text>
+                  {selectedMembers[uid] && <MaterialIcons name="check-circle" size={24} color={primary} />}
                 </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          <View className="border-b border-border/60 pb-2 mb-8 mt-2">
-            <Text className="text-textMuted text-xs font-bold mb-1">Amount Paid</Text>
-            <View className="flex-row items-center mt-1">
-               <Text className="text-textMain text-2xl font-black mr-2">₹</Text>
-               <TextInput 
-                 ref={settleInputRef}
-                 className="flex-1 text-textMain text-2xl font-black" 
-                 placeholder="0.00" 
-                 placeholderTextColor="#D1D5DB"
-                 value={settleAmount} 
-                 onChangeText={setSettleAmount} 
-                 keyboardType="decimal-pad" 
-               />
-            </View>
-          </View>
-
-          <View className="flex-row justify-between mt-2 mb-2">
-            <TouchableOpacity 
-              className="flex-1 bg-background py-3.5 rounded-2xl items-center mr-3 border border-border/40"
-              onPress={() => { setIsSettleModalVisible(false); setSettleAmount(''); setSettleWithUid(null); }}
-            >
-              <Text className="text-textMuted font-bold text-sm">Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              className="flex-1 bg-textMain py-3.5 rounded-2xl items-center" 
-              onPress={handleAddSettlement}
-            >
-              <Text className="text-white font-bold text-sm">Record Payment</Text>
+              ))}
+            </ScrollView>
+            <TouchableOpacity onPress={() => setShowSplitOptions(false)} style={{ backgroundColor: '#0F172A', height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginTop: 20 }}>
+              <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '800' }}>Done</Text>
             </TouchableOpacity>
           </View>
+        )}
+      </SlideModal>
+
+      <SlideModal visible={isSettleModalVisible} onClose={() => setIsSettleModalVisible(false)} title="Settle Up">
+        <View style={{ gap: 20 }}>
+          <View>
+            <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Pay Someone</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, paddingHorizontal: 20 }}>
+              {members.filter(uid => uid !== auth.currentUser?.uid).map(uid => (
+                <TouchableOpacity key={uid} onPress={() => setSettleWithUid(uid)} style={{ alignItems: 'center', marginRight: 20, padding: 12, borderRadius: 20, backgroundColor: settleWithUid === uid ? '#EEF2FF' : 'transparent', borderWidth: 1, borderColor: settleWithUid === uid ? primary : 'transparent' }}>
+                  <View style={{ width: 56, height: 56, borderRadius: 20, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: primary }}>{getMemberName(uid)[0]}</Text>
+                  </View>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: textMain }}>{getMemberName(uid).split(' ')[0]}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+          <View>
+             <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Amount Paid</Text>
+             <View style={{ backgroundColor: '#F8FAFC', borderRadius: 20, paddingHorizontal: 18, height: 60, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' }}>
+               <Text style={{ color: primary, fontSize: 20, fontWeight: '900', marginRight: 10 }}>₹</Text>
+               <TextInput ref={settleInputRef} style={{ flex: 1, color: textMain, fontSize: 22, fontWeight: '900' }} placeholder="0" keyboardType="decimal-pad" value={settleAmount} onChangeText={setSettleAmount} />
+             </View>
+          </View>
+          <TouchableOpacity onPress={handleAddSettlement}>
+             <LinearGradient colors={['#4F46E5', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}>
+               <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '900', textTransform: 'uppercase' }}>Record Payment</Text>
+             </LinearGradient>
+          </TouchableOpacity>
         </View>
       </SlideModal>
     </SafeAreaView>
   );
 }
+

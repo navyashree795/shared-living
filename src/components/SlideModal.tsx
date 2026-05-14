@@ -19,10 +19,10 @@ const MAX_MODAL_HEIGHT = SCREEN_HEIGHT * 0.85;
 
 const SlideModal: React.FC<SlideModalProps> = ({ visible, onClose, title, children, scrollEnabled = true }) => {
   const { isDark } = useTheme();
-  const surface = isDark ? '#1E293B' : '#FFFFFF';
-  const text = isDark ? '#F1F5F9' : '#0F172A';
-  const muted = isDark ? '#94A3B8' : '#64748B';
-  const closeBg = isDark ? '#334155' : '#F1F5F9';
+  const surface = isDark ? '#0F1320' : '#FFFFFF';
+  const text = isDark ? '#E2E8F0' : '#0F172A';
+  const muted = isDark ? '#818CF8' : '#64748B';
+  const closeBg = isDark ? '#151C30' : '#F1F5F9';
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -45,15 +45,23 @@ const SlideModal: React.FC<SlideModalProps> = ({ visible, onClose, title, childr
                     <MaterialIcons name="close" size={18} color={muted} />
                   </TouchableOpacity>
                 </View>
-                <ScrollView 
-                  scrollEnabled={scrollEnabled}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={{ paddingBottom: 10 }}
-                  keyboardShouldPersistTaps="handled"
-                  bounces={false}
-                >
-                  {children}
-                </ScrollView>
+                {scrollEnabled ? (
+                  <ScrollView 
+                    scrollEnabled={true}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ paddingBottom: 10 }}
+                    keyboardShouldPersistTaps="handled"
+                    bounces={false}
+                    decelerationRate="fast"
+                    scrollEventThrottle={16}
+                  >
+                    {children}
+                  </ScrollView>
+                ) : (
+                  <View style={{ paddingBottom: 10 }}>
+                    {children}
+                  </View>
+                )}
               </View>
             </View>
           </View>

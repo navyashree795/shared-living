@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  Alert, ScrollView
+  Alert, ScrollView, Animated
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import ScreenHeader from '../components/ScreenHeader';
@@ -34,13 +35,13 @@ interface Category {
 }
 
 const CATEGORIES: Category[] = [
-  { id: 'produce', name: 'Fresh Produce', icon: 'eco', bg: '#EFFDF5', color: '#059669' },
-  { id: 'dairy', name: 'Dairy & Chilled', icon: 'coffee', bg: '#F0F9FF', color: '#0284C7' },
-  { id: 'meat', name: 'Meat & Seafood', icon: 'restaurant', bg: '#FFF1F2', color: '#E11D48' },
-  { id: 'staples', name: 'Kitchen Staples', icon: 'bakery-dining', bg: '#FEFBE8', color: '#CA8A04' },
-  { id: 'essentials', name: 'Home Essentials', icon: 'auto-awesome', bg: '#F5F3FF', color: '#7C3AED' },
-  { id: 'drinks', name: 'Drinks & Spirits', icon: 'local-bar', bg: '#F1F5F9', color: '#475569' },
-  { id: 'misc', name: 'Miscellaneous', icon: 'inventory', bg: '#F9FAFB', color: '#6B7280' },
+  { id: 'produce', name: 'Fresh Produce', icon: 'eco', bg: '#059669', color: '#FFFFFF' },
+  { id: 'dairy', name: 'Dairy & Chilled', icon: 'coffee', bg: '#0284C7', color: '#FFFFFF' },
+  { id: 'meat', name: 'Meat & Seafood', icon: 'restaurant', bg: '#E11D48', color: '#FFFFFF' },
+  { id: 'staples', name: 'Kitchen Staples', icon: 'bakery-dining', bg: '#CA8A04', color: '#FFFFFF' },
+  { id: 'essentials', name: 'Home Essentials', icon: 'auto-awesome', bg: '#7C3AED', color: '#FFFFFF' },
+  { id: 'drinks', name: 'Drinks & Spirits', icon: 'local-bar', bg: '#475569', color: '#FFFFFF' },
+  { id: 'misc', name: 'Miscellaneous', icon: 'inventory', bg: '#6B7280', color: '#FFFFFF' },
 ];
 
 export default function GroceryScreen({ navigation }: Props) {
@@ -250,18 +251,18 @@ export default function GroceryScreen({ navigation }: Props) {
     
     return (
       <SwipeableRow key={groceryItem.id} onDelete={() => handleDelete(groceryItem.id)} onComplete={!groceryItem.done ? () => handleToggle(groceryItem) : undefined} completeLabel="Bought">
-      <View style={{ backgroundColor: surface, borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: bord }}>
+      <View style={{ backgroundColor: isDark ? '#161B33' : '#FFFFFF', borderRadius: 24, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(99, 102, 241, 0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0 : 0.05, shadowRadius: 8, elevation: 2 }}>
         <View className="flex-row items-center">
           <TouchableOpacity className="mr-3" onPress={() => handleToggle(groceryItem)}>
             <MaterialIcons 
               name={groceryItem.done ? "check-circle" : "radio-button-unchecked"} 
-              size={28} 
-              color={groceryItem.done ? "#10B981" : "#9CA3AF"} 
+              size={26} 
+              color={groceryItem.done ? "#10B981" : (isDark ? '#475569' : '#CBD5E1')} 
             />
           </TouchableOpacity>
           
-          <View style={{ backgroundColor: category.bg }} className="w-10 h-10 rounded-xl items-center justify-center mr-3">
-            <MaterialIcons name={category.icon} size={20} color={category.color} />
+          <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : category.bg, borderColor: isDark ? category.bg : 'transparent', borderWidth: isDark ? 1 : 0 }} className="w-10 h-10 rounded-xl items-center justify-center mr-3">
+            <MaterialIcons name={category.icon} size={20} color={isDark ? category.bg : category.color} />
           </View>
 
           <View className="flex-1">
@@ -279,8 +280,8 @@ export default function GroceryScreen({ navigation }: Props) {
             </View>
           </View>
 
-          <TouchableOpacity onPress={() => handleDelete(groceryItem.id)} className="p-2 ml-1">
-            <MaterialIcons name="close" size={20} color="#9CA3AF" />
+          <TouchableOpacity onPress={() => handleDelete(groceryItem.id)} className="p-2 ml-1 bg-danger/5 rounded-full">
+            <MaterialIcons name="close" size={18} color={isDark ? '#F87171' : '#EF4444'} />
           </TouchableOpacity>
         </View>
 
@@ -318,13 +319,23 @@ export default function GroceryScreen({ navigation }: Props) {
       />
 
       <View className="flex-row mx-6 mb-2 gap-3">
-        <View className="flex-1 bg-surface border border-border p-4 rounded-2xl shadow-sm items-center">
-          <Text className="text-textMuted text-[10px] uppercase font-bold tracking-widest mb-1">To Spend</Text>
-          <Text className="text-2xl font-black text-warning">₹{estimatedCost.toFixed(0)}</Text>
+        <View style={{ flex: 1 }}>
+          <LinearGradient
+            colors={isDark ? ['#1E293B', '#0F172A'] : ['#FFFFFF', '#F8FAFC']}
+            style={{ borderRadius: 24, padding: 16, borderWidth: 1, borderColor: isDark ? 'rgba(245, 158, 11, 0.2)' : 'rgba(0,0,0,0.05)', alignItems: 'center' }}
+          >
+            <Text style={{ color: isDark ? '#FBBF24' : '#92400E', fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>To Spend</Text>
+            <Text style={{ color: isDark ? '#FBBF24' : '#B45309', fontSize: 24, fontWeight: '900' }}>₹{estimatedCost.toFixed(0)}</Text>
+          </LinearGradient>
         </View>
-        <View className="flex-1 bg-surface border border-border p-4 rounded-2xl shadow-sm items-center">
-          <Text className="text-textMuted text-[10px] uppercase font-bold tracking-widest mb-1">In Cart Cost</Text>
-          <Text className="text-2xl font-black text-success">₹{cartTotalCost.toFixed(0)}</Text>
+        <View style={{ flex: 1 }}>
+          <LinearGradient
+            colors={isDark ? ['#1E293B', '#0F172A'] : ['#FFFFFF', '#F8FAFC']}
+            style={{ borderRadius: 24, padding: 16, borderWidth: 1, borderColor: isDark ? 'rgba(16, 185, 129, 0.2)' : 'rgba(0,0,0,0.05)', alignItems: 'center' }}
+          >
+            <Text style={{ color: isDark ? '#34D399' : '#065F46', fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>In Cart Cost</Text>
+            <Text style={{ color: isDark ? '#34D399' : '#059669', fontSize: 24, fontWeight: '900' }}>₹{cartTotalCost.toFixed(0)}</Text>
+          </LinearGradient>
         </View>
       </View>
 
@@ -349,6 +360,8 @@ export default function GroceryScreen({ navigation }: Props) {
           renderItem={renderRow}
           contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, paddingTop: 12 }}
           keyboardShouldPersistTaps="handled"
+          decelerationRate="fast"
+          scrollEventThrottle={16}
           ListEmptyComponent={
             <EmptyState 
               icon="shopping-cart" 
@@ -382,24 +395,24 @@ export default function GroceryScreen({ navigation }: Props) {
                     flexDirection: 'row',
                     alignItems: 'center',
                     paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    borderRadius: 24,
+                    paddingVertical: 10,
+                    borderRadius: 20,
                     marginRight: 12,
                     borderWidth: 1,
-                    borderColor: isActive ? '#4F46E5' : '#E5E7EB',
-                    backgroundColor: isActive ? '#4F46E5' : '#FFFFFF',
+                    borderColor: isActive ? (isDark ? cat.bg : '#4F46E5') : (isDark ? 'rgba(255,255,255,0.05)' : '#E5E7EB'),
+                    backgroundColor: isActive ? (isDark ? 'rgba(255,255,255,0.1)' : '#4F46E5') : (isDark ? '#161B33' : '#FFFFFF'),
                   }}
                 >
                   <MaterialIcons 
                     name={cat.icon} 
-                    size={14} 
-                    color={isActive ? '#FFF' : '#6B7280'} 
+                    size={16} 
+                    color={isActive ? (isDark ? cat.bg : '#FFF') : (isDark ? '#94A3B8' : '#6B7280')} 
                   />
                   <Text style={{
                     marginLeft: 8,
-                    fontSize: 12,
-                    fontWeight: 'bold',
-                    color: isActive ? '#FFFFFF' : '#6B7280',
+                    fontSize: 13,
+                    fontWeight: '800',
+                    color: isActive ? (isDark ? '#FFF' : '#FFFFFF') : (isDark ? '#94A3B8' : '#6B7280'),
                   }}>
                     {cat.name}
                   </Text>
