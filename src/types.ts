@@ -71,6 +71,7 @@ export interface Expense {
   splitAmong?: string[];
   fromPaidUid?: string;
   toReceivedUid?: string;
+  receiptUrl?: string;
   createdAt: Timestamp;
 }
 

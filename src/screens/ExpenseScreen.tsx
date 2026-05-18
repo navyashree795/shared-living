@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  Alert, ScrollView, Animated, Dimensions
+  Alert, ScrollView, Animated, Dimensions, ActivityIndicator, Linking
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +20,7 @@ import {
 import { logActivity } from '../utils/activityUtils';
 import { detectCategory, getCategoryIcon } from '../utils/expenseUtils';
 import { Expense } from '../types';
+import { pickAndUploadReceipt, saveManualReceiptExpense, pickAndUploadImageOnly } from '../utils/uploadUtils';
 
 type Props = { navigation: any; route?: any };
 
@@ -49,6 +50,8 @@ export default function ExpenseScreen({ navigation }: Props) {
 
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   
   const [selectedMembers, setSelectedMembers] = useState<Record<string, boolean>>({});
   const [settleAmount, setSettleAmount] = useState('');
@@ -104,11 +107,12 @@ export default function ExpenseScreen({ navigation }: Props) {
         paidByUid: currentUid,
         payerName: getMemberName(currentUid), 
         splitAmong: splitAmongUids,
+        receiptUrl: receiptUrl || null,
         createdAt: serverTimestamp(),
       });
       logActivity(hid, 'expense_add', title.trim(), currentUserName, parsed);
       showToast('Expense logged', 'success');
-      setTitle(''); setAmount(''); setIsModalVisible(false);
+      setTitle(''); setAmount(''); setReceiptUrl(null); setIsModalVisible(false);
     } catch { Alert.alert('Error', 'Could not add expense.'); }
   };
 
@@ -242,6 +246,13 @@ export default function ExpenseScreen({ navigation }: Props) {
             <Text style={{ fontSize: 9, fontWeight: '900', color: relationshipColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               {relationshipText}
             </Text>
+            {item.receiptUrl && (
+              <TouchableOpacity onPress={() => Linking.openURL(item.receiptUrl!)} style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(99,102,241,0.1)' : '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                <MaterialIcons name="receipt" size={12} color={primary} style={{ marginRight: 4 }} />
+                <Text style={{ color: primary, fontSize: 9, fontWeight: '800' }}>RECEIPT</Text>
+              </TouchableOpacity>
+            )}
+
           </View>
         </View>
       </SwipeableRow>
@@ -250,25 +261,25 @@ export default function ExpenseScreen({ navigation }: Props) {
 
   const renderHeader = () => (
     <View style={{ paddingHorizontal: 24 }}>
-      {/* Dark Summary Card */}
-      <View style={{ backgroundColor: isDark ? '#111827' : '#0F172A', borderRadius: 32, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 }}>
-        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Total Household Spending</Text>
+      {/* Lavender Summary Card */}
+      <View style={{ backgroundColor: '#7C3AED', borderRadius: 32, padding: 24, marginBottom: 20, shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 }}>
+        <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Total Household Spending</Text>
         <Text style={{ color: '#FFFFFF', fontSize: 44, fontWeight: '900', letterSpacing: -1 }}>₹{totalHouseholdSpent.toLocaleString()}</Text>
         
-        <View style={{ flexDirection: 'row', marginTop: 24, justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 20 }}>
+        <View style={{ flexDirection: 'row', marginTop: 24, justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)', paddingTop: 20 }}>
           <View>
-            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '800', marginBottom: 6 }}>You owe</Text>
-            <Text style={{ color: '#F87171', fontSize: 15, fontWeight: '900' }}>₹{Object.values(peerBalances).reduce((acc, val) => val > 0 ? acc + val : acc, 0).toLocaleString()}</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9, fontWeight: '800', marginBottom: 6 }}>You owe</Text>
+            <Text style={{ color: '#FCA5A5', fontSize: 15, fontWeight: '900' }}>₹{Object.values(peerBalances).reduce((acc, val) => val > 0 ? acc + val : acc, 0).toLocaleString()}</Text>
           </View>
-          <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.05)', height: 30, alignSelf: 'center' }} />
+          <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.2)', height: 30, alignSelf: 'center' }} />
           <View>
-            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '800', marginBottom: 6 }}>Active balances</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9, fontWeight: '800', marginBottom: 6 }}>Active balances</Text>
             <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900' }}>{Object.entries(peerBalances).filter(([_, val]) => Math.abs(val) > 0.01).length}</Text>
           </View>
-          <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.05)', height: 30, alignSelf: 'center' }} />
+          <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.2)', height: 30, alignSelf: 'center' }} />
           <View>
-            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '800', marginBottom: 6 }}>This month</Text>
-            <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900' }}>{new Date().toLocaleString('default', { month: 'long' })} {new Date().getFullYear()}</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9, fontWeight: '800', marginBottom: 6 }}>This month</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900' }}>{new Date().toLocaleString('default', { month: 'short' })} {new Date().getFullYear()}</Text>
           </View>
         </View>
       </View>
@@ -347,9 +358,52 @@ export default function ExpenseScreen({ navigation }: Props) {
           <MaterialIcons name="chevron-left" size={28} color={textMain} />
         </TouchableOpacity>
         <Text style={{ fontSize: 18, fontWeight: '900', color: textMain }}>Expenses</Text>
-        <TouchableOpacity onPress={() => setIsModalVisible(true)} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: primary, alignItems: 'center', justifyContent: 'center', shadowColor: primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}>
-          <MaterialIcons name="add" size={24} color="#FFF" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity onPress={async () => {
+              const currentUid = auth.currentUser?.uid;
+              if (!currentUid) return;
+              const uploaderName = getMemberName(currentUid) || userData?.username || 'Member';
+              showToast('Scanning receipt...', 'success');
+              const result = await pickAndUploadReceipt(hid, currentUid, uploaderName, members);
+              if (result.success) {
+                const share = result.amount ? (result.amount / members.length).toFixed(0) : 0;
+                showToast(`✅ ₹${result.amount?.toFixed(0)} split! (₹${share} each)`, 'success');
+              } else if (result.needsManualAmount && result.receiptUrl) {
+                // AI couldn't extract amount — ask user to type it
+                Alert.prompt(
+                  'Enter Total Amount',
+                  `AI could not read the total. Please type the bill amount:`,
+                  async (input) => {
+                    const amt = parseFloat(input || '0');
+                    if (!amt || amt <= 0) { showToast('Invalid amount', 'error'); return; }
+                    const saved = await saveManualReceiptExpense(
+                      hid, currentUid, uploaderName, members,
+                      result.title || 'Receipt', amt, result.receiptUrl!
+                    );
+                    if (saved) {
+                      const share = (amt / members.length).toFixed(0);
+                      showToast(`✅ ₹${amt.toFixed(0)} split! (₹${share} each)`, 'success');
+                    }
+                  },
+                  'plain-text',
+                  '',
+                  'numeric'
+                );
+              } else {
+                if (result.error === 'storage_rules') {
+                  Alert.alert('Storage Permission Error', 'Firebase Storage rules are blocking uploads. Please update your Storage rules in the Firebase Console to:\n\nallow read, write: if request.auth != null;');
+                } else {
+                  showToast('Upload failed. Check your connection.', 'error');
+                }
+              }
+            }} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: border }}>
+              <MaterialIcons name="document-scanner" size={20} color={textMain} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setIsModalVisible(true)} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: primary, alignItems: 'center', justifyContent: 'center', shadowColor: primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}>
+              <MaterialIcons name="add" size={24} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+
       </View>
 
       <FlatList
@@ -396,6 +450,25 @@ export default function ExpenseScreen({ navigation }: Props) {
               </View>
               <MaterialIcons name="chevron-right" size={20} color={primary} />
             </TouchableOpacity>
+
+            <TouchableOpacity onPress={async () => {
+                setIsUploading(true);
+                const url = await pickAndUploadImageOnly();
+                if (url) setReceiptUrl(url);
+                setIsUploading(false);
+            }} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(99,102,241,0.1)' : '#EEF2FF', padding: 16, borderRadius: 20 }}>
+              <MaterialIcons name="receipt" size={24} color={primary} style={{ marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: textMain, fontSize: 14, fontWeight: '800' }}>Attach Receipt</Text>
+                {isUploading ? (
+                  <Text style={{ color: primary, fontSize: 12, fontWeight: '700' }}>Uploading...</Text>
+                ) : (
+                  <Text style={{ color: primary, fontSize: 12, fontWeight: '700' }}>{receiptUrl ? 'Receipt Attached' : 'Optional'}</Text>
+                )}
+              </View>
+              {receiptUrl ? <MaterialIcons name="check-circle" size={20} color="#10B981" /> : <MaterialIcons name="add-a-photo" size={20} color={primary} />}
+            </TouchableOpacity>
+
             <TouchableOpacity onPress={handleAddExpense}>
               <LinearGradient colors={isDark ? ['#4F46E5', '#6366F1'] : ['#4F46E5', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '900', textTransform: 'uppercase' }}>Log Expense</Text>
