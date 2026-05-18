@@ -1,6 +1,8 @@
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configuration extracted from environment variables for security
@@ -40,4 +42,10 @@ const auth = initializeAuth(app, {
 // Initialize Firestore
 const db = getFirestore(app);
 
-export { app, auth, db };
+// Initialize Storage
+const storage = getStorage(app);
+
+// Initialize Functions (used to call server-side Gemini via callable functions)
+const functions = getFunctions(app);
+
+export { app, auth, db, storage, functions };

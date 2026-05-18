@@ -17,16 +17,22 @@ const TOP_OFFSET = 50;
 
 const Toast: React.FC = () => {
   const { visible, message, type, hideToast } = useToast();
+  const [shouldRender, setShouldRender] = React.useState(false);
   const translateY = useSharedValue(-100);
 
   useEffect(() => {
     if (visible) {
+      setShouldRender(true);
       translateY.value = withSpring(TOP_OFFSET, {
         damping: 12,
         stiffness: 90,
       });
     } else {
-      translateY.value = withTiming(-100, { duration: 300 });
+      translateY.value = withTiming(-100, { duration: 300 }, (finished) => {
+        if (finished) {
+          runOnJS(setShouldRender)(false);
+        }
+      });
     }
   }, [visible]);
 
@@ -37,7 +43,7 @@ const Toast: React.FC = () => {
     };
   });
 
-  if (!visible && translateY.value === -100) return null;
+  if (!shouldRender) return null;
 
   const getToastStyles = () => {
     switch (type) {

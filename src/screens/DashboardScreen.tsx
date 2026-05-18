@@ -1,5 +1,5 @@
 import React, { useState, useEffect, memo, useRef } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, TextInput, Image, Linking, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView, Alert, TextInput, Image, Linking, Animated, Dimensions } from 'react-native';
 import { createAudioPlayer } from 'expo-audio';
 import { TimeWheelPicker } from '../components/TimeWheelPicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,7 +29,7 @@ type Props = { navigation: any; route?: any };
 
 const NAV_ITEMS = [
   { name: 'Grocery' as const,  icon: 'shopping-cart' as const,     iconBg: '#065F46', cardBg: '#059669', subtitle: 'Shared shopping list' },
-  { name: 'Expenses' as const, icon: 'account-balance-wallet' as const, iconBg: '#581C87', cardBg: '#7C3AED', subtitle: 'Split bills & balances' },
+  { name: 'Expenses' as const, icon: 'account-balance-wallet' as const, iconBg: '#5B21B6', cardBg: '#A78BFA', subtitle: 'Split bills & balances' },
   { name: 'Chores' as const,   icon: 'cleaning-services' as const, iconBg: '#92400E', cardBg: '#D97706', subtitle: 'Assign household tasks' },
   { name: 'Chat' as const,     icon: 'chat' as const,              iconBg: '#1E3A5F', cardBg: '#2563EB', subtitle: 'Discuss with roommates' },
 ];
@@ -315,42 +315,22 @@ export default function DashboardScreen({ navigation }: Props) {
 
 
   const bgColors = isDark 
-    ? ['#070913', '#0F1324'] as readonly [string, string]
-    : ['#F5F7FF', '#EBEFFF'] as readonly [string, string];
-  const textMain = isDark ? '#F1F5F9' : '#1E1B4B';
+    ? ['#070913', '#070913'] as readonly [string, string]
+    : ['#ECEEFF', '#ECEEFF'] as readonly [string, string];
+  const textMain = isDark ? '#F1F5F9' : '#1A1D3B';
   const textMuted = isDark ? '#A78BFA' : '#4F46E5';
-  const glassBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
-  const glassBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.85)';
+  const glassBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(99,102,241,0.1)';
+  const glassBg = isDark ? 'rgba(255,255,255,0.05)' : '#FFFFFF';
   const blurTint = isDark ? 'dark' : 'light';
 
-  // Dynamic grid card values
-  const cardIntensity = isDark ? 30 : 0;
-  const groceryBorder = isDark ? 'rgba(16, 185, 129, 0.3)' : '#059669';
-  const groceryGrad   = isDark 
-    ? ['rgba(6, 95, 70, 0.7)', 'rgba(5, 150, 105, 0.2)'] as const 
-    : ['#10B981', '#059669'] as const;
-
-  const expenseBorder = isDark ? 'rgba(139, 92, 246, 0.3)' : '#7C3AED';
-  const expenseGrad   = isDark 
-    ? ['rgba(88, 28, 135, 0.7)', 'rgba(124, 58, 237, 0.2)'] as const 
-    : ['#8B5CF6', '#7C3AED'] as const;
-
-  const choresBorder  = isDark ? 'rgba(217, 119, 6, 0.3)' : '#D97706';
-  const choresGrad    = isDark 
-    ? ['rgba(146, 64, 14, 0.7)', 'rgba(217, 119, 6, 0.2)'] as const 
-    : ['#F59E0B', '#D97706'] as const;
-
-  const chatBorder    = isDark ? 'rgba(59, 130, 246, 0.3)' : '#2563EB';
-  const chatGrad      = isDark 
-    ? ['rgba(30, 58, 138, 0.7)', 'rgba(37, 99, 235, 0.2)'] as const 
-    : ['#3B82F6', '#2563EB'] as const;
-
-  const detailsList = householdData?.info?.details || [
-    { id: 'wifi_net', label: 'WiFi Network', value: householdData?.info?.wifiName || '', type: 'text', icon: 'wifi' },
-    { id: 'wifi_pass', label: 'WiFi Password', value: householdData?.info?.wifiPass || '', type: 'password', icon: 'vpn-key' },
-    { id: 'landlord', label: 'Landlord', value: householdData?.info?.landlordName || '', type: 'text', icon: 'phone-in-talk' },
-    { id: 'trash_truck', label: 'Trash Truck', value: householdData?.info?.trashArrivalTime || '', type: 'time', icon: 'delete-outline' }
-  ].filter(item => item.value);
+  const detailsList = householdData?.info?.details && householdData.info.details.length > 0
+    ? householdData.info.details
+    : [
+        { id: 'wifi_net', label: 'WiFi Network', value: householdData?.info?.wifiName || 'Not Set', type: 'text', icon: 'wifi' },
+        { id: 'wifi_pass', label: 'WiFi Password', value: householdData?.info?.wifiPass || '........', type: 'password', icon: 'vpn-key' },
+        { id: 'landlord_contact', label: 'Landlord', value: householdData?.info?.landlordPhone || householdData?.info?.landlordName || 'Not Set', type: 'phone', icon: 'phone-in-talk' },
+        { id: 'trash_truck', label: 'Trash Truck', value: householdData?.info?.trashArrivalTime || 'Not Set', type: 'time', icon: 'delete-outline' }
+      ];
 
   const handlePhoneCall = async (phone: string) => {
     if (!phone) return;
@@ -391,32 +371,45 @@ export default function DashboardScreen({ navigation }: Props) {
 
   return (
     <LinearGradient colors={bgColors} style={{ flex: 1 }}>
+      {/* Background decorative blobs matching reference image */}
+      <View style={{ position: 'absolute', top: -100, right: -50, width: 300, height: 300, borderRadius: 150, backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(99, 102, 241, 0.04)' }} />
+      <View style={{ position: 'absolute', top: 300, left: -100, width: 250, height: 250, borderRadius: 125, backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(99, 102, 241, 0.04)' }} />
+
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        {/* Premium Header */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* Header — matches reference: avatar circle, HOUSEHOLD HUB label, name, icons */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-              <Avatar name={userData?.username || 'U'} size={42} bgColor={isDark ? '#1E1B4B' : '#F1F5F9'} color={isDark ? '#A78BFA' : '#4F46E5'} style={{ borderRadius: 12 }} />
+            {/* Avatar with border circle like reference */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Profile')}
+              style={{ width: 46, height: 46, borderRadius: 23, borderWidth: 1.5, borderColor: isDark ? '#4F46E5' : '#4F46E5', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Avatar name={userData?.username || 'U'} size={38} bgColor={isDark ? '#1E1B4B' : '#EEF2FF'} color={isDark ? '#A78BFA' : '#4F46E5'} style={{ borderRadius: 19 }} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setIsSwitchModalVisible(true)}>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: isDark ? '#94A3B8' : '#64748B', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>HOUSEHOLD HUB</Text>
-              <Text style={{ fontSize: 20, fontWeight: '900', color: textMain, letterSpacing: -0.5 }}>{householdData?.name || 'Loading...'}</Text>
+              {/* HOUSEHOLD HUB label with dropdown arrow */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 1 }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: isDark ? '#A78BFA' : '#4F46E5', textTransform: 'uppercase', letterSpacing: 1 }}>HOUSEHOLD HUB</Text>
+                <MaterialIcons name="keyboard-arrow-down" size={14} color={isDark ? '#A78BFA' : '#4F46E5'} />
+              </View>
+              <Text style={{ fontSize: 22, fontWeight: '900', color: textMain, letterSpacing: -0.5, lineHeight: 26 }}>{householdData?.name || 'Loading...'}</Text>
             </TouchableOpacity>
           </View>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <TouchableOpacity onPress={() => setIsMembersModalVisible(true)}>
-              <MaterialIcons name="people-outline" size={24} color={isDark ? '#A78BFA' : '#4F46E5'} />
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+            {/* Header icons in rounded capsules like reference */}
+            <TouchableOpacity onPress={() => setIsMembersModalVisible(true)} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: isDark ? '#1E1B4B' : 'rgba(99, 102, 241, 0.08)', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialIcons name="people" size={22} color={isDark ? '#A78BFA' : '#4F46E5'} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setIsNotificationsModalVisible(true); setUnreadActivityCount(0); }}>
+            <TouchableOpacity onPress={() => { setIsNotificationsModalVisible(true); setUnreadActivityCount(0); }} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: isDark ? '#1E1B4B' : 'rgba(99, 102, 241, 0.08)', alignItems: 'center', justifyContent: 'center' }}>
               <Animated.View style={{ transform: [{ scale: bellAnim }] }}>
-                <MaterialIcons 
-                  name={unreadActivityCount > 0 ? "notifications" : "notifications-none"} 
-                  size={24} 
-                  color={unreadActivityCount > 0 ? '#F59E0B' : (isDark ? '#A78BFA' : '#4F46E5')} 
+                <MaterialIcons
+                  name="notifications"
+                  size={22}
+                  color={unreadActivityCount > 0 ? '#EF4444' : (isDark ? '#A78BFA' : '#4F46E5')}
                 />
                 {unreadActivityCount > 0 && (
-                  <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: '#EF4444', borderRadius: 8, minWidth: 14, height: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: bg }}>
-                    <Text style={{ color: 'white', fontSize: 7, fontWeight: '900' }}>{unreadActivityCount}</Text>
+                  <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: isDark ? '#1E1B4B' : '#FFFFFF' }}>
+                    <Text style={{ color: 'white', fontSize: 8, fontWeight: '900' }}>{unreadActivityCount}</Text>
                   </View>
                 )}
               </Animated.View>
@@ -429,174 +422,235 @@ export default function DashboardScreen({ navigation }: Props) {
           style={{ flex: 1 }} 
           contentContainerStyle={{ paddingBottom: 40 }}
         >
-          {/* Activity Section */}
-          <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
-            <Text style={{ fontSize: 18, fontWeight: '900', color: textMain, marginBottom: 12 }}>Activity</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
+          {/* Activity Strip — compact horizontal chips like reference */}
+          <View style={{ marginBottom: 16 }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
+            >
               {activities.length > 0 ? (
                 activities.slice(0, 5).map((activity, idx) => {
                   const config = getActivityConfig(activity.type);
                   return (
-                    <View key={activity.id || idx} style={{ backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: bord, minWidth: 220 }}>
-                      <View style={{ backgroundColor: config.color + '20', padding: 8, borderRadius: 14 }}>
-                        <MaterialIcons name={config.icon} size={20} color={config.color} />
+                    <View
+                      key={activity.id || idx}
+                      style={{
+                        backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+                        borderRadius: 16,
+                        paddingVertical: 10,
+                        paddingHorizontal: 14,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                        borderWidth: 1,
+                        borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(99,102,241,0.08)',
+                        minWidth: 190,
+                        shadowColor: '#4F46E5',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: isDark ? 0 : 0.04,
+                        shadowRadius: 8,
+                        elevation: isDark ? 0 : 1,
+                      }}
+                    >
+                      <View style={{ backgroundColor: config.color + '18', padding: 7, borderRadius: 10 }}>
+                        <MaterialIcons name={config.icon} size={16} color={config.color} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '800', color: textMain }} numberOfLines={1}>{activity.userName} {config.label}</Text>
-                        <Text style={{ fontSize: 10, color: isDark ? '#94A3B8' : '#64748B', marginTop: 2 }}>{activity.title}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: textMain }} numberOfLines={1}>
+                          {activity.userName} {config.label}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: isDark ? '#64748B' : '#94A3B8', marginTop: 1 }}>
+                          {activity.title && activity.title.length > 20 ? activity.title.slice(0, 20) + '…' : activity.title}
+                        </Text>
                       </View>
                     </View>
                   );
                 })
               ) : (
-                <View style={{ backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: bord }}>
-                  <Text style={{ fontSize: 12, color: isDark ? '#94A3B8' : '#64748B' }}>No recent activity</Text>
+                <View style={{ backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(99,102,241,0.08)' }}>
+                  <Text style={{ fontSize: 12, color: isDark ? '#64748B' : '#94A3B8' }}>No recent activity</Text>
                 </View>
               )}
             </ScrollView>
           </View>
-          {/* Household Details Section (Image-Matched Design) */}
-          <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
-            <View 
-              style={{ 
-                backgroundColor: isDark ? '#0E1324' : '#FFFFFF', 
-                borderRadius: 32, 
-                padding: 20,
-                borderWidth: 1,
-                borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(99,102,241,0.05)',
+          {/* Household Details Card — clean white card matching reference */}
+          <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+            <View
+              style={{
+                backgroundColor: isDark ? '#0E1324' : '#FFFFFF',
+                borderRadius: 24,
+                padding: 18,
                 shadowColor: '#4F46E5',
-                shadowOffset: { width: 0, height: 10 },
-                shadowOpacity: isDark ? 0 : 0.04,
-                shadowRadius: 20,
-                elevation: isDark ? 0 : 2
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: isDark ? 0 : 0.06,
+                shadowRadius: 16,
+                elevation: isDark ? 0 : 3,
               }}
             >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <View style={{ width: 4, height: 16, backgroundColor: '#4F46E5', borderRadius: 2 }} />
-                  <Text style={{ fontSize: 13, fontWeight: '900', color: isDark ? '#F1F5F9' : '#1E1B4B', textTransform: 'uppercase', letterSpacing: 1 }}>HOUSEHOLD DETAILS</Text>
+              {/* Title row */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ width: 3, height: 16, backgroundColor: '#4F46E5', borderRadius: 2 }} />
+                  <Text style={{ fontSize: 13, fontWeight: '900', color: isDark ? '#F1F5F9' : '#1A1D3B', textTransform: 'uppercase', letterSpacing: 1 }}>HOUSEHOLD DETAILS</Text>
                 </View>
-                <TouchableOpacity onPress={() => { setIsEditMode(true); setIsInfoModalVisible(true); }}>
-                  <MaterialIcons name="edit" size={18} color="#4F46E5" />
+                <TouchableOpacity onPress={() => { setIsEditMode(true); setIsInfoModalVisible(true); }} style={{ padding: 4 }}>
+                  <MaterialIcons name="edit" size={17} color="#4F46E5" />
                 </TouchableOpacity>
               </View>
-
+              {/* Fields */}
               <ScrollView 
-                style={{ maxHeight: 160 }} 
-                showsVerticalScrollIndicator={false}
+                horizontal={true} 
+                showsHorizontalScrollIndicator={false} 
                 nestedScrollEnabled={true}
+                contentContainerStyle={{ gap: 10, paddingRight: 20 }}
               >
-                <View style={{ gap: 8 }}>
                   {detailsList.map((field: any) => (
-                    <View 
-                      key={field.id} 
-                      style={{ 
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC', 
-                        borderRadius: 20, 
-                        padding: 14, 
-                        flexDirection: 'row', 
-                        alignItems: 'center',
-                        borderWidth: 1,
-                        borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)'
+                    <View
+                      key={field.id}
+                      style={{
+                        width: (Dimensions.get('window').width - 78) / 2, // fits exactly 2 fields based on precise screen width
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC',
+                        borderRadius: 16,
+                        padding: 12,
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        minHeight: 110,
                       }}
                     >
-                      <View style={{ backgroundColor: isDark ? 'rgba(79, 70, 229, 0.15)' : '#EEF2FF', padding: 10, borderRadius: 14, marginRight: 14 }}>
-                        <MaterialIcons name={field.icon} size={18} color="#4F46E5" />
+                      <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ backgroundColor: isDark ? 'rgba(79,70,229,0.15)' : '#EEF2FF', padding: 8, borderRadius: 11 }}>
+                          <MaterialIcons name={field.icon} size={18} color="#4F46E5" />
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                          {field.type === 'password' && (
+                            <TouchableOpacity onPress={() => toggleFieldVisibility(field.id)} style={{ padding: 4 }}>
+                              <MaterialIcons name={revealedFields.includes(field.id) ? 'visibility' : 'visibility-off'} size={18} color="#4F46E5" style={{ opacity: 0.8 }} />
+                            </TouchableOpacity>
+                          )}
+                          {field.type === 'link' ? (
+                            <TouchableOpacity onPress={() => handleOpenLink(field.value)} style={{ padding: 4 }}>
+                              <MaterialIcons name="link" size={18} color="#4F46E5" style={{ opacity: 0.8 }} />
+                            </TouchableOpacity>
+                          ) : field.type === 'phone' ? (
+                            <TouchableOpacity onPress={() => handlePhoneCall(field.value)} style={{ padding: 4 }}>
+                              <MaterialIcons name="call" size={18} color="#4F46E5" style={{ opacity: 0.8 }} />
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(field.value); showToast('Copied', 'success'); }} style={{ padding: 4 }}>
+                              <MaterialIcons name="content-copy" size={18} color="#4F46E5" style={{ opacity: 0.8 }} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 8, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: 2 }}>{field.label}</Text>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: isDark ? '#F1F5F9' : '#0F172A' }} numberOfLines={1}>
+                      <View style={{ marginTop: 12, width: '100%' }}>
+                        <Text style={{ fontSize: 9, fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{field.label}</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: isDark ? '#F1F5F9' : '#0F172A' }} numberOfLines={1}>
                           {field.type === 'password' && !revealedFields.includes(field.id) ? '••••••••' : field.value}
                         </Text>
                       </View>
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        {field.type === 'password' && (
-                          <TouchableOpacity onPress={() => toggleFieldVisibility(field.id)}>
-                            <MaterialIcons name={revealedFields.includes(field.id) ? "visibility" : "visibility-off"} size={16} color="#94A3B8" />
-                          </TouchableOpacity>
-                        )}
-                        <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(field.value); showToast('Copied', 'success'); }}>
-                          <MaterialIcons name="content-copy" size={16} color="#94A3B8" />
-                        </TouchableOpacity>
-                      </View>
                     </View>
                   ))}
-                </View>
               </ScrollView>
             </View>
           </View>
 
-          {/* Navigation Grid */}
-          <View style={{ paddingHorizontal: 20, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
-            <TouchableOpacity onPress={() => handleNav('Grocery')} style={{ width: '48%', height: 160, backgroundColor: '#059669', borderRadius: 32, padding: 20, justifyContent: 'space-between' }}>
-              <View>
-                <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900' }}>Grocery</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', marginTop: 4 }}>View shared list →</Text>
-              </View>
-              <View style={{ alignSelf: 'flex-end', backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
-                <MaterialIcons name="shopping-cart" size={20} color="#FFF" />
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => handleNav('Expenses')} style={{ width: '48%', height: 160, backgroundColor: '#2563EB', borderRadius: 32, padding: 20, justifyContent: 'space-between' }}>
-              <View>
-                <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900' }}>Expenses</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Split bills easily →</Text>
-              </View>
-              <View style={{ alignSelf: 'flex-end', backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
-                <MaterialIcons name="account-balance-wallet" size={20} color="#FFF" />
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => handleNav('Chores')} style={{ width: '48%', height: 160, backgroundColor: '#92400E', borderRadius: 32, padding: 20, justifyContent: 'space-between' }}>
-              <View>
-                <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900' }}>Chores</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', marginTop: 4 }}>{chores.filter(c => !c.done).length} active tasks</Text>
-              </View>
-              <View style={{ alignSelf: 'flex-end', backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
-                <MaterialIcons name="cleaning-services" size={20} color="#FFF" />
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => handleNav('Chat')} style={{ width: '48%', height: 160, backgroundColor: '#3B82F6', borderRadius: 32, padding: 20, justifyContent: 'space-between' }}>
-              <View>
-                <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900' }}>Chat</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', marginTop: 4 }}>{hasUnreadMessages ? "New messages" : "Discuss ideas"}</Text>
-              </View>
-              <View style={{ alignSelf: 'flex-end', backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
-                <MaterialIcons name="chat" size={20} color="#FFF" />
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {/* Living Status Banner */}
-          <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
-            <View style={{ borderRadius: 32, overflow: 'hidden', height: 180, position: 'relative' }}>
-              <Image 
-                source={{ uri: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' }} 
-                style={{ width: '100%', height: '100%', opacity: 0.8 }} 
-              />
-              <LinearGradient 
-                colors={['transparent', 'rgba(0,0,0,0.8)']} 
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, padding: 24, justifyContent: 'flex-end' }}
+          {/* Navigation Grid — 2×2 cards matching reference design */}
+          <View style={{ paddingHorizontal: 16, gap: 12 }}>
+            {/* Row 1 */}
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              {/* Grocery */}
+              <TouchableOpacity
+                onPress={() => handleNav('Grocery')}
+                activeOpacity={0.88}
+                style={{ flex: 1, height: 170, backgroundColor: '#059669', borderRadius: 28, padding: 18, overflow: 'hidden' }}
               >
-                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>LIVING STATUS</Text>
-                <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '900' }}>"Peaceful Vibes" Household</Text>
-              </LinearGradient>
-              
-              <TouchableOpacity 
-                style={{ position: 'absolute', bottom: 16, right: 16, width: 44, height: 44, borderRadius: 14, backgroundColor: '#4F46E5', alignItems: 'center', justifyContent: 'center', shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 }}
-                onPress={() => setIsMenuVisible(true)}
+                {/* Top row: title + icon button */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: -0.3 }}>Grocery</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '600', marginTop: 4 }}>View shared list →</Text>
+                  </View>
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 10, borderRadius: 14 }}>
+                    <MaterialIcons name="shopping-cart" size={20} color="#FFF" />
+                  </View>
+                </View>
+                {/* Watermark icon */}
+                <View style={{ position: 'absolute', bottom: -10, right: -6, opacity: 0.12 }}>
+                  <MaterialIcons name="shopping-cart" size={90} color="#FFF" />
+                </View>
+              </TouchableOpacity>
+
+              {/* Expenses */}
+              <TouchableOpacity
+                onPress={() => handleNav('Expenses')}
+                activeOpacity={0.88}
+                style={{ flex: 1, height: 170, backgroundColor: '#7C3AED', borderRadius: 28, padding: 18, overflow: 'hidden' }}
               >
-                <MaterialIcons name="add" size={24} color="#FFF" />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: -0.3 }}>Expenses</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '600', marginTop: 4 }}>Split bills easily →</Text>
+                  </View>
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 10, borderRadius: 14 }}>
+                    <MaterialIcons name="attach-money" size={20} color="#FFF" />
+                  </View>
+                </View>
+                <View style={{ position: 'absolute', bottom: -10, right: -6, opacity: 0.12 }}>
+                  <MaterialIcons name="bar-chart" size={90} color="#FFF" />
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Row 2 */}
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              {/* Chores */}
+              <TouchableOpacity
+                onPress={() => handleNav('Chores')}
+                activeOpacity={0.88}
+                style={{ flex: 1, height: 170, backgroundColor: '#F59E0B', borderRadius: 28, padding: 18, overflow: 'hidden' }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: -0.3 }}>Chores</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '600', marginTop: 4 }}>{chores.filter(c => !c.done).length} active tasks</Text>
+                  </View>
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 10, borderRadius: 14 }}>
+                    <MaterialIcons name="cleaning-services" size={20} color="#FFF" />
+                  </View>
+                </View>
+                <View style={{ position: 'absolute', bottom: -10, right: -6, opacity: 0.12 }}>
+                  <MaterialIcons name="cleaning-services" size={90} color="#FFF" />
+                </View>
+              </TouchableOpacity>
+
+              {/* Chat */}
+              <TouchableOpacity
+                onPress={() => handleNav('Chat')}
+                activeOpacity={0.88}
+                style={{ flex: 1, height: 170, backgroundColor: '#2563EB', borderRadius: 28, padding: 18, overflow: 'hidden' }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: -0.3 }}>Chat</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '600', marginTop: 4 }}>{hasUnreadMessages ? 'New messages' : 'Join chat →'}</Text>
+                  </View>
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 10, borderRadius: 14 }}>
+                    <MaterialIcons name="chat" size={20} color="#FFF" />
+                  </View>
+                </View>
+                <View style={{ position: 'absolute', bottom: -10, right: -6, opacity: 0.12 }}>
+                  <MaterialIcons name="chat" size={90} color="#FFF" />
+                </View>
               </TouchableOpacity>
             </View>
           </View>
+
         </ScrollView>
 
 
-      {/* Modals are kept below but wrapped nicely to ensure context isn't broken */}
-      {/* Menu Modal */}
+      {/* Modals */}
       <SlideModal visible={isMenuVisible} onClose={() => setIsMenuVisible(false)} title="Menu">
         <View className="gap-3">
           <TouchableOpacity onPress={() => { setIsMenuVisible(false); setIsProfileModalVisible(true); }} className="flex-row items-center gap-4 bg-surfaceRaised p-5 rounded-3xl border border-border/50">

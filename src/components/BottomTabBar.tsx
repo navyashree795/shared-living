@@ -14,10 +14,10 @@ type TabConfig = {
 
 const TAB_CONFIG: TabConfig[] = [
   { name: 'Dashboard', icon: 'home', label: 'Home' },
-  { name: 'Grocery',   icon: 'shopping-bag', label: 'Grocery' },
+  { name: 'Grocery',   icon: 'shopping-cart', label: 'Grocery' },
   { name: 'Expenses',  icon: 'attach-money', label: 'Expenses' },
-  { name: 'Chores',    icon: 'check-box', label: 'Chores' },
-  { name: 'Chat',      icon: 'chat-bubble-outline', label: 'Chat' },
+  { name: 'Chores',    icon: 'cleaning-services', label: 'Chores' },
+  { name: 'Chat',      icon: 'chat', label: 'Chat' },
 ];
 
 export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
@@ -50,15 +50,20 @@ export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
   return (
     <View style={{
       position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: 75 + insets.bottom,
-      backgroundColor: isDark ? '#07080F' : '#FFFFFF',
-      borderTopWidth: 1,
-      borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+      bottom: insets.bottom > 0 ? insets.bottom : 20,
+      left: 20,
+      right: 20,
+      height: 72,
+      backgroundColor: isDark ? '#1A1D3B' : '#FFFFFF',
+      borderRadius: 36,
+      shadowColor: '#4F46E5',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 20,
+      elevation: 5,
       flexDirection: 'row',
-      paddingBottom: insets.bottom,
+      alignItems: 'center',
+      paddingHorizontal: 8,
     }}>
       {state.routes.map((route, index) => {
         const config = TAB_CONFIG.find(t => t.name === route.name);
@@ -66,8 +71,8 @@ export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
 
         const isFocused = state.index === index;
         const color = isFocused 
-          ? (isDark ? '#818CF8' : '#4F46E5') 
-          : (isDark ? '#4B5563' : '#94A3B8');
+          ? (isDark ? '#A78BFA' : '#4F46E5') 
+          : (isDark ? '#64748B' : '#94A3B8');
 
         return (
           <TouchableOpacity
@@ -76,29 +81,37 @@ export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
             onPress={() => navigation.navigate(route.name)}
             style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
           >
-            <View style={{ alignItems: 'center', paddingTop: 10 }}>
-              <MaterialIcons
-                name={config.icon as any}
-                size={26}
-                color={color}
-              />
+            <View style={{ alignItems: 'center', gap: 3 }}>
+              {/* Icon Container with background when active */}
+              <View style={{
+                backgroundColor: isFocused ? (isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF') : 'transparent',
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <MaterialIcons
+                  name={config.icon as any}
+                  size={22}
+                  color={color}
+                />
+              </View>
               <Text style={{ 
                 fontSize: 10, 
                 color: color, 
-                fontWeight: isFocused ? '700' : '500',
-                marginTop: 4,
+                fontWeight: isFocused ? '800' : '600',
               }}>
                 {config.label}
               </Text>
-              {isFocused && (
-                <View style={{
-                  width: 4,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: color,
-                  marginTop: 6,
-                }} />
-              )}
+              {/* Active Dot indicator */}
+              <View style={{
+                width: 4,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: isFocused ? color : 'transparent',
+                marginTop: 1,
+              }} />
             </View>
           </TouchableOpacity>
         );
