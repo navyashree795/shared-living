@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, Alert, ScrollView, ActivityIndicator,
+  Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -242,7 +243,11 @@ export default function ProfileScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40, paddingTop: 16 }} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40, paddingTop: 16 }} showsVerticalScrollIndicator={false}>
 
         {/* Avatar + Name */}
         <View style={{ alignItems: 'center', marginBottom: 32 }}>
@@ -494,6 +499,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
       </ScrollView>
+    </KeyboardAvoidingView>
 
       {/* Backup & Archives SlideModal */}
       <SlideModal

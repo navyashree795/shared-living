@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, FlatList, TextInput, TouchableOpacity, 
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Animated, Keyboard
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Animated
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,23 +35,6 @@ export default function ChatScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
   
   const isFirstLoad = useRef(true);
-
-  const [keyboardActive, setKeyboardActive] = useState(false);
-
-  useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      () => setKeyboardActive(true)
-    );
-    const hideSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => setKeyboardActive(false)
-    );
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   useEffect(() => {
     if (!householdId) return;
@@ -302,10 +285,16 @@ export default function ChatScreen({ route, navigation }: Props) {
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, backgroundColor: isDark ? '#070913' : '#F5F7FF' }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      {/*
+        KeyboardAvoidingView starts BELOW the header, so keyboardVerticalOffset = 0.
+        Use 'padding' on both platforms: it just adds bottom padding equal to the
+        keyboard height, pushing the input bar up without resizing or moving the
+        whole container. 'height' shrinks the container which throws messages up.
+      */}
+      <KeyboardAvoidingView
+        behavior="padding"
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.bottom : 0}
       >
         <View style={{ flex: 1 }}>
           {loading ? (
@@ -325,6 +314,7 @@ export default function ChatScreen({ route, navigation }: Props) {
               keyboardDismissMode="interactive"
               decelerationRate="fast"
               scrollEventThrottle={16}
+              maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             />
             )}
 
