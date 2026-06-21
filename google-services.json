@@ -1,0 +1,28 @@
+{
+  "project_info": {
+    "project_number": "362366255638",
+    "project_id": "shared-living-app",
+    "storage_bucket": "shared-living-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:362366255638:android:89e4a7c00f5aedbc60ab37",
+        "android_client_info": {
+          "package_name": "com.jeevan0714.sharedliving"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "AIzaSyCnp_SZ0uT16bOSqeGP_bxPhQ2TPQR4GlM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "status": 1
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

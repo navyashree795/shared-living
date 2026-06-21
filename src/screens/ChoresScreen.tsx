@@ -8,7 +8,8 @@ import { TimeWheelPicker } from '../components/TimeWheelPicker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
-import { getSyncedDate } from '../utils/timeUtils';
+import { getSyncedDate, getNextOccurrence } from '../utils/timeUtils';
+import { getCycleStartDate } from '../utils/retentionUtils';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { useHousehold } from '../context/HouseholdContext';
@@ -19,14 +20,15 @@ import SlideModal from '../components/SlideModal';
 import SwipeableRow from '../components/SwipeableRow';
 import { ChoreSkeleton } from '../components/Skeleton';
 import {
-  collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, arrayUnion
+  collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, arrayUnion, Timestamp, where
 } from 'firebase/firestore';
 import { logActivity } from '../utils/activityUtils';
+import { scheduleChoreReminder, cancelChoreReminder } from '../utils/notificationUtils';
 import { Chore } from '../types';
 type Props = { navigation: any; route?: any };
 
 export default function ChoresScreen({ route, navigation }: Props) {
-  const { householdId } = useHousehold();
+  const { householdId, householdData } = useHousehold();
   const { isDark } = useTheme();
   const bg      = isDark ? '#070913' : '#F5F7FF';
   const surface = isDark ? '#0E1324' : '#FFFFFF';
@@ -62,8 +64,15 @@ export default function ChoresScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     if (!householdId) return;
+    const cycleStartDay = householdData?.billingCycleStartDay || 1;
+    const now = getSyncedDate();
+    const currentCycleStart = getCycleStartDate(now, cycleStartDay);
+    const mainStartDate = new Date(currentCycleStart);
+    mainStartDate.setMonth(mainStartDate.getMonth() - 2);
+
     const q = query(
       collection(db, 'households', householdId, 'chores'),
+      where('createdAt', '>=', Timestamp.fromDate(mainStartDate)),
       orderBy('createdAt', 'desc')
     );
     const unsub = onSnapshot(q, (snap) => {
@@ -87,7 +96,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
       }
     });
     return unsub;
-  }, [householdId]);
+  }, [householdId, householdData?.billingCycleStartDay]);
 
   const openEditModal = (chore: Chore) => {
     setEditingChore(chore);
@@ -145,7 +154,16 @@ export default function ChoresScreen({ route, navigation }: Props) {
       };
 
       if (editingChore) {
-        await updateDoc(doc(db, 'households', householdId, 'chores', editingChore.id), baseChoreData);
+        if (editingChore.notificationId) {
+          await cancelChoreReminder(editingChore.notificationId);
+        }
+        const nextTarget = getNextOccurrence(editingChore.day, formattedTime);
+        const notifId = await scheduleChoreReminder(choreTitle.trim(), nextTarget);
+        await updateDoc(doc(db, 'households', householdId, 'chores', editingChore.id), {
+          ...baseChoreData,
+          targetDate: Timestamp.fromDate(nextTarget),
+          notificationId: notifId || null,
+        });
         showToast('Chore Updated', 'success');
       } else {
         const fullChoreData = {
@@ -158,18 +176,26 @@ export default function ChoresScreen({ route, navigation }: Props) {
         };
 
         if (selectedDays.length > 0) {
-          await Promise.all(selectedDays.map(day => 
-            addDoc(collection(db, 'households', householdId, 'chores'), {
+          await Promise.all(selectedDays.map(async (day) => {
+            const nextTarget = getNextOccurrence(day, formattedTime);
+            const notifId = await scheduleChoreReminder(choreTitle.trim(), nextTarget);
+            return addDoc(collection(db, 'households', householdId, 'chores'), {
               ...fullChoreData,
               day: day,
-            })
-          ));
+              targetDate: Timestamp.fromDate(nextTarget),
+              notificationId: notifId || null,
+            });
+          }));
           logActivity(householdId, 'chore_add', `${choreTitle.trim()} (${selectedDays.join(', ')})`, currentUserName);
         } else {
           const today = getSyncedDate().toLocaleDateString('en-US', { weekday: 'short' });
+          const nextTarget = getNextOccurrence(today, formattedTime);
+          const notifId = await scheduleChoreReminder(choreTitle.trim(), nextTarget);
           await addDoc(collection(db, 'households', householdId, 'chores'), {
             ...fullChoreData,
             day: today,
+            targetDate: Timestamp.fromDate(nextTarget),
+            notificationId: notifId || null,
           });
           logActivity(householdId, 'chore_add', choreTitle.trim(), currentUserName);
         }
@@ -190,44 +216,59 @@ export default function ChoresScreen({ route, navigation }: Props) {
     try {
       const isMarkingDone = !chore.done;
       
-      // Simple toggle for all chores - this ensures the strikethrough appears as requested
-      await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
-        done: isMarkingDone,
-      });
-      
       if (isMarkingDone) {
-        showToast('Chore finished!', 'success');
+        if (chore.notificationId) {
+          await cancelChoreReminder(chore.notificationId);
+        }
+        await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
+          done: true,
+          notificationId: null,
+        });
+        showToast('Chore finished! 🎉', 'success');
         logActivity(householdId, 'chore_done', chore.title);
+
+        if (chore.rotationEnabled && chore.rotationOrder && chore.rotationOrder.length > 0) {
+          const nextIndex = ((chore.currentRotationIndex || 0) + 1) % chore.rotationOrder.length;
+          const nextAssignee = chore.rotationOrder[nextIndex];
+          
+          const baseDate = chore.targetDate ? chore.targetDate.toDate() : getSyncedDate();
+          const nextTargetDate = new Date(baseDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+          const nextNotifId = await scheduleChoreReminder(chore.title, nextTargetDate);
+
+          await addDoc(collection(db, 'households', householdId, 'chores'), {
+            title: chore.title,
+            assignedToUid: nextAssignee,
+            time: chore.time,
+            day: chore.day,
+            done: false,
+            rotationEnabled: true,
+            rotationOrder: chore.rotationOrder,
+            currentRotationIndex: nextIndex,
+            createdByUid: chore.createdByUid || auth.currentUser?.uid || '',
+            createdAt: serverTimestamp(),
+            seenBy: [nextAssignee],
+            targetDate: Timestamp.fromDate(nextTargetDate),
+            notificationId: nextNotifId || null,
+          });
+
+          showToast(`Rotated to ${getMemberName(nextAssignee)}`, 'info');
+          logActivity(householdId, 'chore_rotate', chore.title, undefined, 0, nextAssignee);
+        }
       } else {
+        const nextOccurrence = getNextOccurrence(chore.day, chore.time);
+        const notifId = await scheduleChoreReminder(chore.title, nextOccurrence);
+        await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
+          done: false,
+          targetDate: Timestamp.fromDate(nextOccurrence),
+          notificationId: notifId || null,
+        });
         showToast('Chore reopened', 'info');
       }
     } catch (error) {
       console.error('Chore Toggle Error:', error);
       Alert.alert('Error', 'Could not update chore.');
     }
-  }, [householdId, showToast]);
-
-  const handleRotate = useCallback(async (chore: Chore) => {
-    if (!householdId) return;
-    if (!chore.rotationEnabled || !chore.rotationOrder || chore.rotationOrder.length === 0) return;
-
-    try {
-      const nextIndex = ((chore.currentRotationIndex || 0) + 1) % chore.rotationOrder.length;
-      const nextAssignee = chore.rotationOrder[nextIndex];
-      
-      await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
-        done: false, // Reset to pending for the next person
-        assignedToUid: nextAssignee,
-        currentRotationIndex: nextIndex,
-      });
-
-      showToast(`Rotated to ${getMemberName(nextAssignee)}`, 'info');
-      logActivity(householdId, 'chore_rotate', chore.title, undefined, 0, nextAssignee);
-    } catch (error) {
-      console.error('Chore Rotate Error:', error);
-      Alert.alert('Error', 'Could not rotate chore.');
-    }
-  }, [householdId, getMemberName, showToast]);
+  }, [householdId, showToast, getMemberName]);
 
   const handleReminder = useCallback(async (chore: Chore) => {
     if (!householdId) return;
@@ -256,6 +297,10 @@ export default function ChoresScreen({ route, navigation }: Props) {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try {
+          const chore = chores.find(c => c.id === choreId);
+          if (chore?.notificationId) {
+            await cancelChoreReminder(chore.notificationId);
+          }
           await deleteDoc(doc(db, 'households', householdId, 'chores', choreId));
           showToast('Chore Deleted', 'success');
         } catch {
@@ -263,7 +308,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         }
       }}
     ]);
-  }, [householdId, showToast]);
+  }, [householdId, chores, showToast]);
 
   const pending = chores.filter(c => !c.done);
   const done = chores.filter(c => c.done);
@@ -276,7 +321,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
       <SwipeableRow
         onDelete={() => handleDelete(item.id)}
         onEdit={() => openEditModal(item)}
-        onComplete={item.rotationEnabled ? () => handleRotate(item) : () => handleToggleDone(item)}
+        onComplete={() => handleToggleDone(item)}
         isRotation={item.rotationEnabled}
       >
         <TouchableOpacity 
@@ -395,6 +440,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                       textTransform: 'uppercase' 
                     }}>
                       {item.day}
+                      {item.targetDate ? `, ${item.targetDate.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
                     </Text>
                   </View>
                 )}
@@ -466,7 +512,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         </TouchableOpacity>
       </SwipeableRow>
     );
-  }, [getMemberName, handleToggleDone, handleRotate, handleDelete, handleReminder, surface, bord, text, muted, isDark, openEditModal, expandedId, recentlyNudged]);
+  }, [getMemberName, handleToggleDone, handleDelete, handleReminder, surface, bord, text, muted, isDark, openEditModal, expandedId, recentlyNudged]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>

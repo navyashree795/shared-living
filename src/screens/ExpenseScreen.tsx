@@ -15,19 +15,22 @@ import SlideModal from '../components/SlideModal';
 import SwipeableRow from '../components/SwipeableRow';
 import { ExpenseSkeleton } from '../components/Skeleton';
 import {
-  collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, deleteDoc
+  collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, deleteDoc, where, Timestamp
 } from 'firebase/firestore';
 import { logActivity } from '../utils/activityUtils';
-import { detectCategory, getCategoryIcon } from '../utils/expenseUtils';
+import { sendRemotePushNotification } from '../utils/notificationUtils';
+import { detectCategory, getCategoryIcon, checkAndDraftRecurringExpenses, getYearMonthString } from '../utils/expenseUtils';
+import { getSyncedDate } from '../utils/timeUtils';
+import { getCycleStartDate } from '../utils/retentionUtils';
 import { Expense } from '../types';
-import { pickAndUploadReceipt, saveManualReceiptExpense, pickAndUploadImageOnly } from '../utils/uploadUtils';
+
 
 type Props = { navigation: any; route?: any };
 
 const { width } = Dimensions.get('window');
 
 export default function ExpenseScreen({ navigation }: Props) {
-  const { householdId, members, getMemberName } = useHousehold();
+  const { householdId, members, getMemberName, householdData, memberProfiles } = useHousehold();
   const hid = householdId ?? '';
   const { isDark } = useTheme();
   const bg      = isDark ? '#070913' : '#F4F7FF';
@@ -50,8 +53,8 @@ export default function ExpenseScreen({ navigation }: Props) {
 
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
-  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
+
   
   const [selectedMembers, setSelectedMembers] = useState<Record<string, boolean>>({});
   const [settleAmount, setSettleAmount] = useState('');
@@ -76,13 +79,42 @@ export default function ExpenseScreen({ navigation }: Props) {
 
   useEffect(() => {
     if (!hid) { setLoading(false); return; }
-    const q = query(collection(db, 'households', hid, 'expenses'), orderBy('createdAt', 'desc'));
+    const cycleStartDay = householdData?.billingCycleStartDay || 1;
+    const now = getSyncedDate();
+    const currentCycleStart = getCycleStartDate(now, cycleStartDay);
+    const mainStartDate = new Date(currentCycleStart);
+    mainStartDate.setMonth(mainStartDate.getMonth() - 2);
+
+    const q = query(
+      collection(db, 'households', hid, 'expenses'),
+      where('createdAt', '>=', Timestamp.fromDate(mainStartDate)),
+      orderBy('createdAt', 'desc')
+    );
     const unsub = onSnapshot(q, (snap) => {
-      setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense)));
+      const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense));
+      setExpenses(fetched);
+      setLoading(false);
+    }, (err) => {
+      console.error("Expense fetch error:", err);
       setLoading(false);
     });
-    return unsub;
-  }, [householdId]);
+
+    const qRecurring = query(
+      collection(db, 'households', hid, 'expenses'),
+      where('isRecurring', '==', true)
+    );
+    const unsubRecurring = onSnapshot(qRecurring, (snap) => {
+      const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense));
+      checkAndDraftRecurringExpenses(hid, fetched);
+    }, (err) => {
+      console.error("Recurring expense fetch error:", err);
+    });
+
+    return () => {
+      unsub();
+      unsubRecurring();
+    };
+  }, [householdId, householdData?.billingCycleStartDay]);
 
   const handleAddExpense = async () => {
     const parsed = parseFloat(amount);
@@ -99,7 +131,7 @@ export default function ExpenseScreen({ navigation }: Props) {
     if (!currentUid) return;
     const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
     try {
-      await addDoc(collection(db, 'households', hid, 'expenses'), {
+      const expenseData: any = {
         type: 'expense',
         title: title.trim(),
         amount: parsed,
@@ -107,12 +139,36 @@ export default function ExpenseScreen({ navigation }: Props) {
         paidByUid: currentUid,
         payerName: getMemberName(currentUid), 
         splitAmong: splitAmongUids,
-        receiptUrl: receiptUrl || null,
         createdAt: serverTimestamp(),
-      });
+      };
+      if (isRecurring) {
+        expenseData.isRecurring = true;
+        expenseData.lastDraftedMonth = getYearMonthString(new Date());
+      }
+      await addDoc(collection(db, 'households', hid, 'expenses'), expenseData);
       logActivity(hid, 'expense_add', title.trim(), currentUserName, parsed);
       showToast('Expense logged', 'success');
-      setTitle(''); setAmount(''); setReceiptUrl(null); setIsModalVisible(false);
+
+      try {
+        const otherMembers = members.filter(uid => uid !== currentUid);
+        const tokens = otherMembers
+          .map(uid => memberProfiles[uid]?.pushToken)
+          .filter(Boolean) as string[];
+        
+        if (tokens.length > 0) {
+          const payerName = getMemberName(currentUid);
+          const nameToUse = payerName === 'You' ? (userData?.username ? `@${userData.username}` : 'A roommate') : payerName;
+          sendRemotePushNotification(
+            tokens,
+            '💸 New Expense Logged',
+            `${nameToUse} added an expense: "${title.trim()}" for ₹${parsed}.`
+          );
+        }
+      } catch (e) {
+        console.error('Error sending push notifications for expense:', e);
+      }
+
+      setTitle(''); setAmount(''); setIsRecurring(false); setIsModalVisible(false);
     } catch { Alert.alert('Error', 'Could not add expense.'); }
   };
 
@@ -135,6 +191,22 @@ export default function ExpenseScreen({ navigation }: Props) {
       });
       logActivity(hid, 'payment_add', `to ${getMemberName(settleWithUid)}`, currentUserName, parsed);
       showToast('Payment recorded', 'success');
+
+      try {
+        const receiverToken = memberProfiles[settleWithUid]?.pushToken;
+        if (receiverToken) {
+          const senderName = getMemberName(currentUid);
+          const nameToUse = senderName === 'You' ? (userData?.username ? `@${userData.username}` : 'A roommate') : senderName;
+          sendRemotePushNotification(
+            [receiverToken],
+            '🤝 Debt Settle Up',
+            `${nameToUse} recorded a payment of ₹${parsed} to you.`
+          );
+        }
+      } catch (e) {
+        console.error('Error sending push notification for settlement:', e);
+      }
+
       setSettleAmount(''); setSettleWithUid(null); setIsSettleModalVisible(false);
     } catch { Alert.alert('Error', 'Could not record settlement.'); }
   };
@@ -234,7 +306,12 @@ export default function ExpenseScreen({ navigation }: Props) {
              <MaterialIcons name={iconName} size={22} color="#64748B" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 16, fontWeight: '900', color: textMain }}>{item.title}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: textMain }}>{item.title}</Text>
+              {(item.isRecurring || item.isDrafted) && (
+                <MaterialIcons name="autorenew" size={14} color={primary} />
+              )}
+            </View>
             <Text style={{ fontSize: 10, fontWeight: '900', color: textMuted, marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 }}>
               {iPaid ? 'Paid by You' : `By ${getMemberName(item.paidByUid!)}`}
             </Text>
@@ -246,12 +323,7 @@ export default function ExpenseScreen({ navigation }: Props) {
             <Text style={{ fontSize: 9, fontWeight: '900', color: relationshipColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               {relationshipText}
             </Text>
-            {item.receiptUrl && (
-              <TouchableOpacity onPress={() => Linking.openURL(item.receiptUrl!)} style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(99,102,241,0.1)' : '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                <MaterialIcons name="receipt" size={12} color={primary} style={{ marginRight: 4 }} />
-                <Text style={{ color: primary, fontSize: 9, fontWeight: '800' }}>RECEIPT</Text>
-              </TouchableOpacity>
-            )}
+
 
           </View>
         </View>
@@ -359,46 +431,6 @@ export default function ExpenseScreen({ navigation }: Props) {
         </TouchableOpacity>
         <Text style={{ fontSize: 18, fontWeight: '900', color: textMain }}>Expenses</Text>
         <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity onPress={async () => {
-              const currentUid = auth.currentUser?.uid;
-              if (!currentUid) return;
-              const uploaderName = getMemberName(currentUid) || userData?.username || 'Member';
-              showToast('Scanning receipt...', 'success');
-              const result = await pickAndUploadReceipt(hid, currentUid, uploaderName, members);
-              if (result.success) {
-                const share = result.amount ? (result.amount / members.length).toFixed(0) : 0;
-                showToast(`✅ ₹${result.amount?.toFixed(0)} split! (₹${share} each)`, 'success');
-              } else if (result.needsManualAmount && result.receiptUrl) {
-                // AI couldn't extract amount — ask user to type it
-                Alert.prompt(
-                  'Enter Total Amount',
-                  `AI could not read the total. Please type the bill amount:`,
-                  async (input) => {
-                    const amt = parseFloat(input || '0');
-                    if (!amt || amt <= 0) { showToast('Invalid amount', 'error'); return; }
-                    const saved = await saveManualReceiptExpense(
-                      hid, currentUid, uploaderName, members,
-                      result.title || 'Receipt', amt, result.receiptUrl!
-                    );
-                    if (saved) {
-                      const share = (amt / members.length).toFixed(0);
-                      showToast(`✅ ₹${amt.toFixed(0)} split! (₹${share} each)`, 'success');
-                    }
-                  },
-                  'plain-text',
-                  '',
-                  'numeric'
-                );
-              } else {
-                if (result.error === 'storage_rules') {
-                  Alert.alert('Storage Permission Error', 'Firebase Storage rules are blocking uploads. Please update your Storage rules in the Firebase Console to:\n\nallow read, write: if request.auth != null;');
-                } else {
-                  showToast('Upload failed. Check your connection.', 'error');
-                }
-              }
-            }} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: border }}>
-              <MaterialIcons name="document-scanner" size={20} color={textMain} />
-            </TouchableOpacity>
             <TouchableOpacity onPress={() => setIsModalVisible(true)} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: primary, alignItems: 'center', justifyContent: 'center', shadowColor: primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}>
               <MaterialIcons name="add" size={24} color="#FFF" />
             </TouchableOpacity>
@@ -428,7 +460,7 @@ export default function ExpenseScreen({ navigation }: Props) {
       />
 
       {/* Slide Modals */}
-      <SlideModal visible={isModalVisible} onClose={() => { setIsModalVisible(false); setShowSplitOptions(false); setTitle(''); setAmount(''); }} title={showSplitOptions ? "Split Among" : "Add Expense"}>
+      <SlideModal visible={isModalVisible} onClose={() => { setIsModalVisible(false); setShowSplitOptions(false); setTitle(''); setAmount(''); setIsRecurring(false); }} title={showSplitOptions ? "Split Among" : "Add Expense"}>
         {!showSplitOptions ? (
           <View style={{ gap: 20 }}>
             <View>
@@ -451,23 +483,22 @@ export default function ExpenseScreen({ navigation }: Props) {
               <MaterialIcons name="chevron-right" size={20} color={primary} />
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={async () => {
-                setIsUploading(true);
-                const url = await pickAndUploadImageOnly();
-                if (url) setReceiptUrl(url);
-                setIsUploading(false);
-            }} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(99,102,241,0.1)' : '#EEF2FF', padding: 16, borderRadius: 20 }}>
-              <MaterialIcons name="receipt" size={24} color={primary} style={{ marginRight: 12 }} />
+            <TouchableOpacity
+              onPress={() => setIsRecurring(!isRecurring)}
+              activeOpacity={0.8}
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isRecurring ? (isDark ? 'rgba(99,102,241,0.15)' : '#EEF2FF') : (isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC'), padding: 16, borderRadius: 20, borderWidth: 1, borderColor: isRecurring ? primary : border }}
+            >
+              <MaterialIcons name="autorenew" size={24} color={isRecurring ? primary : textMuted} style={{ marginRight: 12 }} />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: textMain, fontSize: 14, fontWeight: '800' }}>Attach Receipt</Text>
-                {isUploading ? (
-                  <Text style={{ color: primary, fontSize: 12, fontWeight: '700' }}>Uploading...</Text>
-                ) : (
-                  <Text style={{ color: primary, fontSize: 12, fontWeight: '700' }}>{receiptUrl ? 'Receipt Attached' : 'Optional'}</Text>
-                )}
+                <Text style={{ color: textMain, fontSize: 14, fontWeight: '800' }}>Recurring Bill</Text>
+                <Text style={{ color: textMuted, fontSize: 11, fontWeight: '700', marginTop: 2 }}>Drafts on the 1st of every month</Text>
               </View>
-              {receiptUrl ? <MaterialIcons name="check-circle" size={20} color="#10B981" /> : <MaterialIcons name="add-a-photo" size={20} color={primary} />}
+              <View style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: isRecurring ? primary : (isDark ? '#334155' : '#E2E8F0'), justifyContent: 'center', paddingHorizontal: 2 }}>
+                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFFFFF', alignSelf: isRecurring ? 'flex-end' : 'flex-start' }} />
+              </View>
             </TouchableOpacity>
+
+
 
             <TouchableOpacity onPress={handleAddExpense}>
               <LinearGradient colors={isDark ? ['#4F46E5', '#6366F1'] : ['#4F46E5', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}>

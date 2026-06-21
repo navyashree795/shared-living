@@ -139,81 +139,83 @@ export default function LoginScreen({ navigation }: Props) {
   };
 
   const innerContent = (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <ScrollView 
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingVertical: 40 }} 
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <View style={{ paddingHorizontal: 24 }}>
-          {/* App Branding */}
-          <View style={{ alignItems: 'center', marginBottom: 40 }}>
-            <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: accent, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-              <MaterialIcons name="home" size={32} color="#fff" />
-            </View>
-            <Text style={{ fontSize: 28, fontWeight: '900', color: text, letterSpacing: -1, marginBottom: 8 }}>Shared Living</Text>
-            <Text style={{ fontSize: 14, color: muted, textAlign: 'center', lineHeight: 22, maxWidth: 280 }}>
-              Manage your household tasks, expenses, and groceries effortlessly.
-            </Text>
-          </View>
-
-          {/* Form Card */}
-          <View style={{ backgroundColor: surface, borderRadius: 28, padding: 24, borderWidth: 1, borderColor: bord }}>
-            <Text style={{ fontSize: 22, fontWeight: '900', color: text, marginBottom: 24, textAlign: 'center', letterSpacing: -0.5 }}>
-              {isSignUp ? 'Create Account' : 'Welcome Back'}
-            </Text>
-
-            {renderInput('Email', email, setEmail, { placeholder: 'name@example.com', autoCapitalize: 'none', keyboardType: 'email-address', returnKeyType: 'next' })}
-
-            {isSignUp && (
-              <>
-                {renderInput('Phone', phoneNumber, setPhoneNumber, { placeholder: '+1 (555) 000-0000', keyboardType: 'phone-pad', returnKeyType: 'next' })}
-                {renderInput('Username', username, setUsername, { placeholder: 'unique_username', autoCapitalize: 'none', returnKeyType: 'next' })}
-              </>
-            )}
-
-            {renderInput('Password', password, setPassword, { placeholder: '••••••••', returnKeyType: 'done', onSubmitEditing: handleAuth })}
-
-            {!isSignUp && (
-              <TouchableOpacity style={{ alignSelf: 'flex-end', marginBottom: 20, marginTop: -8 }} onPress={handleForgotPassword}>
-                <Text style={{ color: accent, fontSize: 13, fontWeight: '700' }}>Forgot password?</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              onPress={handleAuth}
-              disabled={loading}
-              style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 8, marginBottom: 16 }}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 }}>
-                  {isSignUp ? 'Create Account' : 'Sign In'}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity style={{ paddingVertical: 12, alignItems: 'center' }} onPress={() => setIsSignUp(!isSignUp)}>
-              <Text style={{ color: muted, fontSize: 14, fontWeight: '500' }}>
-                {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
-                <Text style={{ color: accent, fontWeight: '800' }}>{isSignUp ? 'Sign In' : 'Sign Up'}</Text>
+    <ScrollView 
+      contentContainerStyle={{ flexGrow: 1 }} 
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={{ flexGrow: 1, paddingHorizontal: 24, paddingVertical: 40, justifyContent: 'space-between' }}>
+          <View style={{ flex: 1, justifyContent: 'center' }}>
+            {/* App Branding */}
+            <View style={{ alignItems: 'center', marginBottom: 40 }}>
+              <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: accent, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+                <MaterialIcons name="home" size={32} color="#fff" />
+              </View>
+              <Text style={{ fontSize: 28, fontWeight: '900', color: text, letterSpacing: -1, marginBottom: 8 }}>Shared Living</Text>
+              <Text style={{ fontSize: 14, color: muted, textAlign: 'center', lineHeight: 22, maxWidth: 280 }}>
+                Manage your household tasks, expenses, and groceries effortlessly.
               </Text>
-            </TouchableOpacity>
+            </View>
+
+            {/* Form Card */}
+            <View style={{ backgroundColor: surface, borderRadius: 28, padding: 24, borderWidth: 1, borderColor: bord }}>
+              <Text style={{ fontSize: 22, fontWeight: '900', color: text, marginBottom: 24, textAlign: 'center', letterSpacing: -0.5 }}>
+                {isSignUp ? 'Create Account' : 'Welcome Back'}
+              </Text>
+
+              {renderInput('Email', email, setEmail, { placeholder: 'name@example.com', autoCapitalize: 'none', keyboardType: 'email-address', returnKeyType: 'next' })}
+
+              {isSignUp && (
+                <>
+                  {renderInput('Phone', phoneNumber, setPhoneNumber, { placeholder: '+1 (555) 000-0000', keyboardType: 'phone-pad', returnKeyType: 'next' })}
+                  {renderInput('Username', username, setUsername, { placeholder: 'unique_username', autoCapitalize: 'none', returnKeyType: 'next' })}
+                </>
+              )}
+
+              {renderInput('Password', password, setPassword, { placeholder: '••••••••', returnKeyType: 'done', onSubmitEditing: handleAuth })}
+
+              {!isSignUp && (
+                <TouchableOpacity style={{ alignSelf: 'flex-end', marginBottom: 20, marginTop: -8 }} onPress={handleForgotPassword}>
+                  <Text style={{ color: accent, fontSize: 13, fontWeight: '700' }}>Forgot password?</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                onPress={handleAuth}
+                disabled={loading}
+                style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 8, marginBottom: 16 }}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 }}>
+                    {isSignUp ? 'Create Account' : 'Sign In'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity style={{ paddingVertical: 12, alignItems: 'center' }} onPress={() => setIsSignUp(!isSignUp)}>
+                <Text style={{ color: muted, fontSize: 14, fontWeight: '500' }}>
+                  {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+                  <Text style={{ color: accent, fontWeight: '800' }}>{isSignUp ? 'Sign In' : 'Sign Up'}</Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <Text style={{ fontSize: 11, color: '#475569', textAlign: 'center', marginTop: 24, lineHeight: 18, paddingHorizontal: 16 }}>
             By continuing, you agree to our Terms of Service and Privacy Policy.
           </Text>
         </View>
-      </ScrollView>
-    </TouchableWithoutFeedback>
+      </TouchableWithoutFeedback>
+    </ScrollView>
   );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         {innerContent}
       </KeyboardAvoidingView>
     </SafeAreaView>

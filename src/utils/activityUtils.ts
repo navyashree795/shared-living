@@ -39,7 +39,7 @@ export const logActivity = async (
 };
 
 interface ActivityConfig {
-  icon: "shopping-basket" | "check-circle" | "receipt" | "done-all" | "add-task" | "task-alt" | "info" | "notifications-active";
+  icon: "shopping-basket" | "check-circle" | "receipt" | "done-all" | "add-task" | "task-alt" | "info" | "notifications-active" | "loop";
   color: string;
   label: string;
 }

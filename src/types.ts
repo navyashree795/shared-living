@@ -22,6 +22,7 @@ export interface UserProfile {
   phoneNumber?: string;
   householdId: string | null;
   createdAt: string;
+  pushToken?: string;
 }
 
 export interface HouseholdDetailField {
@@ -38,6 +39,7 @@ export interface Household {
   createdBy: string;
   inviteCode: string;
   members: string[];
+  billingCycleStartDay?: number;
   info?: {
     wifiName?: string;
     wifiPass?: string;
@@ -71,8 +73,10 @@ export interface Expense {
   splitAmong?: string[];
   fromPaidUid?: string;
   toReceivedUid?: string;
-  receiptUrl?: string;
   createdAt: Timestamp;
+  isRecurring?: boolean;
+  lastDraftedMonth?: string;
+  isDrafted?: boolean;
 }
 
 export interface GroceryItem {
@@ -101,6 +105,8 @@ export interface Chore {
   currentRotationIndex?: number;
   reminderSent?: boolean;
   seenBy?: string[];
+  targetDate?: Timestamp;
+  notificationId?: string;
 }
 
 export interface Message {

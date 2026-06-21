@@ -10,6 +10,7 @@ import { useUser } from '../context/UserContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useTheme } from '../context/ThemeContext';
 import { Avatar } from '../components/Avatar';
+import { sendRemotePushNotification } from '../utils/notificationUtils';
 import {
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, limit, doc, arrayUnion, writeBatch
 } from 'firebase/firestore';
@@ -19,7 +20,7 @@ import { RootStackParamList, Message } from '../types';
 type Props = { navigation: any; route?: any };
 
 export default function ChatScreen({ route, navigation }: Props) {
-  const { householdId } = useHousehold();
+  const { householdId, members, memberProfiles } = useHousehold();
   const hid = householdId ?? '';
   const { isDark } = useTheme();
   const bg     = isDark ? '#070913' : '#F5F7FF';
@@ -124,6 +125,25 @@ export default function ChatScreen({ route, navigation }: Props) {
         readBy: [user.uid],
         createdAt: serverTimestamp(),
       });
+
+      try {
+        const otherMembers = members.filter(uid => uid !== user.uid);
+        const tokens = otherMembers
+          .map(uid => memberProfiles[uid]?.pushToken)
+          .filter(Boolean) as string[];
+
+        if (tokens.length > 0) {
+          const senderName = userData?.username ? `@${userData.username}` : 'A roommate';
+          sendRemotePushNotification(
+            tokens,
+            `💬 Message in ${householdData?.name || 'Household'}`,
+            `${senderName}: ${text}`
+          );
+        }
+      } catch (e) {
+        console.error('Error sending push notifications for chat message:', e);
+      }
+
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     } catch (e) {
       console.error("Message Send Error:", e);
@@ -283,7 +303,7 @@ export default function ChatScreen({ route, navigation }: Props) {
       </View>
 
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1, backgroundColor: isDark ? '#070913' : '#F5F7FF' }}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
