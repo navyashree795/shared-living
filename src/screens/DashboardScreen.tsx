@@ -28,6 +28,7 @@ import { Avatar } from "../components/Avatar";
 import SlideModal from "../components/SlideModal";
 import { ActivitySkeleton, Skeleton } from "../components/Skeleton";
 import * as Clipboard from "expo-clipboard";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   doc,
   onSnapshot,
@@ -127,6 +128,14 @@ export default function DashboardScreen({ navigation }: Props) {
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [hasUnreadChores, setHasUnreadChores] = useState(false);
   const [unreadActivityCount, setUnreadActivityCount] = useState(0);
+  const [lastSeenActivityTime, setLastSeenActivityTime] = useState<number | null>(null);
+
+  const unreadCountRef = useRef(0);
+  unreadCountRef.current = unreadActivityCount;
+
+  const lastSeenRef = useRef<number | null>(null);
+  lastSeenRef.current = lastSeenActivityTime;
+
   const bellAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -134,6 +143,26 @@ export default function DashboardScreen({ navigation }: Props) {
       setEditUsername(userData.username);
     }
   }, [userData?.username]);
+
+  useEffect(() => {
+    const loadLastSeen = async () => {
+      try {
+        const val = await AsyncStorage.getItem(`lastSeenActivity_${user?.uid}`);
+        if (val) {
+          const parsed = Number(val);
+          setLastSeenActivityTime(parsed);
+        } else {
+          setLastSeenActivityTime(0);
+        }
+      } catch (e) {
+        console.warn("Error loading lastSeenActivityTime:", e);
+        setLastSeenActivityTime(0);
+      }
+    };
+    if (user?.uid) {
+      loadLastSeen();
+    }
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!householdId || !householdData) return;
@@ -182,30 +211,55 @@ export default function DashboardScreen({ navigation }: Props) {
               (!a.targetUid || a.targetUid === user.uid),
           );
 
-          if (relevantNew.length > unreadActivityCount) {
-            try {
-              const beep = createAudioPlayer({
-                uri: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3",
-              });
-              beep.play();
-            } catch (e) {
-              console.warn("Could not play notification beep", e);
-            }
-
-            Animated.sequence([
-              Animated.timing(bellAnim, {
-                toValue: 1.4,
-                duration: 150,
-                useNativeDriver: true,
-              }),
-              Animated.spring(bellAnim, {
-                toValue: 1,
-                friction: 4,
-                useNativeDriver: true,
-              }),
-            ]).start();
+          const currentLastSeen = lastSeenRef.current;
+          if (currentLastSeen === null) {
+            // Wait until AsyncStorage loading is complete
+            return;
           }
-          setUnreadActivityCount(relevantNew.length);
+
+          let newUnreadCount = 0;
+          if (currentLastSeen === 0) {
+            // First time or empty, initialize lastSeenTime to the newest activity's time
+            const latestTime = relevantNew.length > 0
+              ? (relevantNew[0].createdAt?.seconds ? relevantNew[0].createdAt.seconds * 1000 : Date.now())
+              : Date.now();
+            AsyncStorage.setItem(`lastSeenActivity_${user.uid}`, String(latestTime)).catch((err) =>
+              console.warn("Error initializing lastSeenActivity:", err),
+            );
+            setLastSeenActivityTime(latestTime);
+          } else {
+            const unreadItems = relevantNew.filter((a) => {
+              const activityTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : Date.now();
+              return activityTime > currentLastSeen;
+            });
+            newUnreadCount = unreadItems.length;
+
+            if (newUnreadCount > unreadCountRef.current) {
+              try {
+                const beep = createAudioPlayer({
+                  uri: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3",
+                });
+                beep.play();
+              } catch (e) {
+                console.warn("Could not play notification beep", e);
+              }
+
+              Animated.sequence([
+                Animated.timing(bellAnim, {
+                  toValue: 1.4,
+                  duration: 150,
+                  useNativeDriver: true,
+                }),
+                Animated.spring(bellAnim, {
+                  toValue: 1,
+                  friction: 4,
+                  useNativeDriver: true,
+                }),
+              ]).start();
+            }
+          }
+
+          setUnreadActivityCount(newUnreadCount);
         }
       },
       (err) => {
@@ -214,7 +268,7 @@ export default function DashboardScreen({ navigation }: Props) {
       },
     );
     return unsub;
-  }, [householdId, user?.uid, unreadActivityCount]);
+  }, [householdId, user?.uid]);
 
   // TRASH COUNTDOWN & NOTIFICATION LOGIC (NTP SYNCED)
   const isMounted = useRef(true);
@@ -605,6 +659,10 @@ export default function DashboardScreen({ navigation }: Props) {
 
   const handleUpdateInfo = async (updates: any) => {
     if (!householdId) return;
+    if (!isOwner) {
+      showToast("Only the household owner can edit info", "error");
+      return;
+    }
     try {
       const { name, info } = updates;
       await updateDoc(doc(db, "households", hid), { name, info });
@@ -700,6 +758,13 @@ export default function DashboardScreen({ navigation }: Props) {
       showToast("Link copied to clipboard", "success");
     }
   };
+
+  const greeting = React.useMemo(() => {
+    const hours = getSyncedDate().getHours();
+    if (hours < 12) return "Good Morning";
+    if (hours < 17) return "Good Afternoon";
+    return "Good Evening";
+  }, []);
 
   return (
     <LinearGradient colors={bgColors} style={{ flex: 1 }}>
@@ -827,8 +892,24 @@ export default function DashboardScreen({ navigation }: Props) {
               />
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => {
+              onPress={async () => {
                 setIsNotificationsModalVisible(true);
+                if (user?.uid) {
+                  const relevantNew = activities.filter(
+                    (a) =>
+                      a.userId !== user.uid &&
+                      (!a.targetUid || a.targetUid === user.uid),
+                  );
+                  const latestTime = relevantNew.length > 0
+                    ? (relevantNew[0].createdAt?.seconds ? relevantNew[0].createdAt.seconds * 1000 : Date.now())
+                    : Date.now();
+                  try {
+                    await AsyncStorage.setItem(`lastSeenActivity_${user.uid}`, String(latestTime));
+                    setLastSeenActivityTime(latestTime);
+                  } catch (e) {
+                    console.warn("Error updating lastSeenActivityTime:", e);
+                  }
+                }
                 setUnreadActivityCount(0);
               }}
               style={{
@@ -847,14 +928,14 @@ export default function DashboardScreen({ navigation }: Props) {
                   name="notifications"
                   size={22}
                   color={
-                    unreadActivityCount > 0 || agendaItems.length > 0
+                    unreadActivityCount > 0
                       ? "#EF4444"
                       : isDark
                         ? "#A78BFA"
                         : "#4F46E5"
                   }
                 />
-                {(unreadActivityCount > 0 || agendaItems.length > 0) && (
+                {unreadActivityCount > 0 && (
                   <View
                     style={{
                       position: "absolute",
@@ -873,7 +954,7 @@ export default function DashboardScreen({ navigation }: Props) {
                     <Text
                       style={{ color: "white", fontSize: 8, fontWeight: "900" }}
                     >
-                      {unreadActivityCount + agendaItems.length}
+                      {unreadActivityCount}
                     </Text>
                   </View>
                 )}
@@ -885,8 +966,52 @@ export default function DashboardScreen({ navigation }: Props) {
         <ScrollView
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={{ paddingBottom: 60 }}
+          nestedScrollEnabled={true}
+          keyboardShouldPersistTaps="handled"
         >
+          {/* Welcome Hero Card */}
+          <View style={{ paddingHorizontal: 20, marginTop: 12, marginBottom: 20 }}>
+            <LinearGradient
+              colors={isDark ? ["#1E1B4B", "#0F1320"] : ["#E8EAFF", "#FFFFFF"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                borderRadius: 32,
+                padding: 24,
+                borderWidth: 1,
+                borderColor: glassBorder,
+                shadowColor: "#4F46E5",
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: isDark ? 0.3 : 0.04,
+                shadowRadius: 16,
+                elevation: 4,
+              }}
+            >
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <View>
+                  <Text style={{ fontSize: 11, fontWeight: "900", color: isDark ? "#A78BFA" : "#4F46E5", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                    {greeting}
+                  </Text>
+                  <Text style={{ fontSize: 28, fontWeight: "900", color: textMain, marginTop: 4, letterSpacing: -0.5 }}>
+                    @{userData?.username || "Roommate"}
+                  </Text>
+                </View>
+                <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+                  <MaterialIcons name="wb-sunny" size={26} color="#FBBF24" />
+                </View>
+              </View>
+              
+              <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "#EEF2FF", marginVertical: 18 }} />
+              
+              <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#4F46E5", fontWeight: "700" }}>
+                {agendaItems.length === 0 
+                  ? "✨ All clean and clear! No urgent chores or debts left today."
+                  : `⚠️ You have ${agendaItems.length} action item${agendaItems.length > 1 ? "s" : ""} requiring attention today.`
+                }
+              </Text>
+            </LinearGradient>
+          </View>
           {/* Daily Briefing Panel */}
           <View style={{ paddingHorizontal: 20, marginBottom: 20, marginTop: 10 }}>
             <View
@@ -1027,57 +1152,66 @@ export default function DashboardScreen({ navigation }: Props) {
             )}
           </View>
 
-          {/* Activity Strip — compact horizontal chips like reference */}
-          <View style={{ marginBottom: 16 }}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
+          {/* Recent Feed — vertical list of recent activities */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+            <Text
+              style={{
+                color: textMuted,
+                fontSize: 11,
+                fontWeight: "900",
+                textTransform: "uppercase",
+                letterSpacing: 1.5,
+                marginBottom: 12,
+              }}
             >
-              {activities.length > 0 ? (
-                activities.slice(0, 5).map((activity, idx) => {
+              💬 Recent Feed
+            </Text>
+            
+            {activities.length > 0 ? (
+              <View style={{ gap: 10 }}>
+                {activities.slice(0, 3).map((activity, idx) => {
                   const config = getActivityConfig(activity.type);
                   return (
                     <View
                       key={activity.id || idx}
                       style={{
-                        backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
-                        borderRadius: 16,
-                        paddingVertical: 10,
-                        paddingHorizontal: 14,
+                        backgroundColor: glassBg,
+                        borderRadius: 20,
+                        paddingVertical: 12,
+                        paddingHorizontal: 16,
                         flexDirection: "row",
                         alignItems: "center",
-                        gap: 10,
+                        gap: 12,
                         borderWidth: 1,
-                        borderColor: isDark
-                          ? "rgba(255,255,255,0.06)"
-                          : "rgba(99,102,241,0.08)",
-                        minWidth: 190,
+                        borderColor: glassBorder,
                         shadowColor: "#4F46E5",
                         shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: isDark ? 0 : 0.04,
-                        shadowRadius: 8,
-                        elevation: isDark ? 0 : 1,
+                        shadowOpacity: isDark ? 0 : 0.02,
+                        shadowRadius: 6,
+                        elevation: 1,
                       }}
                     >
                       <View
                         style={{
                           backgroundColor: config.color + "18",
-                          padding: 7,
-                          borderRadius: 10,
+                          padding: 8,
+                          borderRadius: 12,
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
                       >
                         <MaterialIcons
                           name={config.icon}
-                          size={16}
+                          size={18}
                           color={config.color}
                         />
                       </View>
+                      
                       <View style={{ flex: 1 }}>
                         <Text
                           style={{
-                            fontSize: 12,
-                            fontWeight: "800",
+                            fontSize: 13,
+                            fontWeight: "900",
                             color: textMain,
                           }}
                           numberOfLines={1}
@@ -1086,56 +1220,55 @@ export default function DashboardScreen({ navigation }: Props) {
                         </Text>
                         <Text
                           style={{
-                            fontSize: 10,
-                            color: isDark ? "#64748B" : "#94A3B8",
-                            marginTop: 1,
+                            fontSize: 11,
+                            color: isDark ? "#94A3B8" : "#64748B",
+                            marginTop: 2,
                           }}
                         >
-                          {activity.title && activity.title.length > 20
-                            ? activity.title.slice(0, 20) + "…"
-                            : activity.title}
+                          {activity.title}
                         </Text>
                       </View>
                     </View>
                   );
-                })
-              ) : (
-                <View
+                })}
+              </View>
+            ) : (
+              <View
+                style={{
+                  backgroundColor: glassBg,
+                  borderRadius: 20,
+                  padding: 16,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: glassBorder,
+                }}
+              >
+                <Text
                   style={{
-                    backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
-                    borderRadius: 16,
-                    paddingVertical: 10,
-                    paddingHorizontal: 16,
-                    borderWidth: 1,
-                    borderColor: isDark
-                      ? "rgba(255,255,255,0.06)"
-                      : "rgba(99,102,241,0.08)",
+                    fontSize: 12,
+                    color: isDark ? "#64748B" : "#94A3B8",
                   }}
                 >
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: isDark ? "#64748B" : "#94A3B8",
-                    }}
-                  >
-                    No recent activity
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
+                  No recent activity
+                </Text>
+              </View>
+            )}
           </View>
-          {/* Household Details Card — clean white card matching reference */}
-          <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+
+          {/* Household Details Grid — clean card matching reference */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
             <View
               style={{
                 backgroundColor: isDark ? "#0E1324" : "#FFFFFF",
-                borderRadius: 24,
-                padding: 18,
+                borderRadius: 32,
+                padding: 20,
                 shadowColor: "#4F46E5",
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: isDark ? 0 : 0.06,
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: isDark ? 0.3 : 0.04,
                 shadowRadius: 16,
-                elevation: isDark ? 0 : 3,
+                elevation: 3,
+                borderWidth: 1,
+                borderColor: glassBorder,
               }}
             >
               {/* Title row */}
@@ -1144,463 +1277,191 @@ export default function DashboardScreen({ navigation }: Props) {
                   flexDirection: "row",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: 14,
+                  marginBottom: 16,
                 }}
               >
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-                >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <View
                     style={{
-                      width: 3,
+                      width: 4,
                       height: 16,
-                      backgroundColor: "#4F46E5",
+                      backgroundColor: "#6366F1",
                       borderRadius: 2,
                     }}
                   />
                   <Text
                     style={{
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: "900",
-                      color: isDark ? "#F1F5F9" : "#1A1D3B",
+                      color: textMain,
                       textTransform: "uppercase",
-                      letterSpacing: 1,
+                      letterSpacing: 1.2,
                     }}
                   >
-                    HOUSEHOLD DETAILS
+                    Household Hub Info
                   </Text>
                 </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    setIsEditMode(true);
-                    setIsInfoModalVisible(true);
-                  }}
-                  style={{ padding: 4 }}
-                >
-                  <MaterialIcons name="edit" size={17} color="#4F46E5" />
-                </TouchableOpacity>
-              </View>
-              {/* Fields */}
-              <ScrollView
-                horizontal={true}
-                showsHorizontalScrollIndicator={false}
-                nestedScrollEnabled={true}
-                contentContainerStyle={{ gap: 10, paddingRight: 20 }}
-              >
-                {detailsList.map((field: any) => (
-                  <View
-                    key={field.id}
+                {isOwner && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsEditMode(true);
+                      setIsInfoModalVisible(true);
+                    }}
                     style={{
-                      width: (Dimensions.get("window").width - 78) / 2, // fits exactly 2 fields based on precise screen width
-                      backgroundColor: isDark
-                        ? "rgba(255,255,255,0.03)"
-                        : "#F8FAFC",
-                      borderRadius: 16,
-                      padding: 12,
-                      flexDirection: "column",
-                      alignItems: "flex-start",
-                      justifyContent: "space-between",
-                      minHeight: 110,
+                      backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "#EEF2FF",
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4
                     }}
                   >
+                    <MaterialIcons name="edit" size={14} color="#6366F1" />
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: '#6366F1' }}>EDIT</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              
+              {/* Horizontal scroll of Fields */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 12, paddingBottom: 4 }}
+              >
+                {detailsList.map((field: any) => {
+                  return (
                     <View
+                      key={field.id}
                       style={{
-                        flexDirection: "row",
-                        width: "100%",
+                        width: 155,
+                        backgroundColor: isDark
+                          ? "rgba(255,255,255,0.02)"
+                          : "#F8FAFC",
+                        borderRadius: 20,
+                        padding: 12,
+                        borderWidth: 1,
+                        borderColor: isDark ? "rgba(255,255,255,0.05)" : "#F1F5F9",
+                        minHeight: 110,
                         justifyContent: "space-between",
-                        alignItems: "center",
                       }}
                     >
-                      <View
-                        style={{
-                          backgroundColor: isDark
-                            ? "rgba(79,70,229,0.15)"
-                            : "#EEF2FF",
-                          padding: 8,
-                          borderRadius: 11,
-                        }}
-                      >
-                        <MaterialIcons
-                          name={field.icon}
-                          size={18}
-                          color="#4F46E5"
-                        />
-                      </View>
                       <View
                         style={{
                           flexDirection: "row",
-                          gap: 6,
+                          justifyContent: "space-between",
                           alignItems: "center",
+                          width: "100%",
                         }}
                       >
-                        {field.type === "password" && (
-                          <TouchableOpacity
-                            onPress={() => toggleFieldVisibility(field.id)}
-                            style={{ padding: 4 }}
-                          >
-                            <MaterialIcons
-                              name={
-                                revealedFields.includes(field.id)
-                                  ? "visibility"
-                                  : "visibility-off"
-                              }
-                              size={18}
-                              color="#4F46E5"
-                              style={{ opacity: 0.8 }}
-                            />
-                          </TouchableOpacity>
-                        )}
-                        {field.type === "link" ? (
-                          <TouchableOpacity
-                            onPress={() => handleOpenLink(field.value)}
-                            style={{ padding: 4 }}
-                          >
-                            <MaterialIcons
-                              name="link"
-                              size={18}
-                              color="#4F46E5"
-                              style={{ opacity: 0.8 }}
-                            />
-                          </TouchableOpacity>
-                        ) : field.type === "phone" ? (
-                          <TouchableOpacity
-                            onPress={() => handlePhoneCall(field.value)}
-                            style={{ padding: 4 }}
-                          >
-                            <MaterialIcons
-                              name="call"
-                              size={18}
-                              color="#4F46E5"
-                              style={{ opacity: 0.8 }}
-                            />
-                          </TouchableOpacity>
-                        ) : (
-                          <TouchableOpacity
-                            onPress={async () => {
-                              await Clipboard.setStringAsync(field.value);
-                              showToast("Copied", "success");
-                            }}
-                            style={{ padding: 4 }}
-                          >
-                            <MaterialIcons
-                              name="content-copy"
-                              size={18}
-                              color="#4F46E5"
-                              style={{ opacity: 0.8 }}
-                            />
-                          </TouchableOpacity>
-                        )}
+                        <View
+                          style={{
+                            backgroundColor: isDark
+                              ? "rgba(99,102,241,0.12)"
+                              : "#EEF2FF",
+                            padding: 8,
+                            borderRadius: 12,
+                          }}
+                        >
+                          <MaterialIcons
+                            name={field.icon}
+                            size={18}
+                            color="#6366F1"
+                          />
+                        </View>
+                        
+                        <View style={{ flexDirection: "row", gap: 4 }}>
+                          {field.type === "password" && (
+                            <TouchableOpacity
+                              onPress={() => toggleFieldVisibility(field.id)}
+                              style={{ padding: 4 }}
+                            >
+                              <MaterialIcons
+                                name={
+                                  revealedFields.includes(field.id)
+                                    ? "visibility"
+                                    : "visibility-off"
+                                }
+                                size={16}
+                                color="#6366F1"
+                                style={{ opacity: 0.8 }}
+                              />
+                            </TouchableOpacity>
+                          )}
+                          {field.type === "link" ? (
+                            <TouchableOpacity
+                              onPress={() => handleOpenLink(field.value)}
+                              style={{ padding: 4 }}
+                            >
+                              <MaterialIcons
+                                name="link"
+                                size={16}
+                                color="#6366F1"
+                                style={{ opacity: 0.8 }}
+                              />
+                            </TouchableOpacity>
+                          ) : field.type === "phone" ? (
+                            <TouchableOpacity
+                              onPress={() => handlePhoneCall(field.value)}
+                              style={{ padding: 4 }}
+                            >
+                              <MaterialIcons
+                                name="call"
+                                size={16}
+                                color="#6366F1"
+                                style={{ opacity: 0.8 }}
+                              />
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity
+                              onPress={async () => {
+                                await Clipboard.setStringAsync(field.value);
+                                showToast("Copied", "success");
+                              }}
+                              style={{ padding: 4 }}
+                            >
+                              <MaterialIcons
+                                name="content-copy"
+                                size={16}
+                                color="#6366F1"
+                                style={{ opacity: 0.8 }}
+                              />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                      
+                      <View style={{ marginTop: 10 }}>
+                        <Text
+                          style={{
+                            fontSize: 9,
+                            fontWeight: "800",
+                            color: isDark ? "#64748B" : "#94A3B8",
+                            textTransform: "uppercase",
+                            letterSpacing: 0.5,
+                            marginBottom: 2,
+                          }}
+                        >
+                          {field.label}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: "900",
+                            color: textMain,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {field.type === "password" &&
+                          !revealedFields.includes(field.id)
+                            ? "••••••••"
+                            : field.value}
+                        </Text>
                       </View>
                     </View>
-                    <View style={{ marginTop: 12, width: "100%" }}>
-                      <Text
-                        style={{
-                          fontSize: 9,
-                          fontWeight: "800",
-                          color: "#94A3B8",
-                          textTransform: "uppercase",
-                          letterSpacing: 0.5,
-                          marginBottom: 4,
-                        }}
-                      >
-                        {field.label}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          fontWeight: "800",
-                          color: isDark ? "#F1F5F9" : "#0F172A",
-                        }}
-                        numberOfLines={1}
-                      >
-                        {field.type === "password" &&
-                        !revealedFields.includes(field.id)
-                          ? "••••••••"
-                          : field.value}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
+                  );
+                })}
               </ScrollView>
-            </View>
-          </View>
-
-          {/* Navigation Grid — 2×2 cards matching reference design */}
-          <View style={{ paddingHorizontal: 16, gap: 12 }}>
-            {/* Row 1 */}
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              {/* Grocery */}
-              <TouchableOpacity
-                onPress={() => handleNav("Grocery")}
-                activeOpacity={0.88}
-                style={{
-                  flex: 1,
-                  height: 170,
-                  backgroundColor: "#059669",
-                  borderRadius: 28,
-                  padding: 18,
-                  overflow: "hidden",
-                }}
-              >
-                {/* Top row: title + icon button */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: "#FFF",
-                        fontSize: 22,
-                        fontWeight: "900",
-                        letterSpacing: -0.3,
-                      }}
-                    >
-                      Grocery
-                    </Text>
-                    <Text
-                      style={{
-                        color: "rgba(255,255,255,0.75)",
-                        fontSize: 12,
-                        fontWeight: "600",
-                        marginTop: 4,
-                      }}
-                    >
-                      View shared list →
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      backgroundColor: "rgba(255,255,255,0.22)",
-                      padding: 10,
-                      borderRadius: 14,
-                    }}
-                  >
-                    <MaterialIcons
-                      name="shopping-cart"
-                      size={20}
-                      color="#FFF"
-                    />
-                  </View>
-                </View>
-                {/* Watermark icon */}
-                <View
-                  style={{
-                    position: "absolute",
-                    bottom: -10,
-                    right: -6,
-                    opacity: 0.12,
-                  }}
-                >
-                  <MaterialIcons name="shopping-cart" size={90} color="#FFF" />
-                </View>
-              </TouchableOpacity>
-
-              {/* Expenses */}
-              <TouchableOpacity
-                onPress={() => handleNav("Expenses")}
-                activeOpacity={0.88}
-                style={{
-                  flex: 1,
-                  height: 170,
-                  backgroundColor: "#7C3AED",
-                  borderRadius: 28,
-                  padding: 18,
-                  overflow: "hidden",
-                }}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: "#FFF",
-                        fontSize: 22,
-                        fontWeight: "900",
-                        letterSpacing: -0.3,
-                      }}
-                    >
-                      Expenses
-                    </Text>
-                    <Text
-                      style={{
-                        color: "rgba(255,255,255,0.75)",
-                        fontSize: 12,
-                        fontWeight: "600",
-                        marginTop: 4,
-                      }}
-                    >
-                      Split bills easily →
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      backgroundColor: "rgba(255,255,255,0.22)",
-                      padding: 10,
-                      borderRadius: 14,
-                    }}
-                  >
-                    <MaterialIcons name="attach-money" size={20} color="#FFF" />
-                  </View>
-                </View>
-                <View
-                  style={{
-                    position: "absolute",
-                    bottom: -10,
-                    right: -6,
-                    opacity: 0.12,
-                  }}
-                >
-                  <MaterialIcons name="bar-chart" size={90} color="#FFF" />
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* Row 2 */}
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              {/* Chores */}
-              <TouchableOpacity
-                onPress={() => handleNav("Chores")}
-                activeOpacity={0.88}
-                style={{
-                  flex: 1,
-                  height: 170,
-                  backgroundColor: "#F59E0B",
-                  borderRadius: 28,
-                  padding: 18,
-                  overflow: "hidden",
-                }}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: "#FFF",
-                        fontSize: 22,
-                        fontWeight: "900",
-                        letterSpacing: -0.3,
-                      }}
-                    >
-                      Chores
-                    </Text>
-                    <Text
-                      style={{
-                        color: "rgba(255,255,255,0.75)",
-                        fontSize: 12,
-                        fontWeight: "600",
-                        marginTop: 4,
-                      }}
-                    >
-                      {chores.filter((c) => !c.done).length} active tasks
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      backgroundColor: "rgba(255,255,255,0.22)",
-                      padding: 10,
-                      borderRadius: 14,
-                    }}
-                  >
-                    <MaterialIcons
-                      name="cleaning-services"
-                      size={20}
-                      color="#FFF"
-                    />
-                  </View>
-                </View>
-                <View
-                  style={{
-                    position: "absolute",
-                    bottom: -10,
-                    right: -6,
-                    opacity: 0.12,
-                  }}
-                >
-                  <MaterialIcons
-                    name="cleaning-services"
-                    size={90}
-                    color="#FFF"
-                  />
-                </View>
-              </TouchableOpacity>
-
-              {/* Chat */}
-              <TouchableOpacity
-                onPress={() => handleNav("Chat")}
-                activeOpacity={0.88}
-                style={{
-                  flex: 1,
-                  height: 170,
-                  backgroundColor: "#2563EB",
-                  borderRadius: 28,
-                  padding: 18,
-                  overflow: "hidden",
-                }}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: "#FFF",
-                        fontSize: 22,
-                        fontWeight: "900",
-                        letterSpacing: -0.3,
-                      }}
-                    >
-                      Chat
-                    </Text>
-                    <Text
-                      style={{
-                        color: "rgba(255,255,255,0.75)",
-                        fontSize: 12,
-                        fontWeight: "600",
-                        marginTop: 4,
-                      }}
-                    >
-                      {hasUnreadMessages ? "New messages" : "Join chat →"}
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      backgroundColor: "rgba(255,255,255,0.22)",
-                      padding: 10,
-                      borderRadius: 14,
-                    }}
-                  >
-                    <MaterialIcons name="chat" size={20} color="#FFF" />
-                  </View>
-                </View>
-                <View
-                  style={{
-                    position: "absolute",
-                    bottom: -10,
-                    right: -6,
-                    opacity: 0.12,
-                  }}
-                >
-                  <MaterialIcons name="chat" size={90} color="#FFF" />
-                </View>
-              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
@@ -1760,7 +1621,7 @@ export default function DashboardScreen({ navigation }: Props) {
             setIsEditMode(false);
           }}
           title={isEditMode ? "Edit Household" : "Household Info"}
-          scrollEnabled={!isEditMode}
+          scrollEnabled={true}
         >
           <HouseholdInfoModalContent
             tab={infoModalTab}
@@ -2271,10 +2132,7 @@ const HouseholdInfoModalContent = memo(
     if (isEdit) {
       return (
         <>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            style={{ marginBottom: 16 }}
-          >
+          <View style={{ marginBottom: 16 }}>
             <View style={{ gap: 16, paddingBottom: 24 }}>
               {/* Household Name */}
               <View
@@ -2607,7 +2465,7 @@ const HouseholdInfoModalContent = memo(
                 </Text>
               </TouchableOpacity>
             </View>
-          </ScrollView>
+          </View>
 
           <TouchableOpacity
             onPress={handleSave}
@@ -2621,10 +2479,7 @@ const HouseholdInfoModalContent = memo(
 
     return (
       <>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          style={{ marginBottom: 16 }}
-        >
+        <View style={{ marginBottom: 16 }}>
           <View style={{ gap: 12, paddingBottom: 24 }}>
             {fields.length > 0 ? (
               fields.map((field) => (
@@ -2793,7 +2648,7 @@ const HouseholdInfoModalContent = memo(
               </View>
             )}
           </View>
-        </ScrollView>
+        </View>
       </>
     );
   },

@@ -50,6 +50,7 @@ export default function ExpenseScreen({ navigation }: Props) {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isSettleModalVisible, setIsSettleModalVisible] = useState(false);
   const [showSplitOptions, setShowSplitOptions] = useState(false);
+  const [txFilter, setTxFilter] = useState<'all' | 'logs' | 'settlements'>('all');
 
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -252,79 +253,204 @@ export default function ExpenseScreen({ navigation }: Props) {
   const renderExpense = useCallback(({ item }: { item: Expense }) => {
     const isPayment = item.type === 'payment';
     const currentUid = auth.currentUser?.uid;
-    
+
+    // ─── SETTLEMENT CARD ─────────────────────────────────────────────────────
     if (isPayment) {
       const isMeFrom = item.fromPaidUid === currentUid;
-      const isMeTo = item.toReceivedUid === currentUid;
-      const primaryText = isMeFrom 
+      const isMeTo   = item.toReceivedUid === currentUid;
+
+      const primaryText = isMeFrom
         ? `You paid ${getMemberName(item.toReceivedUid!)}`
-        : isMeTo 
+        : isMeTo
           ? `${getMemberName(item.fromPaidUid!)} paid you`
           : `${getMemberName(item.fromPaidUid!)} paid ${getMemberName(item.toReceivedUid!)}`;
-      
+
+      // Amber for money you sent, Blue for money received, Slate for observer
+      const chipColor   = isMeFrom ? '#F59E0B' : isMeTo ? '#3B82F6' : '#94A3B8';
+      const chipBg      = isMeFrom
+        ? (isDark ? 'rgba(245,158,11,0.15)' : '#FFFBEB')
+        : isMeTo
+          ? (isDark ? 'rgba(59,130,246,0.15)' : '#EFF6FF')
+          : (isDark ? 'rgba(148,163,184,0.1)' : '#F8FAFC');
+      const iconName    = isMeFrom ? 'arrow-circle-up' : isMeTo ? 'arrow-circle-down' : 'swap-horiz';
+      const chipLabel   = isMeFrom ? 'YOU PAID' : isMeTo ? 'RECEIVED' : 'SETTLED';
+      const cardBorder  = isDark ? `${chipColor}30` : `${chipColor}40`;
+      const cardTint    = isDark ? `${chipColor}08` : `${chipColor}06`;
+
       return (
         <SwipeableRow onDelete={() => handleDelete(item.id)}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: cardBg, borderRadius: 28, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: isDark ? 0.3 : 0.03, shadowRadius: 10, elevation: 3 }}>
-            <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
-               <MaterialIcons name="check" size={22} color={primary} />
+          <View style={{
+            marginHorizontal: 24,
+            marginBottom: 10,
+            borderRadius: 24,
+            borderWidth: 1.5,
+            borderStyle: 'dashed',
+            borderColor: cardBorder,
+            backgroundColor: cardTint,
+            overflow: 'hidden',
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14 }}>
+              {/* Icon */}
+              <View style={{
+                width: 52,
+                height: 52,
+                borderRadius: 18,
+                backgroundColor: chipBg,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 14,
+              }}>
+                <MaterialIcons name={iconName} size={24} color={chipColor} />
+              </View>
+
+              {/* Text */}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '900', color: textMain }} numberOfLines={1}>
+                  {primaryText}
+                </Text>
+                {/* Chip */}
+                <View style={{
+                  marginTop: 6,
+                  alignSelf: 'flex-start',
+                  backgroundColor: chipBg,
+                  borderRadius: 8,
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderWidth: 1,
+                  borderColor: cardBorder,
+                }}>
+                  <Text style={{ fontSize: 9, fontWeight: '900', color: chipColor, letterSpacing: 1 }}>
+                    🤝 {chipLabel}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Amount */}
+              <Text style={{ fontSize: 20, fontWeight: '900', color: chipColor, marginLeft: 8 }}>
+                ₹{item.amount.toFixed(0)}
+              </Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: '900', color: textMain }}>{primaryText}</Text>
-              <Text style={{ fontSize: 10, fontWeight: '900', color: textMuted, marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Settlement</Text>
-            </View>
-            <Text style={{ fontSize: 18, fontWeight: '900', color: primary }}>
-              ₹{item.amount.toFixed(0)}
-            </Text>
           </View>
         </SwipeableRow>
       );
     }
-    
-    const iconName = getCategoryIcon(item.category);
-    const splitCount = item.splitAmong?.length || 1;
-    const individualShare = item.amount / splitCount;
-    const iPaid = item.paidByUid === currentUid;
+
+    // ─── EXPENSE LOG CARD ────────────────────────────────────────────────────
+    const iconName    = getCategoryIcon(item.category);
+    const splitCount  = item.splitAmong?.length || 1;
+    const indvShare   = item.amount / splitCount;
+    const iPaid       = item.paidByUid === currentUid;
     const amIInvolved = Boolean(item.splitAmong?.includes(currentUid!));
 
-    let relationshipText = '';
-    let relationshipColor = textMuted;
+    // Colour + chip configuration
+    let chipColor: string;
+    let chipBg: string;
+    let chipLabel: string;
+    let chipEmoji: string;
+    let accentIcon: string;
+    let accentColor: string;
 
-    if (iPaid) {
-      relationshipText = splitCount > 1 ? `YOU LENT ₹${(item.amount - individualShare).toFixed(0)}` : `PAID FOR SELF`;
-      relationshipColor = splitCount > 1 ? '#10B981' : textMuted;
+    if (iPaid && splitCount > 1) {
+      // You paid for others → Emerald (lent)
+      chipColor  = '#10B981';
+      chipBg     = isDark ? 'rgba(16,185,129,0.12)' : '#F0FDF4';
+      chipLabel  = `LENT ₹${(item.amount - indvShare).toFixed(0)}`;
+      chipEmoji  = '↑';
+      accentIcon = 'trending-up';
+      accentColor = '#10B981';
+    } else if (iPaid && splitCount === 1) {
+      // Paid for yourself only → Indigo
+      chipColor  = primary;
+      chipBg     = isDark ? 'rgba(99,102,241,0.12)' : '#EEF2FF';
+      chipLabel  = 'PERSONAL';
+      chipEmoji  = '•';
+      accentIcon = iconName;
+      accentColor = primary;
     } else if (amIInvolved) {
-      relationshipText = `YOU OWE ₹${individualShare.toFixed(0)}`;
-      relationshipColor = '#EF4444';
+      // You owe → Rose
+      chipColor  = '#F87171';
+      chipBg     = isDark ? 'rgba(248,113,113,0.12)' : '#FEF2F2';
+      chipLabel  = `OWE ₹${indvShare.toFixed(0)}`;
+      chipEmoji  = '↓';
+      accentIcon = 'trending-down';
+      accentColor = '#F87171';
     } else {
-      relationshipText = `NOT INVOLVED`;
+      // Not involved → Slate
+      chipColor  = textMuted;
+      chipBg     = isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9';
+      chipLabel  = 'NOT INVOLVED';
+      chipEmoji  = '–';
+      accentIcon = iconName;
+      accentColor = textMuted;
     }
 
     return (
       <SwipeableRow onDelete={() => handleDelete(item.id)}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: cardBg, borderRadius: 28, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: isDark ? 0.3 : 0.03, shadowRadius: 10, elevation: 3 }}>
-          <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: isDark ? '#F8FAFC' : '#F8FAFC', alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, borderColor: isDark ? '#E2E8F0' : '#F1F5F9' }}>
-             <MaterialIcons name={iconName} size={22} color="#64748B" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-              <Text style={{ fontSize: 16, fontWeight: '900', color: textMain }}>{item.title}</Text>
-              {(item.isRecurring || item.isDrafted) && (
-                <MaterialIcons name="autorenew" size={14} color={primary} />
-              )}
+        <View style={{
+          marginHorizontal: 24,
+          marginBottom: 10,
+          borderRadius: 24,
+          borderWidth: 1,
+          borderColor: isDark ? 'rgba(255,255,255,0.07)' : '#F1F5F9',
+          backgroundColor: cardBg,
+          overflow: 'hidden',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: isDark ? 0.25 : 0.04,
+          shadowRadius: 10,
+          elevation: 2,
+        }}>
+          {/* Left accent stripe */}
+          <View style={{
+            position: 'absolute', left: 0, top: 0, bottom: 0,
+            width: 4, backgroundColor: accentColor,
+          }} />
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, paddingLeft: 18 }}>
+            {/* Icon bubble */}
+            <View style={{
+              width: 52, height: 52, borderRadius: 18,
+              backgroundColor: chipBg,
+              alignItems: 'center', justifyContent: 'center',
+              marginRight: 14,
+            }}>
+              <MaterialIcons name={accentIcon as any} size={22} color={accentColor} />
             </View>
-            <Text style={{ fontSize: 10, fontWeight: '900', color: textMuted, marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 }}>
-              {iPaid ? 'Paid by You' : `By ${getMemberName(item.paidByUid!)}`}
-            </Text>
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={{ fontSize: 18, fontWeight: '900', color: textMain, marginBottom: 4 }}>
-              ₹{item.amount.toFixed(0)}
-            </Text>
-            <Text style={{ fontSize: 9, fontWeight: '900', color: relationshipColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              {relationshipText}
-            </Text>
 
+            {/* Text col */}
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 15, fontWeight: '900', color: textMain, flexShrink: 1 }} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                {(item.isRecurring || item.isDrafted) && (
+                  <MaterialIcons name="autorenew" size={13} color={primary} />
+                )}
+              </View>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: textMuted, marginTop: 3 }}>
+                {iPaid ? 'Paid by you' : `By ${getMemberName(item.paidByUid!)}` } · {splitCount} {splitCount === 1 ? 'person' : 'people'}
+              </Text>
+            </View>
 
+            {/* Right: amount + chip */}
+            <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: accentColor }}>
+                ₹{item.amount.toFixed(0)}
+              </Text>
+              <View style={{
+                marginTop: 5,
+                backgroundColor: chipBg,
+                borderRadius: 8,
+                paddingHorizontal: 7,
+                paddingVertical: 3,
+                borderWidth: 1,
+                borderColor: isDark ? `${chipColor}35` : `${chipColor}30`,
+              }}>
+                <Text style={{ fontSize: 9, fontWeight: '900', color: chipColor, letterSpacing: 0.8 }}>
+                  {chipEmoji} {chipLabel}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
       </SwipeableRow>
@@ -416,8 +542,40 @@ export default function ExpenseScreen({ navigation }: Props) {
         )}
       </View>
 
-      <View style={{ marginBottom: 16 }}>
-        <Text style={{ color: textMuted, fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Transactions</Text>
+      {/* Transactions header + filter tabs */}
+      <View style={{ marginBottom: 14 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <Text style={{ color: textMain, fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Transactions</Text>
+          <Text style={{ color: textMuted, fontSize: 10, fontWeight: '700' }}>{expenses.length} total</Text>
+        </View>
+        {/* Filter chips */}
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {(['all', 'logs', 'settlements'] as const).map(f => {
+            const active = txFilter === f;
+            const label = f === 'all' ? 'All' : f === 'logs' ? 'Expense Logs' : 'Settlements';
+            const dotColor = f === 'logs' ? primary : f === 'settlements' ? '#F59E0B' : textMain;
+            return (
+              <TouchableOpacity
+                key={f}
+                onPress={() => setTxFilter(f)}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 5,
+                  paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                  backgroundColor: active ? (isDark ? 'rgba(255,255,255,0.08)' : '#1E1B4B') : (isDark ? 'rgba(255,255,255,0.03)' : '#F1F5F9'),
+                  borderWidth: 1,
+                  borderColor: active ? (isDark ? 'rgba(255,255,255,0.15)' : '#1E1B4B') : (isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0'),
+                }}
+              >
+                {f !== 'all' && (
+                  <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: active ? '#FFFFFF' : dotColor }} />
+                )}
+                <Text style={{ fontSize: 11, fontWeight: '800', color: active ? (isDark ? textMain : '#FFFFFF') : textMuted }}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
     </View>
   );
@@ -439,15 +597,21 @@ export default function ExpenseScreen({ navigation }: Props) {
       </View>
 
       <FlatList
-        data={expenses}
+        data={expenses.filter(e => {
+          if (txFilter === 'logs') return e.type === 'expense';
+          if (txFilter === 'settlements') return e.type === 'payment';
+          return true;
+        })}
         keyExtractor={item => item.id}
         renderItem={renderExpense}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
-          !loading && expenses.length === 0 ? (
-            <View style={{ paddingHorizontal: 24, alignItems: 'center', marginTop: 40 }}>
+          !loading ? (
+            <View style={{ alignItems: 'center', marginTop: 40 }}>
               <MaterialIcons name="receipt-long" size={64} color={isDark ? '#1E293B' : '#E2E8F0'} />
-              <Text style={{ color: textMuted, fontSize: 16, fontWeight: '700', marginTop: 16 }}>No transactions yet</Text>
+              <Text style={{ color: textMuted, fontSize: 16, fontWeight: '700', marginTop: 16 }}>
+                {txFilter === 'logs' ? 'No expense logs yet' : txFilter === 'settlements' ? 'No settlements yet' : 'No transactions yet'}
+              </Text>
             </View>
           ) : loading ? (
             <View style={{ paddingHorizontal: 24 }}>
