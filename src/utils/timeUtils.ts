@@ -61,3 +61,39 @@ export const syncTimeWithNetwork = async () => {
 export const getSyncedDate = () => {
   return new Date(Date.now() + timeOffset);
 };
+
+export const getNextOccurrence = (dayStr: string, timeStr: string): Date => {
+  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const targetDayIndex = daysOfWeek.indexOf(dayStr);
+  if (targetDayIndex === -1) return getSyncedDate();
+
+  const now = getSyncedDate();
+  
+  let hours = 0;
+  let minutes = 0;
+  try {
+    const timeMatch = timeStr.match(/(\d+):(\d+)(?::\d+)?\s*(AM|PM)?/i);
+    if (timeMatch) {
+      hours = parseInt(timeMatch[1], 10);
+      minutes = parseInt(timeMatch[2], 10);
+      const ampm = timeMatch[3]?.toUpperCase();
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+    }
+  } catch (e) {
+    console.warn("Error parsing time in getNextOccurrence:", e);
+  }
+
+  const result = new Date(now);
+  result.setHours(hours, minutes, 0, 0);
+
+  const currentDayIndex = now.getDay();
+  let dayDiff = targetDayIndex - currentDayIndex;
+
+  if (dayDiff < 0 || (dayDiff === 0 && result.getTime() < now.getTime())) {
+    dayDiff += 7;
+  }
+
+  result.setDate(result.getDate() + dayDiff);
+  return result;
+};

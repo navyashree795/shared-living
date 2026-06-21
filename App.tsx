@@ -1,6 +1,11 @@
 import React, { useEffect } from 'react';
 import './global.css';
+import * as Sentry from '@sentry/react-native';
+import { initGlobalErrorTracking } from './src/utils/errorLogger';
 import { StatusBar } from 'expo-status-bar';
+
+// Initialize global crash analytics and error tracking
+initGlobalErrorTracking();
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
@@ -15,6 +20,7 @@ import Toast from './src/components/Toast';
 import BottomTabBar from './src/components/BottomTabBar';
 import { RootStackParamList } from './src/types';
 import { syncTimeWithNetwork } from './src/utils/timeUtils';
+import { registerForPushNotificationsAsync } from './src/utils/notificationUtils';
 
 // Auth / setup screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -57,6 +63,12 @@ function RootNavigator() {
     syncTimeWithNetwork();
   }, []);
 
+  useEffect(() => {
+    if (user) {
+      registerForPushNotificationsAsync();
+    }
+  }, [user]);
+
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: isDark ? '#0F172A' : '#F8FAFC', justifyContent: 'center', alignItems: 'center' }}>
@@ -93,7 +105,7 @@ function RootNavigator() {
   );
 }
 
-export default function App() {
+function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -112,6 +124,8 @@ export default function App() {
     </GestureHandlerRootView>
   );
 }
+
+export default Sentry.wrap(App);
 
 /** Reads theme inside NavigationContainer so StatusBar colour is reactive */
 function ThemedApp() {

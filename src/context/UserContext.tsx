@@ -3,6 +3,7 @@ import { auth, db } from '../firebaseConfig';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { UserProfile } from '../types';
+import { setSentryUser } from '../utils/errorLogger';
 
 interface UserContextType {
   user: User | null;
@@ -23,6 +24,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       setUser(currentUser);
       
       if (currentUser) {
+        // Sync user context with Sentry
+        setSentryUser(currentUser.uid, currentUser.email);
+
         // 2. If logged in, listen for Profile changes in Firestore
         const unsubscribeProfile = onSnapshot(
           doc(db, 'users', currentUser.uid),
@@ -39,6 +43,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         );
         return () => unsubscribeProfile();
       } else {
+        // Clear Sentry user context
+        setSentryUser(null, null);
         setProfile(null);
         setLoading(false);
       }

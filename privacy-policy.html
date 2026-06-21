@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - Shared Living</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #334155;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background-color: #f8fafc;
+        }
+        h1, h2, h3 {
+            color: #0f172a;
+        }
+        h1 {
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 12px;
+            font-size: 2.25rem;
+        }
+        h2 {
+            margin-top: 32px;
+            font-size: 1.5rem;
+        }
+        a {
+            color: #6366f1;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .last-updated {
+            color: #64748b;
+            font-size: 0.875rem;
+            margin-bottom: 40px;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Privacy Policy</h1>
+        <p class="last-updated">Last Updated: June 21, 2026</p>
+
+        <p>Welcome to <strong>Shared Living</strong>. We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and safeguard your information when you use our mobile application.</p>
+
+        <h2>1. Information We Collect</h2>
+        <p>We collect information to provide a better experience for managing tasks, chores, groceries, and expenses within your household:</p>
+        <ul>
+            <li><strong>Account Information:</strong> When you register an account, we collect your email address, unique username, and phone number. This information is secured and managed via Firebase Authentication.</li>
+            <li><strong>Household Data:</strong> All task logs, chore rosters, expense balances, grocery shopping lists, and live chat messages that you submit to the application are stored securely in our Firebase Firestore database.</li>
+            <li><strong>Device Push Tokens:</strong> With your permission, we collect and route Expo Push Notification tokens to notify you about chore assignments, reminders, payments, and messaging alerts.</li>
+        </ul>
+
+        <h2>2. How We Use Your Information</h2>
+        <p>We use the collected information for the following purposes:</p>
+        <ul>
+            <li>To set up and manage your user profile and household connections.</li>
+            <li>To sync real-time bills, tasks, and chat notifications between you and your roommates.</li>
+            <li>To schedule push reminders for chores and notify you of modifications to shared balances.</li>
+            <li>To collect crashes and analytics logs (via Sentry) to diagnose bug fixes and optimize performance.</li>
+        </ul>
+
+        <h2>3. Data Retention and Deletion</h2>
+        <p>We hold your data only as long as you keep an active household or user profile. We implement a strict data retention policy where historical subcollection data is backed up and purged periodically:</p>
+        <ul>
+            <li><strong>Archived Logs:</strong> Chore, grocery, and expense listings older than three months are archived and kept for up to five months, after which they are permanently removed.</li>
+            <li><strong>Account Deletion:</strong> You have the absolute right to delete your account at any time. When you initiate account deletion from the "Legal & Compliance" tab in settings:
+                <ul>
+                    <li>Your email and registration identifiers are permanently removed from Firebase Authentication.</li>
+                    <li>Your Firestore user profile is destroyed.</li>
+                    <li>Your username mapping is deleted to free it up for reuse.</li>
+                    <li>Your UID is automatically removed from your household members array.</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h2>4. Security</h2>
+        <p>We implement strict Firestore database security rules that isolate subcollection access. Only authenticated users who belong to a specific household's verified member list can read or modify that household's tasks, expenses, groceries, and messages.</p>
+
+        <h2>5. Contact Us</h2>
+        <p>If you have any questions or suggestions about our Privacy Policy, do not hesitate to contact us at <a href="mailto:jeevan0714@gmail.com">jeevan0714@gmail.com</a>.</p>
+    </div>
+</body>
+</html>

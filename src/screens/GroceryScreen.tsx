@@ -18,8 +18,11 @@ import { useHousehold } from '../context/HouseholdContext';
 import { useTheme } from '../context/ThemeContext';
 import { detectCategory } from '../utils/expenseUtils';
 import { logActivity } from '../utils/activityUtils';
+import { sendRemotePushNotification } from '../utils/notificationUtils';
+import { getSyncedDate } from '../utils/timeUtils';
+import { getCycleStartDate } from '../utils/retentionUtils';
 import {
-  collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, writeBatch
+  collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, writeBatch, where, Timestamp
 } from 'firebase/firestore';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, GroceryItem } from '../types';
@@ -45,7 +48,7 @@ const CATEGORIES: Category[] = [
 ];
 
 export default function GroceryScreen({ navigation }: Props) {
-  const { householdId, members, getMemberName } = useHousehold();
+  const { householdId, members, getMemberName, householdData, memberProfiles } = useHousehold();
   const hid = householdId ?? '';
   const { isDark } = useTheme();
   const bg      = isDark ? '#070913' : '#F5F7FF';
@@ -75,19 +78,27 @@ export default function GroceryScreen({ navigation }: Props) {
   useEffect(() => {
     if (!householdId) return;
     const hid = householdId!;
+    const cycleStartDay = householdData?.billingCycleStartDay || 1;
+    const now = getSyncedDate();
+    const currentCycleStart = getCycleStartDate(now, cycleStartDay);
+    const mainStartDate = new Date(currentCycleStart);
+    mainStartDate.setMonth(mainStartDate.getMonth() - 2);
+
     const q = query(
       collection(db, 'households', hid, 'groceries'),
+      where('createdAt', '>=', Timestamp.fromDate(mainStartDate)),
       orderBy('createdAt', 'desc')
     );
     const unsub = onSnapshot(q, (snap) => {
-      setItems(snap.docs.map(d => ({ id: d.id, ...d.data() } as GroceryItem)));
+      const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as GroceryItem));
+      setItems(fetched);
       setLoading(false);
     }, (err) => {
       console.error("Grocery fetch error:", err);
       setLoading(false);
     });
     return unsub;
-  }, [householdId]);
+  }, [householdId, householdData?.billingCycleStartDay]);
 
   const pending = items.filter(i => !i.done);
   const done = items.filter(i => i.done);
@@ -115,6 +126,28 @@ export default function GroceryScreen({ navigation }: Props) {
       });
       logActivity(hid, 'grocery_add', name, currentUserName);
       showToast('Item added', 'success');
+
+      try {
+        const currentUid = auth.currentUser?.uid;
+        if (currentUid) {
+          const otherMembers = members.filter(uid => uid !== currentUid);
+          const tokens = otherMembers
+            .map(uid => memberProfiles[uid]?.pushToken)
+            .filter(Boolean) as string[];
+
+          if (tokens.length > 0) {
+            const nameToUse = userData?.username ? `@${userData.username}` : 'A roommate';
+            sendRemotePushNotification(
+              tokens,
+              '🛒 Grocery List Update',
+              `${nameToUse} added "${name}" to the shopping list.`
+            );
+          }
+        }
+      } catch (e) {
+        console.error('Error sending push notifications for grocery add:', e);
+      }
+
       setNewItem(''); setNewQty(''); setNewPrice('');
       setIsAddModalVisible(false);
     } catch {

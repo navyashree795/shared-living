@@ -22,6 +22,7 @@
     },
     "android": {
       "package": "com.jeevan0714.sharedliving",
+      "googleServicesFile": "./google-services.json",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -52,7 +53,15 @@
       "expo-web-browser",
       "expo-audio",
       "expo-font",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#6366F1"
+        }
+      ],
+      "@sentry/react-native"
     ]
   }
 }

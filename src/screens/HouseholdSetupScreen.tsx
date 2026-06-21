@@ -13,6 +13,8 @@ import {
   where, getDocs, arrayUnion,
 } from 'firebase/firestore';
 import { useTheme } from '../context/ThemeContext';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdSetup'>;
 
@@ -137,90 +139,97 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bounces={false}>
-            
-            {/* Title */}
-            <View style={{ alignItems: 'center', marginBottom: 32 }}>
-              <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: accent, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                <MaterialIcons name={activeTab === 'create' ? 'add-home' : 'group-add'} size={28} color="#fff" />
-              </View>
-              <Text style={{ fontSize: 24, fontWeight: '900', color: text, letterSpacing: -0.5, marginBottom: 8 }}>
-                {activeTab === 'create' ? 'Create Household' : 'Join Household'}
-              </Text>
-              <Text style={{ fontSize: 14, color: muted, textAlign: 'center', lineHeight: 22, maxWidth: 280 }}>
-                {activeTab === 'create' ? 'Set up a new shared space for your roommates.' : 'Enter the 6-character invite code from your roommate.'}
-              </Text>
-            </View>
-
-            {/* Segmented Control */}
-            <View style={{ flexDirection: 'row', backgroundColor: surface, borderRadius: 16, padding: 4, marginBottom: 28, borderWidth: 1, borderColor: bord }}>
-              {(['create', 'join'] as const).map(tab => (
-                <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}
-                  style={{ flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', backgroundColor: activeTab === tab ? accent : 'transparent' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: activeTab === tab ? '#fff' : muted }}>
-                    {tab === 'create' ? 'Create' : 'Join'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Create Tab */}
-            {activeTab === 'create' && (
-              <View style={{ backgroundColor: surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: bord }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10, paddingLeft: 4 }}>Household Name</Text>
-                <TextInput
-                  style={{ backgroundColor: bg, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 16, color: text, fontSize: 15, fontWeight: '600', borderWidth: 1, borderColor: bord, marginBottom: 20 }}
-                  placeholder="e.g. My Awesome Apartment"
-                  placeholderTextColor="#475569"
-                  value={householdName}
-                  onChangeText={setHouseholdName}
-                  returnKeyType="done"
-                  onSubmitEditing={handleCreateHousehold}
-                />
-                <TouchableOpacity onPress={handleCreateHousehold} disabled={loading}
-                  style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center' }}>
-                  {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Create Space</Text>}
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Join Tab — OTP-style input */}
-            {activeTab === 'join' && (
-              <View style={{ backgroundColor: surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: bord }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, paddingLeft: 4 }}>Invite Code</Text>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 24 }}>
-                  {[0, 1, 2, 3, 4, 5].map(i => (
-                    <TextInput
-                      key={i}
-                      ref={ref => { codeRefs.current[i] = ref; }}
-                      style={{
-                        flex: 1, height: 56, borderRadius: 14, backgroundColor: bg, borderWidth: 2,
-                        borderColor: codeDigits[i] ? accent : bord,
-                        color: text, fontSize: 20, fontWeight: '900', textAlign: 'center', letterSpacing: 2
-                      }}
-                      maxLength={1}
-                      autoCapitalize="characters"
-                      value={codeDigits[i]}
-                      onChangeText={v => handleCodeChange(v, i)}
-                      onKeyPress={e => handleCodeKeyPress(e, i)}
-                    />
-                  ))}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView 
+          contentContainerStyle={{ flexGrow: 1 }} 
+          keyboardShouldPersistTaps="handled" 
+          showsVerticalScrollIndicator={false} 
+          bounces={false}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }}>
+              
+              {/* Title */}
+              <View style={{ alignItems: 'center', marginBottom: 32 }}>
+                <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: accent, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                  <MaterialIcons name={activeTab === 'create' ? 'add-home' : 'group-add'} size={28} color="#fff" />
                 </View>
-                <TouchableOpacity onPress={() => handleJoinHousehold()} disabled={loading}
-                  style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center' }}>
-                  {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Join Space</Text>}
-                </TouchableOpacity>
+                <Text style={{ fontSize: 24, fontWeight: '900', color: text, letterSpacing: -0.5, marginBottom: 8 }}>
+                  {activeTab === 'create' ? 'Create Household' : 'Join Household'}
+                </Text>
+                <Text style={{ fontSize: 14, color: muted, textAlign: 'center', lineHeight: 22, maxWidth: 280 }}>
+                  {activeTab === 'create' ? 'Set up a new shared space for your roommates.' : 'Enter the 6-character invite code from your roommate.'}
+                </Text>
               </View>
-            )}
 
-            {/* Sign Out */}
-            <TouchableOpacity onPress={() => auth.signOut()} style={{ marginTop: 32, paddingVertical: 12, alignItems: 'center' }}>
-              <Text style={{ color: '#EF4444', fontSize: 14, fontWeight: '700' }}>Sign Out</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </TouchableWithoutFeedback>
+              {/* Segmented Control */}
+              <View style={{ flexDirection: 'row', backgroundColor: surface, borderRadius: 16, padding: 4, marginBottom: 28, borderWidth: 1, borderColor: bord }}>
+                {(['create', 'join'] as const).map(tab => (
+                  <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}
+                    style={{ flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', backgroundColor: activeTab === tab ? accent : 'transparent' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: activeTab === tab ? '#fff' : muted }}>
+                      {tab === 'create' ? 'Create' : 'Join'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Create Tab */}
+              {activeTab === 'create' && (
+                <View style={{ backgroundColor: surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: bord }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10, paddingLeft: 4 }}>Household Name</Text>
+                  <TextInput
+                    style={{ backgroundColor: bg, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 16, color: text, fontSize: 15, fontWeight: '600', borderWidth: 1, borderColor: bord, marginBottom: 20 }}
+                    placeholder="e.g. My Awesome Apartment"
+                    placeholderTextColor="#475569"
+                    value={householdName}
+                    onChangeText={setHouseholdName}
+                    returnKeyType="done"
+                    onSubmitEditing={handleCreateHousehold}
+                  />
+                  <TouchableOpacity onPress={handleCreateHousehold} disabled={loading}
+                    style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center' }}>
+                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Create Space</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Join Tab — OTP-style input */}
+              {activeTab === 'join' && (
+                <View style={{ backgroundColor: surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: bord }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, paddingLeft: 4 }}>Invite Code</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 24 }}>
+                    {[0, 1, 2, 3, 4, 5].map(i => (
+                      <TextInput
+                        key={i}
+                        ref={ref => { codeRefs.current[i] = ref; }}
+                        style={{
+                          flex: 1, height: 56, borderRadius: 14, backgroundColor: bg, borderWidth: 2,
+                          borderColor: codeDigits[i] ? accent : bord,
+                          color: text, fontSize: 20, fontWeight: '900', textAlign: 'center', letterSpacing: 2
+                        }}
+                        maxLength={1}
+                        autoCapitalize="characters"
+                        value={codeDigits[i]}
+                        onChangeText={v => handleCodeChange(v, i)}
+                        onKeyPress={e => handleCodeKeyPress(e, i)}
+                      />
+                    ))}
+                  </View>
+                  <TouchableOpacity onPress={() => handleJoinHousehold()} disabled={loading}
+                    style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center' }}>
+                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Join Space</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Sign Out */}
+              <TouchableOpacity onPress={() => auth.signOut()} style={{ marginTop: 32, paddingVertical: 12, alignItems: 'center' }}>
+                <Text style={{ color: '#EF4444', fontSize: 14, fontWeight: '700' }}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
