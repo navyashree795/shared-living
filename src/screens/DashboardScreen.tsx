@@ -722,6 +722,40 @@ export default function DashboardScreen({ navigation }: Props) {
           },
         ];
 
+  const getFieldTheme = (field: any) => {
+    const icon = field.icon || "";
+    const label = (field.label || "").toLowerCase();
+    
+    if (label.includes("wifi") || icon === "wifi" || icon === "vpn-key") {
+      return {
+        primary: "#6366F1", // Indigo
+        bg: isDark ? "rgba(99, 102, 241, 0.15)" : "#EEF2FF",
+      };
+    }
+    if (label.includes("landlord") || label.includes("contact") || label.includes("phone") || icon === "phone-in-talk" || icon === "call") {
+      return {
+        primary: "#10B981", // Emerald
+        bg: isDark ? "rgba(16, 185, 129, 0.15)" : "#ECFDF5",
+      };
+    }
+    if (label.includes("trash") || label.includes("truck") || label.includes("garbage") || icon === "delete-outline" || icon === "delete") {
+      return {
+        primary: "#F59E0B", // Amber
+        bg: isDark ? "rgba(245, 158, 11, 0.15)" : "#FEF3C7",
+      };
+    }
+    if (field.type === "link" || icon === "link") {
+      return {
+        primary: "#EC4899", // Pink
+        bg: isDark ? "rgba(236, 72, 153, 0.15)" : "#FDF2F8",
+      };
+    }
+    return {
+      primary: "#8B5CF6", // Violet
+      bg: isDark ? "rgba(139, 92, 246, 0.15)" : "#F5F3FF",
+    };
+  };
+
   const handlePhoneCall = async (phone: string) => {
     if (!phone) return;
     const url = `tel:${phone.replace(/\s+/g, "")}`;
@@ -1255,214 +1289,224 @@ export default function DashboardScreen({ navigation }: Props) {
             )}
           </View>
 
-          {/* Household Details Grid — clean card matching reference */}
-          <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
-            <View
-              style={{
-                backgroundColor: isDark ? "#0E1324" : "#FFFFFF",
-                borderRadius: 32,
-                padding: 20,
-                shadowColor: "#4F46E5",
-                shadowOffset: { width: 0, height: 6 },
-                shadowOpacity: isDark ? 0.3 : 0.04,
-                shadowRadius: 16,
-                elevation: 3,
-                borderWidth: 1,
-                borderColor: glassBorder,
-              }}
-            >
-              {/* Title row */}
-              <View
+          {/* Household Details Section Header */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text
                 style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 16,
+                  color: textMuted,
+                  fontSize: 11,
+                  fontWeight: "900",
+                  textTransform: "uppercase",
+                  letterSpacing: 1.5,
                 }}
               >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                ℹ️ Household Info
+              </Text>
+              {isOwner && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setIsEditMode(true);
+                    setIsInfoModalVisible(true);
+                  }}
+                  style={{
+                    backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "#EEF2FF",
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  <MaterialIcons name="edit" size={14} color="#6366F1" />
+                  <Text style={{ fontSize: 11, fontWeight: "900", color: "#6366F1" }}>EDIT</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+          
+          {/* Horizontal scroll of Fields */}
+          <View style={{ marginBottom: 28 }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 8 }}
+            >
+              {detailsList.map((field: any) => {
+                const theme = getFieldTheme(field);
+                return (
                   <View
+                    key={field.id}
                     style={{
-                      width: 4,
-                      height: 16,
-                      backgroundColor: "#6366F1",
-                      borderRadius: 2,
-                    }}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "900",
-                      color: textMain,
-                      textTransform: "uppercase",
-                      letterSpacing: 1.2,
+                      width: 160,
+                      backgroundColor: isDark
+                        ? "rgba(30, 41, 59, 0.45)"
+                        : "#FFFFFF",
+                      borderRadius: 24,
+                      padding: 14,
+                      borderWidth: 1.5,
+                      borderColor: isDark ? "rgba(255, 255, 255, 0.06)" : theme.primary + "15",
+                      minHeight: 125,
+                      justifyContent: "space-between",
+                      shadowColor: theme.primary,
+                      shadowOffset: { width: 0, height: 6 },
+                      shadowOpacity: isDark ? 0.25 : 0.06,
+                      shadowRadius: 10,
+                      elevation: 3,
+                      position: "relative",
+                      overflow: "hidden",
                     }}
                   >
-                    Household Hub Info
-                  </Text>
-                </View>
-                {isOwner && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      setIsEditMode(true);
-                      setIsInfoModalVisible(true);
-                    }}
-                    style={{
-                      backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "#EEF2FF",
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
-                      borderRadius: 12,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 4
-                    }}
-                  >
-                    <MaterialIcons name="edit" size={14} color="#6366F1" />
-                    <Text style={{ fontSize: 11, fontWeight: '900', color: '#6366F1' }}>EDIT</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              
-              {/* Horizontal scroll of Fields */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 12, paddingBottom: 4 }}
-              >
-                {detailsList.map((field: any) => {
-                  return (
+                    {/* Ambient background glow circle */}
                     <View
-                      key={field.id}
                       style={{
-                        width: 155,
-                        backgroundColor: isDark
-                          ? "rgba(255,255,255,0.02)"
-                          : "#F8FAFC",
-                        borderRadius: 20,
-                        padding: 12,
-                        borderWidth: 1,
-                        borderColor: isDark ? "rgba(255,255,255,0.05)" : "#F1F5F9",
-                        minHeight: 110,
+                        position: "absolute",
+                        bottom: -24,
+                        right: -24,
+                        width: 80,
+                        height: 80,
+                        borderRadius: 40,
+                        backgroundColor: theme.primary,
+                        opacity: isDark ? 0.08 : 0.04,
+                        pointerEvents: "none",
+                      }}
+                    />
+
+                    {/* Card Top Row */}
+                    <View
+                      style={{
+                        flexDirection: "row",
                         justifyContent: "space-between",
+                        alignItems: "center",
+                        width: "100%",
                       }}
                     >
+                      {/* Icon Container */}
                       <View
                         style={{
-                          flexDirection: "row",
-                          justifyContent: "space-between",
+                          backgroundColor: theme.bg,
+                          width: 36,
+                          height: 36,
+                          borderRadius: 12,
                           alignItems: "center",
-                          width: "100%",
+                          justifyContent: "center",
                         }}
                       >
-                        <View
+                        <MaterialIcons
+                          name={field.icon}
+                          size={18}
+                          color={theme.primary}
+                        />
+                      </View>
+                      
+                      {/* Actions Row */}
+                      <View style={{ flexDirection: "row", gap: 6 }}>
+                        {field.type === "password" && (
+                          <TouchableOpacity
+                            onPress={() => toggleFieldVisibility(field.id)}
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: 14,
+                              backgroundColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#FFFFFF",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              borderWidth: 1,
+                              borderColor: isDark ? "rgba(255, 255, 255, 0.12)" : "#E2E8F0",
+                              shadowColor: "#000",
+                              shadowOffset: { width: 0, height: 1 },
+                              shadowOpacity: isDark ? 0 : 0.05,
+                              shadowRadius: 2,
+                              elevation: 1,
+                            }}
+                          >
+                            <MaterialIcons
+                              name={
+                                revealedFields.includes(field.id)
+                                  ? "visibility"
+                                  : "visibility-off"
+                              }
+                              size={14}
+                              color={theme.primary}
+                            />
+                          </TouchableOpacity>
+                        )}
+                        
+                        <TouchableOpacity
+                          onPress={async () => {
+                            if (field.type === "link") {
+                              handleOpenLink(field.value);
+                            } else if (field.type === "phone") {
+                              handlePhoneCall(field.value);
+                            } else {
+                              await Clipboard.setStringAsync(field.value);
+                              showToast("Copied to clipboard", "success");
+                            }
+                          }}
                           style={{
-                            backgroundColor: isDark
-                              ? "rgba(99,102,241,0.12)"
-                              : "#EEF2FF",
-                            padding: 8,
-                            borderRadius: 12,
+                            width: 28,
+                            height: 28,
+                            borderRadius: 14,
+                            backgroundColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#FFFFFF",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderWidth: 1,
+                            borderColor: isDark ? "rgba(255, 255, 255, 0.12)" : "#E2E8F0",
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: isDark ? 0 : 0.05,
+                            shadowRadius: 2,
+                            elevation: 1,
                           }}
                         >
                           <MaterialIcons
-                            name={field.icon}
-                            size={18}
-                            color="#6366F1"
+                            name={
+                              field.type === "link"
+                                ? "open-in-new"
+                                : field.type === "phone"
+                                  ? "call"
+                                  : "content-copy"
+                            }
+                            size={14}
+                            color={theme.primary}
                           />
-                        </View>
-                        
-                        <View style={{ flexDirection: "row", gap: 4 }}>
-                          {field.type === "password" && (
-                            <TouchableOpacity
-                              onPress={() => toggleFieldVisibility(field.id)}
-                              style={{ padding: 4 }}
-                            >
-                              <MaterialIcons
-                                name={
-                                  revealedFields.includes(field.id)
-                                    ? "visibility"
-                                    : "visibility-off"
-                                }
-                                size={16}
-                                color="#6366F1"
-                                style={{ opacity: 0.8 }}
-                              />
-                            </TouchableOpacity>
-                          )}
-                          {field.type === "link" ? (
-                            <TouchableOpacity
-                              onPress={() => handleOpenLink(field.value)}
-                              style={{ padding: 4 }}
-                            >
-                              <MaterialIcons
-                                name="link"
-                                size={16}
-                                color="#6366F1"
-                                style={{ opacity: 0.8 }}
-                              />
-                            </TouchableOpacity>
-                          ) : field.type === "phone" ? (
-                            <TouchableOpacity
-                              onPress={() => handlePhoneCall(field.value)}
-                              style={{ padding: 4 }}
-                            >
-                              <MaterialIcons
-                                name="call"
-                                size={16}
-                                color="#6366F1"
-                                style={{ opacity: 0.8 }}
-                              />
-                            </TouchableOpacity>
-                          ) : (
-                            <TouchableOpacity
-                              onPress={async () => {
-                                await Clipboard.setStringAsync(field.value);
-                                showToast("Copied", "success");
-                              }}
-                              style={{ padding: 4 }}
-                            >
-                              <MaterialIcons
-                                name="content-copy"
-                                size={16}
-                                color="#6366F1"
-                                style={{ opacity: 0.8 }}
-                              />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </View>
-                      
-                      <View style={{ marginTop: 10 }}>
-                        <Text
-                          style={{
-                            fontSize: 9,
-                            fontWeight: "800",
-                            color: isDark ? "#64748B" : "#94A3B8",
-                            textTransform: "uppercase",
-                            letterSpacing: 0.5,
-                            marginBottom: 2,
-                          }}
-                        >
-                          {field.label}
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            fontWeight: "900",
-                            color: textMain,
-                          }}
-                          numberOfLines={1}
-                        >
-                          {field.type === "password" &&
-                          !revealedFields.includes(field.id)
-                            ? "••••••••"
-                            : field.value}
-                        </Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
-                  );
-                })}
-              </ScrollView>
-            </View>
+                    
+                    {/* Card Bottom / Info Section */}
+                    <View style={{ marginTop: 14 }}>
+                      <Text
+                        style={{
+                          fontSize: 9,
+                          fontWeight: "800",
+                          color: isDark ? "#94A3B8" : "#64748B",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.8,
+                          marginBottom: 4,
+                        }}
+                      >
+                        {field.label}
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "900",
+                          color: textMain,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {field.type === "password" &&
+                        !revealedFields.includes(field.id)
+                          ? "••••••••"
+                          : field.value}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
           </View>
         </ScrollView>
 
