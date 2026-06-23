@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 import { db, auth } from '../firebaseConfig';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -46,15 +47,22 @@ export async function registerForPushNotificationsAsync() {
     }
     
     try {
-      token = (await Notifications.getExpoPushTokenAsync({
-        projectId: "6e612ca1-cfbc-4727-aadb-4f1283e2636d",
-      })).data;
+      if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+        console.warn(
+          'Android Remote Push Notifications are not supported in Expo Go (SDK 53+). ' +
+          'To test remote push notifications, please run a custom Development Build (npm run android).'
+        );
+      } else {
+        token = (await Notifications.getExpoPushTokenAsync({
+          projectId: "6e612ca1-cfbc-4727-aadb-4f1283e2636d",
+        })).data;
 
-      const user = auth.currentUser;
-      if (user && token) {
-        await updateDoc(doc(db, 'users', user.uid), {
-          pushToken: token
-        });
+        const user = auth.currentUser;
+        if (user && token) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            pushToken: token
+          });
+        }
       }
     } catch (error) {
       console.error('Error fetching Expo push token:', error);
