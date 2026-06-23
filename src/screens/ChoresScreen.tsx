@@ -33,7 +33,6 @@ export default function ChoresScreen({ route, navigation }: Props) {
   const bg      = isDark ? '#070913' : '#F5F7FF';
   const surface = isDark ? '#0E1324' : '#FFFFFF';
   const text    = isDark ? '#F1F5F9' : '#1E1B4B';
-  const muted   = isDark ? '#A78BFA' : '#4F46E5';
   const bord    = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
   const { showToast } = useToast();
   const [chores, setChores] = useState<Chore[]>([]);
@@ -98,7 +97,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
     return unsub;
   }, [householdId, householdData?.billingCycleStartDay]);
 
-  const openEditModal = (chore: Chore) => {
+  const openEditModal = useCallback((chore: Chore) => {
     setEditingChore(chore);
     setChoreTitle(chore.title);
     setAssignedTo(chore.assignedToUid);
@@ -131,7 +130,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
     }
     
     setIsModalVisible(true);
-  };
+  }, []);
 
   const handleAddChore = async () => {
     if (!choreTitle.trim()) { Alert.alert('Error', 'Please enter a chore name.'); return; }
@@ -512,7 +511,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         </TouchableOpacity>
       </SwipeableRow>
     );
-  }, [getMemberName, handleToggleDone, handleDelete, handleReminder, surface, bord, text, muted, isDark, openEditModal, expandedId, recentlyNudged]);
+  }, [getMemberName, handleToggleDone, handleDelete, handleReminder, surface, bord, text, isDark, openEditModal, expandedId, recentlyNudged]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
@@ -664,7 +663,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         visible={isModalVisible}
         onClose={() => { setIsModalVisible(false); setEditingChore(null); setChoreTitle(''); }}
         title={editingChore ? "Edit Chore" : "Add Chore"}
-        scrollEnabled={!showTimePicker}
+        scrollEnabled={true}
       >
         <View className="pt-2 pb-2">
           {!showSplitOptions ? (
@@ -711,9 +710,9 @@ export default function ChoresScreen({ route, navigation }: Props) {
                   onPress={() => setShowTimePicker(true)}
                   className={`flex-row items-baseline rounded-xl px-3 py-1 ${showTimePicker ? 'bg-primary/5' : ''}`}
                 >
-                  <Text className="text-xl font-black text-textMain">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[0]}</Text>
+                  <Text className="text-xl font-black text-textMain">{(time.getHours() % 12 || 12).toString().padStart(2, '0')}</Text>
                   <Text className="text-base font-black text-textMuted mx-0.5">:</Text>
-                  <Text className="text-xl font-black text-textMain">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[1]}</Text>
+                  <Text className="text-xl font-black text-textMain">{time.getMinutes().toString().padStart(2, '0')}</Text>
                   <Text className="text-[10px] font-black text-textMuted ml-1 uppercase">{time.getHours() >= 12 ? 'PM' : 'AM'}</Text>
                 </TouchableOpacity>
               </View>
@@ -761,7 +760,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                 <MaterialIcons name="chevron-right" size={20} color="#9CA3AF" />
               </TouchableOpacity>
 
-              <View className="flex-row justify-between mt-2">
+              <View style={{ paddingBottom: 40 }} className="flex-row justify-between mt-2">
                 <TouchableOpacity 
                   className="flex-1 bg-background py-3.5 rounded-2xl items-center mr-3 border border-border/40"
                   onPress={() => { setIsModalVisible(false); setShowSplitOptions(false); setChoreTitle(''); }}
