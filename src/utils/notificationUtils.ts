@@ -129,6 +129,10 @@ export async function sendRemotePushNotification(targetTokens: string[], title: 
     sound: 'default',
     title: title,
     body: body,
+    priority: 'high',
+    android: {
+      channelId: 'default',
+    },
   }));
 
   try {
