@@ -65,24 +65,21 @@ export const HouseholdProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    const fetchProfiles = async () => {
-      try {
-        const q = query(
-          collection(db, "users"),
-          where(documentId(), "in", membersList)
-        );
-        const querySnapshot = await getDocs(q);
-        const profiles: Record<string, UserProfile> = {};
-        querySnapshot.forEach((doc) => {
-          profiles[doc.id] = doc.data() as UserProfile;
-        });
-        setMemberProfiles(profiles);
-      } catch (err) {
-        console.error("Failed to fetch member profiles:", err);
-      }
-    };
+    const q = query(
+      collection(db, "users"),
+      where(documentId(), "in", membersList)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const profiles: Record<string, UserProfile> = {};
+      snap.forEach((doc) => {
+        profiles[doc.id] = doc.data() as UserProfile;
+      });
+      setMemberProfiles(profiles);
+    }, (err) => {
+      console.error("Failed to sync member profiles:", err);
+    });
 
-    fetchProfiles();
+    return unsub;
   }, [membersDeps]);
 
 

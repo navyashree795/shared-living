@@ -42,6 +42,7 @@ import {
   serverTimestamp,
   where,
   Timestamp,
+  setDoc,
 } from "firebase/firestore";
 import { getActivityConfig, logActivity } from "../utils/activityUtils";
 import { getSyncedDate } from "../utils/timeUtils";
@@ -103,6 +104,10 @@ export default function DashboardScreen({ navigation }: Props) {
     useState(false);
   const { user, profile: userData } = useUser();
   const { householdData, memberProfiles } = useHousehold();
+  const [stickyNote, setStickyNote] = useState<{ text: string; updatedBy: string; updatedAt: any } | null>(null);
+  const [isStickyModalVisible, setIsStickyModalVisible] = useState(false);
+  const [stickyText, setStickyText] = useState("");
+  const [isStatusModalVisible, setIsStatusModalVisible] = useState(false);
 
   const [editUsername, setEditUsername] = useState(userData?.username || "");
 
@@ -423,6 +428,74 @@ export default function DashboardScreen({ navigation }: Props) {
       unsubRecurring();
     };
   }, [householdId, householdData?.billingCycleStartDay]);
+
+  useEffect(() => {
+    if (!householdId) {
+      setStickyNote(null);
+      return;
+    }
+    const docRef = doc(db, "households", hid, "announcements", "sticky");
+    const unsub = onSnapshot(docRef, (snap) => {
+      if (snap.exists()) {
+        setStickyNote(snap.data() as any);
+      } else {
+        setStickyNote(null);
+      }
+    }, (err) => {
+      console.warn("Error listening to sticky note:", err);
+    });
+    return unsub;
+  }, [householdId]);
+
+  const formatStickyTime = (timestamp: any) => {
+    if (!timestamp) return "";
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const diffMs = getSyncedDate().getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  };
+
+  const handleSaveStickyNote = async () => {
+    if (!householdId) return;
+    const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || "Roommate");
+    try {
+      const docRef = doc(db, "households", hid, "announcements", "sticky");
+      await setDoc(docRef, {
+        text: stickyText.trim(),
+        updatedBy: currentUserName,
+        updatedAt: serverTimestamp(),
+      });
+      setIsStickyModalVisible(false);
+      showToast("Sticky note updated", "success");
+    } catch (e) {
+      console.error("Error saving sticky note:", e);
+      showToast("Could not update note", "error");
+    }
+  };
+
+  const handleUpdateStatus = async (newStatus: "home" | "out" | "sleeping" | "away") => {
+    if (!user?.uid) return;
+    try {
+      const userDocRef = doc(db, "users", user.uid);
+      await updateDoc(userDocRef, { status: newStatus });
+      setIsStatusModalVisible(false);
+      const statusTextMap = {
+        home: "At Home",
+        out: "Out / Busy",
+        sleeping: "Sleeping",
+        away: "Away (Vacation)"
+      };
+      showToast(`Status updated to ${statusTextMap[newStatus]}`, "success");
+    } catch (e) {
+      console.error("Error updating status:", e);
+      showToast("Could not update status", "error");
+    }
+  };
 
   const agendaItems = React.useMemo(() => {
     const items: any[] = [];
@@ -793,11 +866,43 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   };
 
-  const greeting = React.useMemo(() => {
+  const cardTheme = React.useMemo(() => {
     const hours = getSyncedDate().getHours();
-    if (hours < 12) return "Good Morning";
-    if (hours < 17) return "Good Afternoon";
-    return "Good Evening";
+    if (hours >= 5 && hours < 12) {
+      return {
+        greeting: "Good Morning",
+        subtext: "Rise and shine! Have a productive and wonderful day ahead.",
+        icon: "wb-sunny" as const,
+        iconColor: "#FF9800", // Amber / Warm Orange
+        gradient: isDark ? (["#2D1F10", "#0F0B06"] as const) : (["#FFF9F2", "#FFFFFF"] as const),
+        border: isDark ? "rgba(255, 152, 0, 0.12)" : "rgba(255, 152, 0, 0.18)",
+      };
+    } else if (hours >= 12 && hours < 17) {
+      return {
+        greeting: "Good Afternoon",
+        subtext: "Stay energized and focused for the rest of your day.",
+        icon: "wb-sunny" as const,
+        iconColor: "#0284C7", // Bright Sky Blue / Cyan
+        gradient: isDark ? (["#0D283E", "#06121D"] as const) : (["#F0F9FF", "#FFFFFF"] as const),
+        border: isDark ? "rgba(2, 132, 199, 0.12)" : "rgba(2, 132, 199, 0.18)",
+      };
+    } else {
+      return {
+        greeting: "Good Evening",
+        subtext: "Wind down and relax. Enjoy a peaceful evening at home.",
+        icon: "nights-stay" as const,
+        iconColor: "#8B5CF6", // Sunset Purple / Violet
+        gradient: isDark ? (["#1E1B4B", "#0F1320"] as const) : (["#F5F3FF", "#FFFFFF"] as const),
+        border: isDark ? "rgba(139, 92, 246, 0.12)" : "rgba(139, 92, 246, 0.18)",
+      };
+    }
+  }, [isDark]);
+
+  const dateInfo = React.useMemo(() => {
+    const now = getSyncedDate();
+    const dayName = now.toLocaleDateString("en-US", { weekday: "long" });
+    const dateString = now.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return { dayName, dateString };
   }, []);
 
   return (
@@ -1007,44 +1112,203 @@ export default function DashboardScreen({ navigation }: Props) {
           {/* Welcome Hero Card */}
           <View style={{ paddingHorizontal: 20, marginTop: 12, marginBottom: 20 }}>
             <LinearGradient
-              colors={isDark ? ["#1E1B4B", "#0F1320"] : ["#E8EAFF", "#FFFFFF"]}
+              colors={cardTheme.gradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{
-                borderRadius: 32,
-                padding: 24,
+                borderRadius: 28,
+                padding: 22,
                 borderWidth: 1,
-                borderColor: glassBorder,
-                shadowColor: "#4F46E5",
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: isDark ? 0.3 : 0.04,
-                shadowRadius: 16,
+                borderColor: cardTheme.border,
+                shadowColor: cardTheme.iconColor,
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: isDark ? 0.25 : 0.06,
+                shadowRadius: 12,
                 elevation: 4,
               }}
             >
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <View>
-                  <Text style={{ fontSize: 11, fontWeight: "900", color: isDark ? "#A78BFA" : "#4F46E5", textTransform: "uppercase", letterSpacing: 1.5 }}>
-                    {greeting}
+                <View style={{ flex: 1, marginRight: 16 }}>
+                  {/* Styled Date String */}
+                  <Text style={{ fontSize: 10, fontWeight: "900", color: cardTheme.iconColor, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>
+                    {dateInfo.dayName}, {dateInfo.dateString}
                   </Text>
-                  <Text style={{ fontSize: 28, fontWeight: "900", color: textMain, marginTop: 4, letterSpacing: -0.5 }}>
-                    @{userData?.username || "Roommate"}
+                  <Text style={{ fontSize: 26, fontWeight: "900", color: textMain, letterSpacing: -0.5, lineHeight: 32 }}>
+                    {cardTheme.greeting}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#64748B", marginTop: 6, fontWeight: "600", lineHeight: 18 }}>
+                    {cardTheme.subtext}
                   </Text>
                 </View>
-                <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
-                  <MaterialIcons name="wb-sunny" size={26} color="#FBBF24" />
+                <View style={{ 
+                  width: 58, 
+                  height: 58, 
+                  borderRadius: 20, 
+                  backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.85)", 
+                  alignItems: "center", 
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.4)",
+                  shadowColor: cardTheme.iconColor,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 8,
+                }}>
+                  <MaterialIcons name={cardTheme.icon} size={28} color={cardTheme.iconColor} />
                 </View>
               </View>
-              
-              <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "#EEF2FF", marginVertical: 18 }} />
-              
-              <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#4F46E5", fontWeight: "700" }}>
-                {agendaItems.length === 0 
-                  ? "✨ All clean and clear! No urgent chores or debts left today."
-                  : `⚠️ You have ${agendaItems.length} action item${agendaItems.length > 1 ? "s" : ""} requiring attention today.`
-                }
-              </Text>
             </LinearGradient>
+          </View>
+
+          {/* Shared Sticky Notice Board */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+            <TouchableOpacity
+              onPress={() => {
+                setStickyText(stickyNote?.text || "");
+                setIsStickyModalVisible(true);
+              }}
+              activeOpacity={0.9}
+              style={{
+                backgroundColor: isDark ? "rgba(245, 158, 11, 0.06)" : "#FFFDF0",
+                borderRadius: 24,
+                padding: 18,
+                borderWidth: 1,
+                borderColor: isDark ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.25)",
+                shadowColor: "#F59E0B",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: isDark ? 0.1 : 0.04,
+                shadowRadius: 8,
+                elevation: 2,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <MaterialIcons name="push-pin" size={16} color="#F59E0B" style={{ transform: [{ rotate: "45deg" }] }} />
+                  <Text style={{ fontSize: 10, fontWeight: "900", color: "#F59E0B", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                    Sticky Notice Board
+                  </Text>
+                </View>
+                {stickyNote?.updatedBy && (
+                  <Text style={{ fontSize: 9, fontWeight: "700", color: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.35)", textTransform: "uppercase" }}>
+                    {stickyNote.updatedBy} {stickyNote.updatedAt ? `· ${formatStickyTime(stickyNote.updatedAt)}` : ""}
+                  </Text>
+                )}
+              </View>
+              <Text 
+                style={{ 
+                  fontSize: 14, 
+                  fontWeight: "700", 
+                  color: stickyNote?.text ? textMain : (isDark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.35)"),
+                  lineHeight: 20,
+                  fontStyle: stickyNote?.text ? "normal" : "italic"
+                }}
+              >
+                {stickyNote?.text || "No active announcements. Tap here to write a note! 📌"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Roommates Presence Row */}
+          <View style={{ marginBottom: 24 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginBottom: 14 }}>
+              <Text style={{ fontSize: 11, fontWeight: "900", color: isDark ? "#A78BFA" : "#4F46E5", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                Roommate Presence
+              </Text>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.4)" }}>
+                {Object.values(memberProfiles).filter((m: any) => m.status === "home" || !m.status).length} at home
+              </Text>
+            </View>
+
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20 }}
+            >
+              {Object.entries(memberProfiles).map(([uid, member]: [string, any]) => {
+                const status = member.status || "home";
+                const isMe = uid === auth.currentUser?.uid;
+                
+                // Status configurations
+                let statusEmoji = "🟢";
+                let statusText = "At Home";
+                if (status === "out") {
+                  statusEmoji = "🟡";
+                  statusText = "Out / Busy";
+                } else if (status === "sleeping") {
+                  statusEmoji = "💤";
+                  statusText = "Sleeping";
+                } else if (status === "away") {
+                  statusEmoji = "✈️";
+                  statusText = "Away";
+                }
+
+                const displayName = member.username || "Roommate";
+                const firstName = displayName.startsWith("@") ? displayName : displayName.split(" ")[0];
+
+                return (
+                  <TouchableOpacity
+                    key={uid}
+                    onPress={() => {
+                      if (isMe) {
+                        setIsStatusModalVisible(true);
+                      } else {
+                        showToast(`${displayName} is currently ${statusText.toLowerCase()}`, "info");
+                      }
+                    }}
+                    activeOpacity={isMe ? 0.7 : 0.9}
+                    style={{
+                      alignItems: "center",
+                      marginRight: 16,
+                      backgroundColor: isDark ? "rgba(255,255,255,0.02)" : "#FFFFFF",
+                      borderWidth: 1,
+                      borderColor: isMe ? (isDark ? "rgba(129,140,248,0.3)" : "rgba(99,102,241,0.2)") : bord,
+                      borderRadius: 24,
+                      padding: 12,
+                      width: 90,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: isDark ? 0 : 0.04,
+                      shadowRadius: 5,
+                      elevation: 1,
+                    }}
+                  >
+                    {/* Avatar with Status badge overlay */}
+                    <View style={{ width: 50, height: 50, position: "relative", marginBottom: 8 }}>
+                      <Avatar
+                        name={displayName}
+                        size={50}
+                        bgColor={isDark ? "#1E1B4B" : "#F1F5F9"}
+                        color={isDark ? "#A78BFA" : "#4F46E5"}
+                        style={{ borderRadius: 18 }}
+                      />
+                      {/* Badge dot */}
+                      <View style={{
+                        position: "absolute",
+                        bottom: -2,
+                        right: -2,
+                        backgroundColor: isDark ? "#0E1324" : "#FFFFFF",
+                        borderRadius: 10,
+                        width: 20,
+                        height: 20,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderWidth: 1.5,
+                        borderColor: isDark ? "#0E1324" : "#FFFFFF",
+                      }}>
+                        <Text style={{ fontSize: 9 }}>{statusEmoji}</Text>
+                      </View>
+                    </View>
+
+                    <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: "800", color: textMain }}>
+                      {firstName} {isMe ? "(You)" : ""}
+                    </Text>
+                    <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: "700", color: isMe ? muted : (isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.4)"), marginTop: 2, textTransform: "uppercase" }}>
+                      {statusText}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
           {/* Daily Briefing Panel */}
           <View style={{ paddingHorizontal: 20, marginBottom: 20, marginTop: 10 }}>
@@ -1777,6 +2041,77 @@ export default function DashboardScreen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
         </SlideModal>
+
+        {/* Sticky Note Edit Modal */}
+        <SlideModal
+          visible={isStickyModalVisible}
+          onClose={() => setIsStickyModalVisible(false)}
+          title="Edit Sticky Board"
+        >
+          <View className="gap-4 pb-2 pt-2">
+            <View>
+              <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">
+                Announcement Text
+              </Text>
+              <TextInput
+                className="bg-surfaceRaised rounded-2xl p-4 text-textMain font-bold border border-border/50 text-base"
+                placeholder="e.g. Gas cylinder arriving between 2-4 PM today..."
+                placeholderTextColor={isDark ? "#475569" : "#94A3B8"}
+                value={stickyText}
+                onChangeText={setStickyText}
+                multiline
+                numberOfLines={4}
+                maxLength={200}
+                style={{ textAlignVertical: "top", minHeight: 100 }}
+              />
+              <Text style={{ alignSelf: "flex-end" }} className="text-[10px] text-textMuted font-bold mt-1 px-1">
+                {stickyText.length}/200 characters
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleSaveStickyNote}
+              className="bg-warning py-3.5 rounded-xl items-center"
+            >
+              <Text className="text-white font-black text-sm uppercase tracking-widest">
+                Update Sticky Board
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SlideModal>
+
+        {/* Quick Status Modal */}
+        <SlideModal
+          visible={isStatusModalVisible}
+          onClose={() => setIsStatusModalVisible(false)}
+          title="Update My Status"
+        >
+          <View className="gap-3 pb-2 pt-2">
+            {[
+              { id: "home", label: "At Home", emoji: "🟢", desc: "You are in the flat and available" },
+              { id: "out", label: "Out / Busy", emoji: "🟡", desc: "You are outside or occupied" },
+              { id: "sleeping", label: "Sleeping", emoji: "💤", desc: "Do not disturb" },
+              { id: "away", label: "Away (Vacation)", emoji: "✈️", desc: "Away for a longer trip" }
+            ].map(item => {
+              const currentStatus = memberProfiles[user?.uid || ""]?.status || "home";
+              const isSelected = currentStatus === item.id;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  onPress={() => handleUpdateStatus(item.id as any)}
+                  className={`flex-row items-center p-3 rounded-2xl border ${isSelected ? 'bg-indigo-600/10 border-indigo-600' : 'bg-surfaceRaised border-border/50'}`}
+                >
+                  <Text className="text-xl mr-4">{item.emoji}</Text>
+                  <View className="flex-1">
+                    <Text className={`font-black text-sm ${isSelected ? 'text-indigo-600' : 'text-textMain'}`}>{item.label}</Text>
+                    <Text className="text-[10px] text-textMuted font-medium mt-0.5">{item.desc}</Text>
+                  </View>
+                  {isSelected && <MaterialIcons name="check" size={18} color="#4F46E5" />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </SlideModal>
+
         {/* Notifications Modal */}
         <SlideModal
           visible={isNotificationsModalVisible}

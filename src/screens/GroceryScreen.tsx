@@ -393,7 +393,6 @@ export default function GroceryScreen({ navigation }: Props) {
           renderItem={renderRow}
           contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, paddingTop: 12 }}
           keyboardShouldPersistTaps="handled"
-          decelerationRate="fast"
           scrollEventThrottle={16}
           ListEmptyComponent={
             <EmptyState 

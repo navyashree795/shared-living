@@ -280,7 +280,6 @@ export default function ExpenseScreen({ navigation }: Props) {
       return (
         <SwipeableRow onDelete={() => handleDelete(item.id)}>
           <View style={{
-            marginHorizontal: 24,
             marginBottom: 10,
             borderRadius: 24,
             borderWidth: 1.5,
@@ -387,7 +386,6 @@ export default function ExpenseScreen({ navigation }: Props) {
     return (
       <SwipeableRow onDelete={() => handleDelete(item.id)}>
         <View style={{
-          marginHorizontal: 24,
           marginBottom: 10,
           borderRadius: 24,
           borderWidth: 1,
@@ -458,7 +456,7 @@ export default function ExpenseScreen({ navigation }: Props) {
   }, [getMemberName, handleDelete, textMain, textMuted, cardBg, border, primary, isDark]);
 
   const renderHeader = () => (
-    <View style={{ paddingHorizontal: 24 }}>
+    <View>
       {/* Lavender Summary Card */}
       <View style={{ backgroundColor: '#7C3AED', borderRadius: 32, padding: 24, marginBottom: 20, shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 }}>
         <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Total Household Spending</Text>
@@ -583,7 +581,7 @@ export default function ExpenseScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['top']}>
       {/* Custom Header */}
-      <View style={{ height: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}>
+      <View style={{ height: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24 }}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: surface, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.4 : 0.05, shadowRadius: 5, elevation: 2, borderWidth: 1, borderColor: border }}>
           <MaterialIcons name="chevron-left" size={28} color={textMain} />
         </TouchableOpacity>
@@ -614,59 +612,57 @@ export default function ExpenseScreen({ navigation }: Props) {
               </Text>
             </View>
           ) : loading ? (
-            <View style={{ paddingHorizontal: 24 }}>
+            <View>
               {[1, 2, 3, 4].map((i) => <ExpenseSkeleton key={i} />)}
             </View>
           ) : null
         }
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100, paddingTop: 12 }}
         showsVerticalScrollIndicator={false}
       />
 
       {/* Slide Modals */}
       <SlideModal visible={isModalVisible} onClose={() => { setIsModalVisible(false); setShowSplitOptions(false); setTitle(''); setAmount(''); setIsRecurring(false); }} title={showSplitOptions ? "Split Among" : "Add Expense"}>
         {!showSplitOptions ? (
-          <View style={{ gap: 20 }}>
+          <View style={{ gap: 14 }}>
             <View>
-              <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginLeft: 4 }}>Description</Text>
-              <TextInput ref={expenseInputRef} style={{ backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderRadius: 20, padding: 18, color: textMain, fontSize: 16, fontWeight: '700', borderWidth: 1, borderColor: border }} placeholder="What was this for?" placeholderTextColor={textMuted} value={title} onChangeText={setTitle} />
+              <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, marginLeft: 4 }}>Description</Text>
+              <TextInput ref={expenseInputRef} style={{ backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderRadius: 16, padding: 12, paddingHorizontal: 16, color: textMain, fontSize: 15, fontWeight: '700', borderWidth: 1, borderColor: border }} placeholder="What was this for?" placeholderTextColor={textMuted} value={title} onChangeText={setTitle} />
             </View>
             <View>
-              <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginLeft: 4 }}>Amount</Text>
-              <View style={{ backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderRadius: 20, paddingHorizontal: 18, height: 60, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: border }}>
-                <Text style={{ color: primary, fontSize: 20, fontWeight: '900', marginRight: 10 }}>₹</Text>
-                <TextInput style={{ flex: 1, color: textMain, fontSize: 22, fontWeight: '900' }} placeholder="0" placeholderTextColor={textMuted} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+              <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, marginLeft: 4 }}>Amount</Text>
+              <View style={{ backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderRadius: 16, paddingHorizontal: 16, height: 50, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: border }}>
+                <Text style={{ color: primary, fontSize: 18, fontWeight: '900', marginRight: 8 }}>₹</Text>
+                <TextInput style={{ flex: 1, color: textMain, fontSize: 18, fontWeight: '900' }} placeholder="0" placeholderTextColor={textMuted} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
               </View>
             </View>
-            <TouchableOpacity onPress={() => setShowSplitOptions(true)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(129,140,248,0.1)' : '#EEF2FF', padding: 16, borderRadius: 20 }}>
-              <MaterialIcons name="groups" size={24} color={primary} style={{ marginRight: 12 }} />
+            <TouchableOpacity onPress={() => setShowSplitOptions(true)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(129,140,248,0.1)' : '#EEF2FF', padding: 12, paddingHorizontal: 16, borderRadius: 16 }}>
+              <MaterialIcons name="groups" size={20} color={primary} style={{ marginRight: 12 }} />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: textMain, fontSize: 14, fontWeight: '800' }}>Split Among</Text>
-                <Text style={{ color: primary, fontSize: 12, fontWeight: '700' }}>{Object.values(selectedMembers).filter(Boolean).length === members.length ? 'Everyone' : `${Object.values(selectedMembers).filter(Boolean).length} Selected`}</Text>
+                <Text style={{ color: textMain, fontSize: 13, fontWeight: '800' }}>Split Among</Text>
+                <Text style={{ color: primary, fontSize: 11, fontWeight: '700' }}>{Object.values(selectedMembers).filter(Boolean).length === members.length ? 'Everyone' : `${Object.values(selectedMembers).filter(Boolean).length} Selected`}</Text>
               </View>
-              <MaterialIcons name="chevron-right" size={20} color={primary} />
+              <MaterialIcons name="chevron-right" size={18} color={primary} />
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => setIsRecurring(!isRecurring)}
               activeOpacity={0.8}
-              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isRecurring ? (isDark ? 'rgba(99,102,241,0.15)' : '#EEF2FF') : (isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC'), padding: 16, borderRadius: 20, borderWidth: 1, borderColor: isRecurring ? primary : border }}
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isRecurring ? (isDark ? 'rgba(99,102,241,0.15)' : '#EEF2FF') : (isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC'), padding: 12, paddingHorizontal: 16, borderRadius: 16, borderWidth: 1, borderColor: isRecurring ? primary : border }}
             >
-              <MaterialIcons name="autorenew" size={24} color={isRecurring ? primary : textMuted} style={{ marginRight: 12 }} />
+              <MaterialIcons name="autorenew" size={20} color={isRecurring ? primary : textMuted} style={{ marginRight: 12 }} />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: textMain, fontSize: 14, fontWeight: '800' }}>Recurring Bill</Text>
-                <Text style={{ color: textMuted, fontSize: 11, fontWeight: '700', marginTop: 2 }}>Drafts on the 1st of every month</Text>
+                <Text style={{ color: textMain, fontSize: 13, fontWeight: '800' }}>Recurring Bill</Text>
+                <Text style={{ color: textMuted, fontSize: 10, fontWeight: '700', marginTop: 1 }}>Drafts on the 1st of every month</Text>
               </View>
-              <View style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: isRecurring ? primary : (isDark ? '#334155' : '#E2E8F0'), justifyContent: 'center', paddingHorizontal: 2 }}>
-                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFFFFF', alignSelf: isRecurring ? 'flex-end' : 'flex-start' }} />
+              <View style={{ width: 38, height: 20, borderRadius: 10, backgroundColor: isRecurring ? primary : (isDark ? '#334155' : '#E2E8F0'), justifyContent: 'center', paddingHorizontal: 2 }}>
+                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#FFFFFF', alignSelf: isRecurring ? 'flex-end' : 'flex-start' }} />
               </View>
             </TouchableOpacity>
 
-
-
             <TouchableOpacity onPress={handleAddExpense}>
-              <LinearGradient colors={isDark ? ['#4F46E5', '#6366F1'] : ['#4F46E5', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '900', textTransform: 'uppercase' }}>Log Expense</Text>
+              <LinearGradient colors={isDark ? ['#4F46E5', '#6366F1'] : ['#4F46E5', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '900', textTransform: 'uppercase' }}>Log Expense</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -691,30 +687,30 @@ export default function ExpenseScreen({ navigation }: Props) {
       </SlideModal>
 
       <SlideModal visible={isSettleModalVisible} onClose={() => setIsSettleModalVisible(false)} title="Settle Up">
-        <View style={{ gap: 20 }}>
+        <View style={{ gap: 14 }}>
           <View>
-            <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Pay Someone</Text>
+            <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Pay Someone</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, paddingHorizontal: 20 }}>
               {members.filter(uid => uid !== auth.currentUser?.uid).map(uid => (
-                <TouchableOpacity key={uid} onPress={() => setSettleWithUid(uid)} style={{ alignItems: 'center', marginRight: 20, padding: 12, borderRadius: 20, backgroundColor: settleWithUid === uid ? (isDark ? 'rgba(99,102,241,0.1)' : '#EEF2FF') : 'transparent', borderWidth: 1, borderColor: settleWithUid === uid ? primary : 'transparent' }}>
-                  <View style={{ width: 56, height: 56, borderRadius: 20, backgroundColor: isDark ? '#0F172A' : '#F8FAFC', alignItems: 'center', justifyContent: 'center', marginBottom: 8, borderWidth: 1, borderColor: border }}>
-                    <Text style={{ fontSize: 18, fontWeight: '900', color: primary }}>{getMemberName(uid)[0]}</Text>
+                <TouchableOpacity key={uid} onPress={() => setSettleWithUid(uid)} style={{ alignItems: 'center', marginRight: 16, padding: 8, borderRadius: 16, backgroundColor: settleWithUid === uid ? (isDark ? 'rgba(99,102,241,0.1)' : '#EEF2FF') : 'transparent', borderWidth: 1, borderColor: settleWithUid === uid ? primary : 'transparent' }}>
+                  <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: isDark ? '#0F172A' : '#F8FAFC', alignItems: 'center', justifyContent: 'center', marginBottom: 6, borderWidth: 1, borderColor: border }}>
+                    <Text style={{ fontSize: 16, fontWeight: '900', color: primary }}>{getMemberName(uid)[0]}</Text>
                   </View>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: textMain }}>{getMemberName(uid).split(' ')[0]}</Text>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: textMain }}>{getMemberName(uid).split(' ')[0]}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
           </View>
           <View>
-             <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Amount Paid</Text>
-             <View style={{ backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderRadius: 20, paddingHorizontal: 18, height: 60, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: border }}>
-               <Text style={{ color: primary, fontSize: 20, fontWeight: '900', marginRight: 10 }}>₹</Text>
-               <TextInput ref={settleInputRef} style={{ flex: 1, color: textMain, fontSize: 22, fontWeight: '900' }} placeholder="0" placeholderTextColor={textMuted} keyboardType="decimal-pad" value={settleAmount} onChangeText={setSettleAmount} />
+             <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Amount Paid</Text>
+             <View style={{ backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderRadius: 16, paddingHorizontal: 16, height: 50, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: border }}>
+               <Text style={{ color: primary, fontSize: 18, fontWeight: '900', marginRight: 8 }}>₹</Text>
+               <TextInput ref={settleInputRef} style={{ flex: 1, color: textMain, fontSize: 18, fontWeight: '900' }} placeholder="0" placeholderTextColor={textMuted} keyboardType="decimal-pad" value={settleAmount} onChangeText={setSettleAmount} />
              </View>
           </View>
           <TouchableOpacity onPress={handleAddSettlement}>
-             <LinearGradient colors={['#4F46E5', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}>
-               <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '900', textTransform: 'uppercase' }}>Record Payment</Text>
+             <LinearGradient colors={['#4F46E5', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
+               <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '900', textTransform: 'uppercase' }}>Record Payment</Text>
              </LinearGradient>
           </TouchableOpacity>
         </View>

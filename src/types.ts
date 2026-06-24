@@ -23,6 +23,7 @@ export interface UserProfile {
   householdId: string | null;
   createdAt: string;
   pushToken?: string;
+  status?: 'home' | 'out' | 'sleeping' | 'away';
 }
 
 export interface HouseholdDetailField {

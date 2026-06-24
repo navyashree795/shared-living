@@ -27,26 +27,32 @@ const SlideModal: React.FC<SlideModalProps> = ({ visible, onClose, title, childr
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 }}>
+        <View style={{ 
+          flex: 1, 
+          backgroundColor: 'rgba(0,0,0,0.5)', 
+          justifyContent: 'flex-end', 
+          alignItems: 'center',
+          paddingBottom: Platform.OS === 'ios' ? 24 : 16
+        }}>
           <TouchableOpacity style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} activeOpacity={1} onPress={onClose} />
           
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-            style={{ width: '100%' }}
+            style={{ width: '92%', maxWidth: 350 }}
           >
-            <View style={{ backgroundColor: surface, borderRadius: 32, overflow: 'hidden', maxHeight: MAX_MODAL_HEIGHT, elevation: 24 }}>
+            <View style={{ backgroundColor: surface, borderRadius: 24, overflow: 'hidden', maxHeight: MAX_MODAL_HEIGHT, elevation: 24 }}>
               {/* Handle pill */}
-              <View style={{ alignItems: 'center', paddingTop: 12 }}>
-                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: isDark ? '#475569' : '#CBD5E1' }} />
+              <View style={{ alignItems: 'center', paddingTop: 10 }}>
+                <View style={{ width: 32, height: 4, borderRadius: 2, backgroundColor: isDark ? '#334155' : '#CBD5E1' }} />
               </View>
-              <View style={{ padding: 24 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <Text style={{ color: text, fontSize: 22, fontWeight: '900', letterSpacing: -0.5 }}>{title}</Text>
+              <View style={{ padding: 20 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <Text style={{ color: text, fontSize: 18, fontWeight: '900', letterSpacing: -0.5 }}>{title}</Text>
                   <TouchableOpacity
                     onPress={onClose}
-                    style={{ width: 38, height: 38, borderRadius: 14, backgroundColor: closeBg, alignItems: 'center', justifyContent: 'center' }}
+                    style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: closeBg, alignItems: 'center', justifyContent: 'center' }}
                   >
-                    <MaterialIcons name="close" size={18} color={muted} />
+                    <MaterialIcons name="close" size={16} color={muted} />
                   </TouchableOpacity>
                 </View>
                 {scrollEnabled ? (
@@ -56,7 +62,6 @@ const SlideModal: React.FC<SlideModalProps> = ({ visible, onClose, title, childr
                     contentContainerStyle={{ paddingBottom: 10 }}
                     keyboardShouldPersistTaps="handled"
                     bounces={false}
-                    decelerationRate="fast"
                     scrollEventThrottle={16}
                   >
                     {children}
