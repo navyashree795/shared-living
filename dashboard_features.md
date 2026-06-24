@@ -12,12 +12,12 @@ This document provides a detailed breakdown of the features and functionalities 
 ---
 
 ## 2. Dynamic Hero / Greeting Card
-* **Time-Based Greeting**: Uses NTP-synced time ([getSyncedDate](file:///home/jeevan/Desktop/my%20projects/shared%20living/src/utils/timeUtils.ts)) to display localized greetings:
-  * `"Good Morning"` (before 12 PM)
-  * `"Good Afternoon"` (between 12 PM and 5 PM)
-  * `"Good Evening"` (after 5 PM)
-* **User Identity**: Welcomes the user with their dynamic username (`@username`).
-* **Action Summary Status**: Summarizes action items for the day, displaying `"✨ All clean and clear! No urgent chores or debts left today."` or warning about outstanding tasks.
+* **Time-of-Day Themes**: Automatically selects color gradients, decorative borders, subtext messages, and weather/time icons based on the current hour (using NTP-synced time from [getSyncedDate](file:///home/jeevan/Desktop/my%20projects/shared%20living/src/utils/timeUtils.ts)):
+  * **Morning** (5:00 AM - 11:59 AM): Warm sunset orange/amber gradients, Amber `wb-sunny` icon, and welcoming morning-themed subtext.
+  * **Afternoon** (12:00 PM - 4:59 PM): Sky blue/cyan gradients, Cyan `wb-sunny` icon, and energizing afternoon-themed subtext.
+  * **Evening/Night** (5:00 PM - 4:59 AM): Deep purple/indigo gradients, Violet `nights-stay` icon, and relaxing evening-themed subtext.
+* **Date Badge Display**: Prominently highlights the current day of the week and date (e.g. "WEDNESDAY, JUN 24").
+* **Minimalist Design**: Removed user identity (`@username`) and action summary status to present a cleaner, premium card interface.
 
 ---
 
