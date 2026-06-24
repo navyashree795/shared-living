@@ -130,7 +130,7 @@ export default function ExpenseScreen({ navigation }: Props) {
     }
     const currentUid = auth.currentUser?.uid;
     if (!currentUid) return;
-    const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
+    const currentUserName = userData?.username ? userData.username : (auth.currentUser?.email?.split('@')[0] || 'Member');
     try {
       const expenseData: any = {
         type: 'expense',
@@ -158,7 +158,7 @@ export default function ExpenseScreen({ navigation }: Props) {
         
         if (tokens.length > 0) {
           const payerName = getMemberName(currentUid);
-          const nameToUse = payerName === 'You' ? (userData?.username ? `@${userData.username}` : 'A roommate') : payerName;
+          const nameToUse = payerName === 'You' ? (userData?.username ? userData.username : 'A roommate') : payerName;
           sendRemotePushNotification(
             tokens,
             '💸 New Expense Logged',
@@ -181,7 +181,7 @@ export default function ExpenseScreen({ navigation }: Props) {
     }
     const currentUid = auth.currentUser?.uid;
     if (!currentUid) return;
-    const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
+    const currentUserName = userData?.username ? userData.username : (auth.currentUser?.email?.split('@')[0] || 'Member');
     try {
       await addDoc(collection(db, 'households', hid, 'expenses'), {
         type: 'payment',
@@ -197,7 +197,7 @@ export default function ExpenseScreen({ navigation }: Props) {
         const receiverToken = memberProfiles[settleWithUid]?.pushToken;
         if (receiverToken) {
           const senderName = getMemberName(currentUid);
-          const nameToUse = senderName === 'You' ? (userData?.username ? `@${userData.username}` : 'A roommate') : senderName;
+          const nameToUse = senderName === 'You' ? (userData?.username ? userData.username : 'A roommate') : senderName;
           sendRemotePushNotification(
             [receiverToken],
             '🤝 Debt Settle Up',
@@ -516,7 +516,7 @@ export default function ExpenseScreen({ navigation }: Props) {
               const color = isOwedToMe ? '#10B981' : '#F87171';
               const iconBg = isOwedToMe ? (isDark ? 'rgba(16,185,129,0.1)' : '#F0FDF4') : (isDark ? 'rgba(248,113,113,0.1)' : '#FEF2FF');
               const name = getMemberName(uid);
-              const displayName = name.startsWith('@') ? name : `@${name.toLowerCase().replace(/\s+/g, '')}`;
+              const displayName = name.startsWith('@') ? name.substring(1) : name;
 
               return (
                 <View key={uid} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: cardBg, padding: 12, borderRadius: 28, borderWidth: 1, borderColor: border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: isDark ? 0.3 : 0.04, shadowRadius: 12, elevation: 2, overflow: 'hidden' }}>

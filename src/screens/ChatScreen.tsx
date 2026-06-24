@@ -116,7 +116,7 @@ export default function ChatScreen({ route, navigation }: Props) {
           .filter(Boolean) as string[];
 
         if (tokens.length > 0) {
-          const senderName = userData?.username ? `@${userData.username}` : 'A roommate';
+          const senderName = userData?.username ? userData.username : 'A roommate';
           sendRemotePushNotification(
             tokens,
             `💬 Message in ${householdData?.name || 'Household'}`,

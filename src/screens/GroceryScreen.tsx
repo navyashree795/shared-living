@@ -26,26 +26,10 @@ import {
 } from 'firebase/firestore';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, GroceryItem } from '../types';
+import GroceryItemRow, { CATEGORIES, Category } from '../components/GroceryItemRow';
 
 type Props = { navigation: any; route?: any };
 
-interface Category {
-  id: string;
-  name: string;
-  icon: keyof typeof MaterialIcons.glyphMap;
-  bg: string;
-  color: string;
-}
-
-const CATEGORIES: Category[] = [
-  { id: 'produce', name: 'Fresh Produce', icon: 'eco', bg: '#059669', color: '#FFFFFF' },
-  { id: 'dairy', name: 'Dairy & Chilled', icon: 'coffee', bg: '#0284C7', color: '#FFFFFF' },
-  { id: 'meat', name: 'Meat & Seafood', icon: 'restaurant', bg: '#E11D48', color: '#FFFFFF' },
-  { id: 'staples', name: 'Kitchen Staples', icon: 'bakery-dining', bg: '#CA8A04', color: '#FFFFFF' },
-  { id: 'essentials', name: 'Home Essentials', icon: 'auto-awesome', bg: '#7C3AED', color: '#FFFFFF' },
-  { id: 'drinks', name: 'Drinks & Spirits', icon: 'local-bar', bg: '#475569', color: '#FFFFFF' },
-  { id: 'misc', name: 'Miscellaneous', icon: 'inventory', bg: '#6B7280', color: '#FFFFFF' },
-];
 
 export default function GroceryScreen({ navigation }: Props) {
   const { householdId, members, getMemberName, householdData, memberProfiles } = useHousehold();
@@ -65,6 +49,9 @@ export default function GroceryScreen({ navigation }: Props) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
+  const [loggingItem, setLoggingItem] = useState<GroceryItem | null>(null);
+  const [logPrice, setLogPrice] = useState('');
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -106,57 +93,84 @@ export default function GroceryScreen({ navigation }: Props) {
   const estimatedCost = pending.reduce((sum, item) => sum + (item.price || 0), 0);
   const cartTotalCost = done.reduce((sum, item) => sum + (item.price || 0), 0);
 
+  const handleCloseModal = () => {
+    setIsAddModalVisible(false);
+    setEditingItem(null);
+    setNewItem('');
+    setNewQty('');
+    setNewPrice('');
+    setSelectedCategoryId(CATEGORIES[0].id);
+  };
+
+  const handleStartEdit = (item: GroceryItem) => {
+    setEditingItem(item);
+    setNewItem(item.name);
+    setNewQty(item.qty || '');
+    setNewPrice(item.price ? item.price.toString() : '');
+    setSelectedCategoryId(item.category);
+    setIsAddModalVisible(true);
+  };
+
   const handleAdd = async () => {
     const name = newItem.trim();
     if (!name) return;
 
     const priceNum = parseFloat(newPrice) || 0;
-    const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
+    const currentUserName = userData?.username ? userData.username : (auth.currentUser?.email?.split('@')[0] || 'Member');
     
     try {
-      await addDoc(collection(db, 'households', hid, 'groceries'), {
-        name,
-        done: false,
-        category: selectedCategoryId,
-        qty: newQty.trim(),
-        price: priceNum,
-        addedBy: currentUserName,
-        expenseLogged: false,
-        createdAt: serverTimestamp(),
-      });
-      logActivity(hid, 'grocery_add', name, currentUserName);
-      showToast('Item added', 'success');
+      if (editingItem) {
+        await updateDoc(doc(db, 'households', hid, 'groceries', editingItem.id), {
+          name,
+          category: selectedCategoryId,
+          qty: newQty.trim(),
+          price: priceNum,
+        });
+        showToast('Item updated', 'success');
+      } else {
+        await addDoc(collection(db, 'households', hid, 'groceries'), {
+          name,
+          done: false,
+          category: selectedCategoryId,
+          qty: newQty.trim(),
+          price: priceNum,
+          addedBy: currentUserName,
+          expenseLogged: false,
+          createdAt: serverTimestamp(),
+        });
+        logActivity(hid, 'grocery_add', name, currentUserName);
+        showToast('Item added', 'success');
 
-      try {
-        const currentUid = auth.currentUser?.uid;
-        if (currentUid) {
-          const otherMembers = members.filter(uid => uid !== currentUid);
-          const tokens = otherMembers
-            .map(uid => memberProfiles[uid]?.pushToken)
-            .filter(Boolean) as string[];
+        try {
+          const currentUid = auth.currentUser?.uid;
+          if (currentUid) {
+            const otherMembers = members.filter(uid => uid !== currentUid);
+            const tokens = otherMembers
+              .map(uid => memberProfiles[uid]?.pushToken)
+              .filter(Boolean) as string[];
 
-          if (tokens.length > 0) {
-            const nameToUse = userData?.username ? `@${userData.username}` : 'A roommate';
-            sendRemotePushNotification(
-              tokens,
-              '🛒 Grocery List Update',
-              `${nameToUse} added "${name}" to the shopping list.`
-            );
+            if (tokens.length > 0) {
+              const nameToUse = userData?.username ? userData.username : 'A roommate';
+              sendRemotePushNotification(
+                tokens,
+                '🛒 Grocery List Update',
+                `${nameToUse} added "${name}" to the shopping list.`
+              );
+            }
           }
+        } catch (e) {
+          console.error('Error sending push notifications for grocery add:', e);
         }
-      } catch (e) {
-        console.error('Error sending push notifications for grocery add:', e);
       }
 
-      setNewItem(''); setNewQty(''); setNewPrice('');
-      setIsAddModalVisible(false);
+      handleCloseModal();
     } catch {
-      Alert.alert('Error', 'Could not add item.');
+      Alert.alert('Error', editingItem ? 'Could not update item.' : 'Could not add item.');
     }
   };
 
   const handleToggle = async (item: GroceryItem) => {
-    const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || 'Member');
+    const currentUserName = userData?.username ? userData.username : (auth.currentUser?.email?.split('@')[0] || 'Member');
     try {
       const isFinishing = !item.done;
       await updateDoc(doc(db, 'households', hid, 'groceries', item.id), {
@@ -204,49 +218,65 @@ export default function GroceryScreen({ navigation }: Props) {
     ]);
   };
 
+  const executeLogExpense = async (item: GroceryItem, priceToUse: number) => {
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid) return;
+
+    try {
+      const categoryMatch = detectCategory(item.name);
+      await addDoc(collection(db, 'households', hid, 'expenses'), {
+        type: 'expense',
+        title: `Groceries: ${item.name}`,
+        amount: priceToUse,
+        category: categoryMatch,
+        paidByUid: currentUid,
+        payerName: getMemberName(currentUid), 
+        splitAmong: members, 
+        createdAt: serverTimestamp(),
+      });
+
+      await updateDoc(doc(db, 'households', hid, 'groceries', item.id), {
+        price: priceToUse,
+        expenseLogged: true,
+      });
+
+      logActivity(hid, 'expense_add', `Groceries: ${item.name}`, getMemberName(currentUid), priceToUse);
+      showToast('Logged to Expenses', 'success');
+    } catch {
+      Alert.alert('Error', 'Could not log to expenses.');
+    }
+  };
+
   const handleLogToExpenses = async (item: GroceryItem) => {
-    if (!item.price || item.price <= 0) return;
-
-    Alert.alert(
-      'Log to Expenses',
-      `Add an expense of ₹${item.price} for ${item.name}? This will be split among all members evenly.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Log Event', 
-          style: 'default',
-          onPress: async () => {
-            const currentUid = auth.currentUser?.uid;
-            if (!currentUid) return;
-
-            try {
-              // 1. Add Expense
-              const categoryMatch = detectCategory(item.name);
-              await addDoc(collection(db, 'households', hid, 'expenses'), {
-                type: 'expense',
-                title: `Groceries: ${item.name}`,
-                amount: item.price,
-                category: categoryMatch,
-                paidByUid: currentUid,
-                payerName: getMemberName(currentUid), 
-                splitAmong: members, // Split among everyone by default
-                createdAt: serverTimestamp(),
-              });
-
-              // 2. Mark Grocery item as logged so the button disappears
-              await updateDoc(doc(db, 'households', hid, 'groceries', item.id), {
-                expenseLogged: true,
-              });
-
-              logActivity(hid, 'expense_add', `Groceries: ${item.name}`, getMemberName(currentUid), item.price);
-              showToast('Logged to Expenses', 'success');
-            } catch {
-              Alert.alert('Error', 'Could not log to expenses.');
-            }
+    if (!item.price || item.price <= 0) {
+      setLoggingItem(item);
+      setLogPrice('');
+    } else {
+      Alert.alert(
+        'Log to Expenses',
+        `Add an expense of ₹${item.price} for ${item.name}? This will be split among all members evenly.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Log Event', 
+            style: 'default',
+            onPress: () => executeLogExpense(item, item.price)
           }
-        }
-      ]
-    );
+        ]
+      );
+    }
+  };
+
+  const handleConfirmLogExpense = async () => {
+    if (!loggingItem) return;
+    const amount = parseFloat(logPrice) || 0;
+    if (amount <= 0) {
+      Alert.alert('Error', 'Please enter a valid price greater than 0.');
+      return;
+    }
+    const itemToLog = loggingItem;
+    setLoggingItem(null);
+    await executeLogExpense(itemToLog, amount);
   };
 
   // Convert flat data into sectioned data for FlatList
@@ -280,65 +310,17 @@ export default function GroceryScreen({ navigation }: Props) {
     }
 
     const groceryItem: GroceryItem = item.data;
-    const category = CATEGORIES.find(c => c.id === groceryItem.category) || CATEGORIES[CATEGORIES.length - 1];
     
     return (
-      <SwipeableRow key={groceryItem.id} onDelete={() => handleDelete(groceryItem.id)} onComplete={!groceryItem.done ? () => handleToggle(groceryItem) : undefined} completeLabel="Bought">
-      <View style={{ backgroundColor: isDark ? '#161B33' : '#FFFFFF', borderRadius: 24, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(99, 102, 241, 0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0 : 0.05, shadowRadius: 8, elevation: 2 }}>
-        <View className="flex-row items-center">
-          <TouchableOpacity className="mr-3" onPress={() => handleToggle(groceryItem)}>
-            <MaterialIcons 
-              name={groceryItem.done ? "check-circle" : "radio-button-unchecked"} 
-              size={26} 
-              color={groceryItem.done ? "#10B981" : (isDark ? '#475569' : '#CBD5E1')} 
-            />
-          </TouchableOpacity>
-          
-          <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : category.bg, borderColor: isDark ? category.bg : 'transparent', borderWidth: isDark ? 1 : 0 }} className="w-10 h-10 rounded-xl items-center justify-center mr-3">
-            <MaterialIcons name={category.icon} size={20} color={isDark ? category.bg : category.color} />
-          </View>
-
-          <View className="flex-1">
-            <View className="flex-row items-baseline">
-              <Text className={`text-base font-bold ${groceryItem.done ? 'text-textMuted line-through' : 'text-textMain'}`}>
-                {groceryItem.name}
-              </Text>
-              {groceryItem.qty ? <Text className="text-primary text-[11px] font-black ml-2 uppercase tracking-tight">{groceryItem.qty}</Text> : null}
-            </View>
-            <View className="flex-row items-center mt-0.5">
-              <Text className="text-[10px] text-textMuted font-bold uppercase tracking-widest mr-2">{category.name}</Text>
-              {groceryItem.price > 0 && (
-                <Text className="text-[10px] text-textMuted font-bold uppercase">·  ₹{groceryItem.price.toFixed(2)}</Text>
-              )}
-            </View>
-          </View>
-
-          <TouchableOpacity onPress={() => handleDelete(groceryItem.id)} className="p-2 ml-1 bg-danger/5 rounded-full">
-            <MaterialIcons name="close" size={18} color={isDark ? '#F87171' : '#EF4444'} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Expense Logging Section for Completed Items */}
-        {groceryItem.done && groceryItem.price > 0 && !groceryItem.expenseLogged && (
-          <View className="mt-3 pt-3 border-t border-border/50 flex-row items-center justify-between">
-            <Text className="text-xs text-textMuted font-medium pr-4">You bought this for <Text className="font-bold text-textMain">₹{groceryItem.price}</Text>. Log it to your household expenses?</Text>
-            <TouchableOpacity 
-              onPress={() => handleLogToExpenses(groceryItem)}
-              className="bg-primary px-3 py-2 rounded-xl flex-row items-center shadow-sm"
-            >
-              <MaterialIcons name="account-balance-wallet" size={14} color="#FFF" />
-              <Text className="text-white text-[10px] font-bold ml-1.5 uppercase tracking-wider">Log</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        {groceryItem.done && groceryItem.expenseLogged && (
-          <View className="mt-3 pt-3 border-t border-border/50 flex-row items-center">
-             <MaterialIcons name="verified" size={14} color="#10B981" />
-             <Text className="text-xs text-success font-bold ml-1">Logged to Expenses</Text>
-          </View>
-        )}
-      </View>
-      </SwipeableRow>
+      <GroceryItemRow
+        key={groceryItem.id}
+        item={groceryItem}
+        onToggle={handleToggle}
+        onDelete={handleDelete}
+        onEdit={handleStartEdit}
+        onLogExpense={handleLogToExpenses}
+        isDark={isDark}
+      />
     );
   };
 
@@ -406,8 +388,8 @@ export default function GroceryScreen({ navigation }: Props) {
 
       <SlideModal
         visible={isAddModalVisible}
-        onClose={() => setIsAddModalVisible(false)}
-        title="Add Item"
+        onClose={handleCloseModal}
+        title={editingItem ? "Edit Item" : "Add Item"}
       >
         <View className="pb-2 pt-2">
           <Text className="text-textMuted text-xs font-bold tracking-widest px-6 mb-3">SELECT CATEGORY</Text>
@@ -496,7 +478,7 @@ export default function GroceryScreen({ navigation }: Props) {
             <View className="flex-row justify-between mt-4">
               <TouchableOpacity 
                 className="flex-1 bg-background py-3.5 rounded-2xl items-center mr-3 border border-border/40"
-                onPress={() => { setIsAddModalVisible(false); setNewItem(''); setNewPrice(''); setNewQty(''); }}
+                onPress={handleCloseModal}
               >
                 <Text className="text-textMuted font-bold text-sm">Cancel</Text>
               </TouchableOpacity>
@@ -507,6 +489,49 @@ export default function GroceryScreen({ navigation }: Props) {
                 <Text className="text-white font-bold text-sm">Save</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </SlideModal>
+
+      {/* Log Expense Price Input Modal */}
+      <SlideModal
+        visible={!!loggingItem}
+        onClose={() => setLoggingItem(null)}
+        title="Log Expense"
+      >
+        <View className="pb-2 pt-2">
+          <Text className="text-textMuted text-sm font-semibold mb-4 px-2">
+            Enter the amount spent on <Text className="font-bold text-textMain">{loggingItem?.name}</Text>:
+          </Text>
+          <View className="border-b border-border/60 pb-2 mb-6 px-2">
+            <Text className="text-textMuted text-xs font-bold mb-1">Actual Price</Text>
+            <View className="flex-row items-center mt-1">
+              <Text className="text-textMain text-lg font-black mr-2">₹</Text>
+              <TextInput
+                className="flex-1 text-textMain text-lg font-bold"
+                placeholder="0.00"
+                placeholderTextColor="#D1D5DB"
+                keyboardType="numeric"
+                value={logPrice}
+                onChangeText={setLogPrice}
+                autoFocus
+              />
+            </View>
+          </View>
+
+          <View className="flex-row justify-between mt-4">
+            <TouchableOpacity 
+              className="flex-1 bg-background py-3.5 rounded-2xl items-center mr-3 border border-border/40"
+              onPress={() => setLoggingItem(null)}
+            >
+              <Text className="text-textMuted font-bold text-sm">Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              className="flex-1 bg-textMain py-3.5 rounded-2xl items-center" 
+              onPress={handleConfirmLogExpense}
+            >
+              <Text className="text-white font-bold text-sm">Log Expense</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </SlideModal>

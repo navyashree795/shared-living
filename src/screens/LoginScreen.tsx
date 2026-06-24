@@ -48,7 +48,13 @@ export default function LoginScreen({ navigation }: Props) {
     setLoading(true);
     try {
       if (isSignUp) {
-        const lowerUsername = username.trim().toLowerCase();
+        const cleaned = username.trim().replace(/^@+/, '');
+        const lowerUsername = cleaned.toLowerCase();
+        if (!lowerUsername) {
+          Alert.alert("Error", "Please enter a valid username");
+          setLoading(false);
+          return;
+        }
         
         const usernameSnap = await getDoc(doc(db, "usernames", lowerUsername));
         if (usernameSnap.exists()) {
