@@ -187,8 +187,8 @@ export default function ChoresScreen({ route, navigation }: Props) {
             });
           }));
           logActivity(householdId, 'chore_add', `${choreTitle.trim()} (${selectedDays.join(', ')})`, currentUserName);
-        } else {
-          const today = getSyncedDate().toLocaleDateString('en-US', { weekday: 'short' });
+          const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const today = daysOfWeek[getSyncedDate().getDay()];
           const nextTarget = getNextOccurrence(today, formattedTime);
           const notifId = await scheduleChoreReminder(choreTitle.trim(), nextTarget);
           await addDoc(collection(db, 'households', householdId, 'chores'), {
@@ -440,7 +440,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                       textTransform: 'uppercase' 
                     }}>
                       {item.day}
-                      {item.targetDate ? `, ${item.targetDate.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                      {item.targetDate ? `, ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][item.targetDate.toDate().getMonth()]} ${item.targetDate.toDate().getDate()}` : ''}
                     </Text>
                   </View>
                 )}

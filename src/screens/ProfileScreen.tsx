@@ -24,7 +24,7 @@ export default function ProfileScreen() {
   const { householdId, householdData, setHouseholdId } = useHousehold();
   const { isDark, toggleTheme } = useTheme();
 
-  const [editUsername, setEditUsername] = useState(profile?.username || '');
+  const [editUsername, setEditUsername] = useState(profile?.username ? profile.username.replace(/^@+/, '') : '');
   const [editing, setEditing] = useState(false);
 
   // Retention and archive states
@@ -55,13 +55,14 @@ export default function ProfileScreen() {
   const primary = '#6366F1';
 
   const handleSave = async () => {
-    if (!editUsername.trim() || !auth.currentUser) {
+    const cleaned = editUsername.trim().replace(/^@+/, '');
+    if (!cleaned || !auth.currentUser) {
       Alert.alert('Error', 'Please enter a valid username');
       return;
     }
     try {
       await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        username: editUsername.trim().toLowerCase(),
+        username: cleaned.toLowerCase(),
       });
       setEditing(false);
       Alert.alert('Success', 'Username updated!');
@@ -259,7 +260,7 @@ export default function ProfileScreen() {
             style={{ borderRadius: 28, marginBottom: 12 }}
           />
           <Text style={{ fontSize: 22, fontWeight: '800', color: text }}>
-            @{profile?.username || 'unknown'}
+            {profile?.username ? profile.username.replace(/^@+/, '') : 'unknown'}
           </Text>
           <Text style={{ fontSize: 13, color: muted, marginTop: 4 }}>
             {user?.email}
@@ -298,11 +299,14 @@ export default function ProfileScreen() {
             </>
           ) : (
             <TouchableOpacity
-              onPress={() => setEditing(true)}
+              onPress={() => {
+                setEditUsername(profile?.username ? profile.username.replace(/^@+/, '') : '');
+                setEditing(true);
+              }}
               style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
             >
               <Text style={{ fontSize: 16, fontWeight: '700', color: text }}>
-                {profile?.username || 'Set username'}
+                {profile?.username ? profile.username.replace(/^@+/, '') : 'Set username'}
               </Text>
               <MaterialIcons name="edit" size={18} color={muted} />
             </TouchableOpacity>

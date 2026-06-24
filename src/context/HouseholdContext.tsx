@@ -86,7 +86,7 @@ export const HouseholdProvider = ({ children }: { children: ReactNode }) => {
   const getMemberName = useCallback((uid: string) => {
     if (uid === user?.uid) return 'You';
     const profile = memberProfiles[uid];
-    if (profile?.username) return `@${profile.username}`;
+    if (profile?.username) return profile.username;
     return profile?.email?.split('@')[0] || 'Member';
   }, [memberProfiles, user?.uid]);
 

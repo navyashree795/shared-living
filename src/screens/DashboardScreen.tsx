@@ -109,7 +109,7 @@ export default function DashboardScreen({ navigation }: Props) {
   const [stickyText, setStickyText] = useState("");
   const [isStatusModalVisible, setIsStatusModalVisible] = useState(false);
 
-  const [editUsername, setEditUsername] = useState(userData?.username || "");
+  const [editUsername, setEditUsername] = useState(userData?.username ? userData.username.replace(/^@+/, "") : "");
 
   const [trashCountdown, setTrashCountdown] = useState<string | null>(null);
   const [trashReminderSent, setTrashReminderSent] = useState(false);
@@ -145,7 +145,7 @@ export default function DashboardScreen({ navigation }: Props) {
 
   useEffect(() => {
     if (userData?.username) {
-      setEditUsername(userData.username);
+      setEditUsername(userData.username.replace(/^@+/, ""));
     }
   }, [userData?.username]);
 
@@ -176,13 +176,14 @@ export default function DashboardScreen({ navigation }: Props) {
   }, [householdId, householdData?.billingCycleStartDay]);
 
   const handleUpdateProfile = async () => {
-    if (!editUsername.trim() || !auth.currentUser) {
+    const cleaned = editUsername.trim().replace(/^@+/, "");
+    if (!cleaned || !auth.currentUser) {
       showToast("Enter valid username", "error");
       return;
     }
     try {
       await updateDoc(doc(db, "users", auth.currentUser.uid), {
-        username: editUsername.trim(),
+        username: cleaned,
       });
       setIsProfileModalVisible(false);
       showToast("Profile updated", "success");
@@ -462,7 +463,7 @@ export default function DashboardScreen({ navigation }: Props) {
 
   const handleSaveStickyNote = async () => {
     if (!householdId) return;
-    const currentUserName = userData?.username ? `@${userData.username}` : (auth.currentUser?.email?.split('@')[0] || "Roommate");
+    const currentUserName = userData?.username ? userData.username : (auth.currentUser?.email?.split('@')[0] || "Roommate");
     try {
       const docRef = doc(db, "households", hid, "announcements", "sticky");
       await setDoc(docRef, {
@@ -503,11 +504,20 @@ export default function DashboardScreen({ navigation }: Props) {
 
     // 1. Chores
     const now = getSyncedDate();
-    const currentDay = now.toLocaleDateString("en-US", { weekday: "short" });
+    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const currentDay = daysOfWeek[now.getDay()];
     const pendingChoresToday = chores.filter((c) => {
       if (c.done || c.assignedToUid !== user.uid) return false;
       if (c.targetDate) {
-        const target = typeof c.targetDate.toDate === 'function' ? c.targetDate.toDate() : new Date(c.targetDate);
+        let target: Date;
+        if (typeof c.targetDate.toDate === 'function') {
+          target = c.targetDate.toDate();
+        } else if (c.targetDate.seconds) {
+          target = new Date(c.targetDate.seconds * 1000);
+        } else {
+          target = new Date(c.targetDate);
+        }
+        if (isNaN(target.getTime())) return false;
         const targetDateOnly = new Date(target.getFullYear(), target.getMonth(), target.getDate());
         const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         return targetDateOnly <= nowDateOnly;
@@ -629,7 +639,8 @@ export default function DashboardScreen({ navigation }: Props) {
     const checkUpcomingChores = async () => {
       if (!householdId || chores.length === 0) return;
       const now = getSyncedDate();
-      const currentDay = now.toLocaleDateString("en-US", { weekday: "short" });
+      const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const currentDay = daysOfWeek[now.getDay()];
       for (const chore of chores) {
         if (chore.done || chore.reminderSent) continue;
         if (chore.day && !chore.day.includes(currentDay)) continue;
@@ -900,8 +911,10 @@ export default function DashboardScreen({ navigation }: Props) {
 
   const dateInfo = React.useMemo(() => {
     const now = getSyncedDate();
-    const dayName = now.toLocaleDateString("en-US", { weekday: "long" });
-    const dateString = now.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const daysOfWeekLong = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dayName = daysOfWeekLong[now.getDay()];
+    const dateString = `${months[now.getMonth()]} ${now.getDate()}`;
     return { dayName, dateString };
   }, []);
 
@@ -969,8 +982,8 @@ export default function DashboardScreen({ navigation }: Props) {
                 style={{ borderRadius: 19 }}
               />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setIsSwitchModalVisible(true)}>
-              {/* HOUSEHOLD HUB label with dropdown arrow */}
+            <View>
+              {/* HOUSEHOLD HUB label */}
               <View
                 style={{
                   flexDirection: "row",
@@ -990,11 +1003,6 @@ export default function DashboardScreen({ navigation }: Props) {
                 >
                   HOUSEHOLD HUB
                 </Text>
-                <MaterialIcons
-                  name="keyboard-arrow-down"
-                  size={14}
-                  color={isDark ? "#A78BFA" : "#4F46E5"}
-                />
               </View>
               <Text
                 style={{
@@ -1007,7 +1015,7 @@ export default function DashboardScreen({ navigation }: Props) {
               >
                 {householdData?.name || "Loading..."}
               </Text>
-            </TouchableOpacity>
+            </View>
           </View>
           <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
             {/* Header icons in rounded capsules like reference */}
@@ -1243,7 +1251,7 @@ export default function DashboardScreen({ navigation }: Props) {
                 }
 
                 const displayName = member.username || "Roommate";
-                const firstName = displayName.startsWith("@") ? displayName : displayName.split(" ")[0];
+                const firstName = displayName.startsWith("@") ? displayName.slice(1) : displayName.split(" ")[0];
 
                 return (
                   <TouchableOpacity
