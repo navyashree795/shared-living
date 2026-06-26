@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { db } from '../firebaseConfig';
 import { doc, onSnapshot, getDocs, collection, query, where, documentId } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Household, UserProfile } from '../types';
 import { useUser } from './UserContext';
 
@@ -21,16 +22,50 @@ export const HouseholdProvider = ({ children }: { children: ReactNode }) => {
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [householdData, setHouseholdData] = useState<Household | null>(null);
   const [memberProfiles, setMemberProfiles] = useState<Record<string, UserProfile>>({});
-  const [loading, setLoading] = useState(false);
+  const [storageLoading, setStorageLoading] = useState(false);
+  const [firestoreLoading, setFirestoreLoading] = useState(false);
 
-  // 0. Clear householdId when user logs out
+  const loading = storageLoading || firestoreLoading;
+
+  // 0. Load saved householdId from AsyncStorage on login
   useEffect(() => {
-    if (!user) {
-      setHouseholdId(null);
+    const loadSavedHousehold = async () => {
+      if (!user) {
+        setHouseholdId(null);
+        return;
+      }
+      setStorageLoading(true);
+      try {
+        const savedId = await AsyncStorage.getItem(`lastOpenedHousehold_${user.uid}`);
+        if (savedId) {
+          setHouseholdId(savedId);
+        }
+      } catch (err) {
+        console.error("Error loading last opened household:", err);
+      } finally {
+        setStorageLoading(false);
+      }
+    };
+    loadSavedHousehold();
+  }, [user]);
+
+  // 1. Intercept setHouseholdId to persist in AsyncStorage
+  const changeHouseholdId = useCallback(async (id: string | null) => {
+    setHouseholdId(id);
+    if (user) {
+      try {
+        if (id) {
+          await AsyncStorage.setItem(`lastOpenedHousehold_${user.uid}`, id);
+        } else {
+          await AsyncStorage.removeItem(`lastOpenedHousehold_${user.uid}`);
+        }
+      } catch (err) {
+        console.error("Error saving last opened household:", err);
+      }
     }
   }, [user]);
 
-  // 1. Sync householdData when householdId changes
+  // 2. Sync householdData when householdId changes
   useEffect(() => {
     if (!householdId) {
       setHouseholdData(null);
@@ -38,7 +73,7 @@ export const HouseholdProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    setLoading(true);
+    setFirestoreLoading(true);
     const unsub = onSnapshot(doc(db, 'households', householdId), (snap) => {
       if (snap.exists()) {
         const data = { id: snap.id, ...snap.data() } as Household;
@@ -46,10 +81,10 @@ export const HouseholdProvider = ({ children }: { children: ReactNode }) => {
       } else {
         setHouseholdData(null);
       }
-      setLoading(false);
+      setFirestoreLoading(false);
     }, (err) => {
       console.error("Error subscribing to household:", err);
-      setLoading(false);
+      setFirestoreLoading(false);
     });
 
     return unsub;
@@ -98,7 +133,7 @@ export const HouseholdProvider = ({ children }: { children: ReactNode }) => {
         members: householdData?.members || [], 
         memberProfiles, 
         loading, 
-        setHouseholdId,
+        setHouseholdId: changeHouseholdId,
         getMemberName
       }}
     >
