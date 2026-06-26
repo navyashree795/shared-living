@@ -124,6 +124,11 @@ export const WheelPicker: React.FC<WheelPickerProps> = memo(({ data, initialInde
           index,
         })}
         initialScrollIndex={initialIndex}
+        onScrollToIndexFailed={(info) => {
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
+          }, 50);
+        }}
         windowSize={3}
         maxToRenderPerBatch={5}
         removeClippedSubviews={true}
@@ -141,11 +146,10 @@ interface TimeWheelPickerProps {
 }
 
 export const TimeWheelPicker: React.FC<TimeWheelPickerProps> = ({ initialTime, onConfirm, onCancel }) => {
-  const { isDark } = useTheme();
-
-  const [hour, setHour] = useState(initialTime.getHours() % 12 || 12);
-  const [minute, setMinute] = useState(initialTime.getMinutes());
-  const [ampm, setAmPm] = useState(initialTime.getHours() >= 12 ? "PM" : "AM");
+  // Use separate refs for selection to avoid closure issues with onSelect and prevent janky re-renders during gesture scrolling
+  const selectedHour = useRef(initialTime.getHours() % 12 || 12);
+  const selectedMinute = useRef(initialTime.getMinutes());
+  const selectedAmPm = useRef(initialTime.getHours() >= 12 ? 'PM' : 'AM');
 
   const hours = useRef(Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, "0"))).current;
   const minutes = useRef(Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0"))).current;
@@ -153,16 +157,24 @@ export const TimeWheelPicker: React.FC<TimeWheelPickerProps> = ({ initialTime, o
 
   const handleConfirm = () => {
     const finalDate = new Date();
-    let finalHour = hour;
-    if (ampm === "PM" && finalHour !== 12) finalHour += 12;
-    if (ampm === "AM" && finalHour === 12) finalHour = 0;
-    finalDate.setHours(finalHour, minute, 0, 0);
+    let finalHour = selectedHour.current;
+    if (selectedAmPm.current === 'PM' && finalHour !== 12) finalHour += 12;
+    if (selectedAmPm.current === 'AM' && finalHour === 12) finalHour = 0;
+    finalDate.setHours(finalHour, selectedMinute.current, 0, 0);
     onConfirm(finalDate);
   };
 
-  const handleHourSelect = useCallback((v: string) => setHour(parseInt(v)), []);
-  const handleMinuteSelect = useCallback((v: string) => setMinute(parseInt(v)), []);
-  const handleAmPmSelect = useCallback((v: string) => setAmPm(v), []);
+  const handleHourSelect = useCallback((v: string) => {
+    selectedHour.current = parseInt(v);
+  }, []);
+  
+  const handleMinuteSelect = useCallback((v: string) => {
+    selectedMinute.current = parseInt(v);
+  }, []);
+  
+  const handleAmPmSelect = useCallback((v: string) => {
+    selectedAmPm.current = v;
+  }, []);
 
   const cardBg = isDark ? "#111827" : "#F8FAFC";
   const border = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)";
@@ -194,7 +206,7 @@ export const TimeWheelPicker: React.FC<TimeWheelPickerProps> = ({ initialTime, o
       <View style={{ backgroundColor: innerBg, borderColor: innerBorder, borderWidth: 1 }} className="flex-row items-center justify-center rounded-[32px] py-6 shadow-sm">
         <WheelPicker 
           data={hours} 
-          initialIndex={hour - 1} 
+          initialIndex={selectedHour.current - 1} 
           onSelect={handleHourSelect} 
           width={70}
           isDark={isDark}
@@ -204,7 +216,7 @@ export const TimeWheelPicker: React.FC<TimeWheelPickerProps> = ({ initialTime, o
         </View>
         <WheelPicker 
           data={minutes} 
-          initialIndex={minute} 
+          initialIndex={selectedMinute.current} 
           onSelect={handleMinuteSelect} 
           width={70}
           isDark={isDark}
@@ -212,7 +224,7 @@ export const TimeWheelPicker: React.FC<TimeWheelPickerProps> = ({ initialTime, o
         <View className="w-3" />
         <WheelPicker 
           data={periods} 
-          initialIndex={periods.indexOf(ampm)} 
+          initialIndex={periods.indexOf(selectedAmPm.current)} 
           onSelect={handleAmPmSelect} 
           width={90}
           isDark={isDark}
