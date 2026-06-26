@@ -59,8 +59,8 @@ function MainTabs() {
 }
 
 function RootNavigator() {
-  const { user, loading } = useUser();
-  const { householdId } = useHousehold();
+  const { user, loading: userLoading } = useUser();
+  const { householdId, loading: householdLoading } = useHousehold();
   const { isDark } = useTheme();
 
   useEffect(() => {
@@ -73,7 +73,7 @@ function RootNavigator() {
     }
   }, [user]);
 
-  if (loading) {
+  if (userLoading || householdLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: isDark ? '#0F172A' : '#F8FAFC', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#6366F1" />
