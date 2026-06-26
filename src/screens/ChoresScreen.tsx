@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   View, Text, FlatList, TextInput, TouchableOpacity, 
-  Alert, ScrollView, Switch
+  Alert, ScrollView, Switch, Modal, Pressable
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TimeWheelPicker } from '../components/TimeWheelPicker';
@@ -186,8 +186,8 @@ export default function ChoresScreen({ route, navigation }: Props) {
             });
           }));
           logActivity(householdId, 'chore_add', `${choreTitle.trim()} (${selectedDays.join(', ')})`, currentUserName);
-        } else {
-          const today = getSyncedDate().toLocaleDateString('en-US', { weekday: 'short' });
+          const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const today = daysOfWeek[getSyncedDate().getDay()];
           const nextTarget = getNextOccurrence(today, formattedTime);
           const notifId = await scheduleChoreReminder(choreTitle.trim(), nextTarget);
           await addDoc(collection(db, 'households', householdId, 'chores'), {
@@ -439,7 +439,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                       textTransform: 'uppercase' 
                     }}>
                       {item.day}
-                      {item.targetDate ? `, ${item.targetDate.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                      {item.targetDate ? `, ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][item.targetDate.toDate().getMonth()]} ${item.targetDate.toDate().getDate()}` : ''}
                     </Text>
                   </View>
                 )}
@@ -630,9 +630,8 @@ export default function ChoresScreen({ route, navigation }: Props) {
           extraData={memberProfiles}
           keyExtractor={i => i.id}
           renderItem={renderChore}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100 }}
           keyboardShouldPersistTaps="handled"
-          decelerationRate="fast"
           scrollEventThrottle={16}
           ListHeaderComponent={
             chores.length > 0 ? (
@@ -663,16 +662,19 @@ export default function ChoresScreen({ route, navigation }: Props) {
         visible={isModalVisible}
         onClose={() => { setIsModalVisible(false); setEditingChore(null); setChoreTitle(''); }}
         title={editingChore ? "Edit Chore" : "Add Chore"}
+<<<<<<< HEAD
+=======
         scrollEnabled={true}
+>>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
       >
-        <View className="pt-2 pb-2">
+        <View className="pt-1 pb-1">
           {!showSplitOptions ? (
             <View>
-              <View className="border-b border-border/60 pb-2 mb-6">
-                <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-1">What needs to be done?</Text>
+              <View className="border-b border-border/60 pb-1.5 mb-4">
+                <Text className="text-textMuted text-[9px] font-bold uppercase tracking-widest mb-1">What needs to be done?</Text>
                 <TextInput 
                   ref={inputRef}
-                  className="text-textMain text-lg font-bold" 
+                  className="text-textMain text-base font-bold" 
                   placeholder="e.g. Sweep the floor" 
                   placeholderTextColor="#D1D5DB"
                   value={choreTitle} 
@@ -680,7 +682,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                 />
               </View>
 
-              <View className="mb-6">
+              <View className="mb-4">
                 <Text className="text-textMuted text-xs font-bold mb-2">Select Days</Text>
                 <View className="flex-row justify-between">
                   {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => {
@@ -695,7 +697,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                             setSelectedDays([...selectedDays, d]);
                           }
                         }}
-                        className={`w-9 h-9 rounded-full items-center justify-center border ${isSelected ? 'bg-warning border-warning' : 'bg-surfaceRaised border-border'}`}
+                        className={`w-8.5 h-8.5 rounded-full items-center justify-center border ${isSelected ? 'bg-warning border-warning' : 'bg-surfaceRaised border-border'}`}
                       >
                         <Text className={`text-[10px] font-black ${isSelected ? 'text-white' : 'text-slate-400'}`}>{d}</Text>
                       </TouchableOpacity>
@@ -704,30 +706,29 @@ export default function ChoresScreen({ route, navigation }: Props) {
                 </View>
               </View>
 
-              <View className="border-b border-border/60 pb-2 mb-6 flex-row justify-between items-center">
+              <View className="border-b border-border/60 pb-1.5 mb-4 flex-row justify-between items-center">
                 <Text className="text-textMuted text-xs font-bold w-16">Time</Text>
                 <TouchableOpacity 
                   onPress={() => setShowTimePicker(true)}
-                  className={`flex-row items-baseline rounded-xl px-3 py-1 ${showTimePicker ? 'bg-primary/5' : ''}`}
+                  className={`flex-row items-baseline rounded-xl px-3 py-0.5 ${showTimePicker ? 'bg-primary/5' : ''}`}
                 >
+<<<<<<< HEAD
+                  <Text className="text-lg font-black text-textMain">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[0]}</Text>
+                  <Text className="text-sm font-black text-textMuted mx-0.5">:</Text>
+                  <Text className="text-lg font-black text-textMain">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[1]}</Text>
+                  <Text className="text-[9px] font-black text-textMuted ml-1 uppercase">{time.getHours() >= 12 ? 'PM' : 'AM'}</Text>
+=======
                   <Text className="text-xl font-black text-textMain">{(time.getHours() % 12 || 12).toString().padStart(2, '0')}</Text>
                   <Text className="text-base font-black text-textMuted mx-0.5">:</Text>
                   <Text className="text-xl font-black text-textMain">{time.getMinutes().toString().padStart(2, '0')}</Text>
                   <Text className="text-[10px] font-black text-textMuted ml-1 uppercase">{time.getHours() >= 12 ? 'PM' : 'AM'}</Text>
+>>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
                 </TouchableOpacity>
               </View>
 
-              {showTimePicker && (
-                <View className="mb-6 border border-border/50 rounded-2xl bg-background/30 p-2">
-                  <TimeWheelPicker 
-                    initialTime={time}
-                    onConfirm={(date) => { setTime(date); setShowTimePicker(false); }}
-                    onCancel={() => setShowTimePicker(false)}
-                  />
-                </View>
-              )}
 
-              <View className="flex-row items-center justify-between mb-6 bg-surfaceRaised p-4 rounded-3xl border border-border/50">
+
+              <View className="flex-row items-center justify-between mb-4 bg-surfaceRaised p-3 rounded-2xl border border-border/50">
                 <View className="flex-1">
                   <Text className="text-textMain font-bold text-sm">Automated Rotation</Text>
                   <Text className="text-textMuted text-[10px]">Rotates between members automatically</Text>
@@ -748,27 +749,31 @@ export default function ChoresScreen({ route, navigation }: Props) {
 
               <TouchableOpacity 
                 onPress={() => setShowSplitOptions(true)}
-                className="bg-secondary/30 rounded-2xl py-3.5 px-5 items-center flex-row border border-border/50 mb-6"
+                className="bg-secondary/30 rounded-xl py-2.5 px-4 items-center flex-row border border-border/50 mb-4"
               >
-                <MaterialIcons name="people" size={20} color="#4F46E5" />
+                <MaterialIcons name="people" size={18} color="#4F46E5" />
                 <Text className="text-textMain font-bold text-sm ml-3 flex-1">
                   {isRotationEnabled 
                     ? `Rotation: ${rotationOrder.length} Members`
                     : `Assignee: ${assignedTo ? getMemberName(assignedTo) : 'Select Person'}`
                   }
                 </Text>
-                <MaterialIcons name="chevron-right" size={20} color="#9CA3AF" />
+                <MaterialIcons name="chevron-right" size={18} color="#9CA3AF" />
               </TouchableOpacity>
 
+<<<<<<< HEAD
+              <View className="flex-row justify-between mt-1">
+=======
               <View style={{ paddingBottom: 40 }} className="flex-row justify-between mt-2">
+>>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
                 <TouchableOpacity 
-                  className="flex-1 bg-background py-3.5 rounded-2xl items-center mr-3 border border-border/40"
+                  className="flex-1 bg-background py-2.5 rounded-xl items-center mr-3 border border-border/40"
                   onPress={() => { setIsModalVisible(false); setShowSplitOptions(false); setChoreTitle(''); }}
                 >
                   <Text className="text-textMuted font-bold text-sm">Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  className="flex-1 bg-textMain py-3.5 rounded-2xl items-center" 
+                  className="flex-1 bg-textMain py-2.5 rounded-xl items-center" 
                   onPress={handleAddChore}
                 >
                   <Text className="text-white font-bold text-sm">Save</Text>
@@ -778,20 +783,20 @@ export default function ChoresScreen({ route, navigation }: Props) {
             </View>
           ) : (
             <View>
-              <View className="flex-row items-center justify-between mb-6">
+              <View className="flex-row items-center justify-between mb-4">
                 <View>
-                  <Text className="text-textMain text-lg font-black">Assign to</Text>
+                  <Text className="text-textMain text-base font-black">Assign to</Text>
                   {isRotationEnabled && (
                     <TouchableOpacity onPress={() => setRotationOrder(members || [])}>
-                      <Text className="text-primary text-[10px] font-black uppercase mt-1">Select All Members</Text>
+                      <Text className="text-primary text-[9px] font-black uppercase mt-0.5">Select All Members</Text>
                     </TouchableOpacity>
                   )}
                 </View>
-                <TouchableOpacity onPress={() => setShowSplitOptions(false)} className="bg-primary/10 px-3 py-1.5 rounded-full">
-                   <Text className="text-primary font-bold text-xs uppercase">Done</Text>
+                <TouchableOpacity onPress={() => setShowSplitOptions(false)} className="bg-primary/10 px-3 py-1 rounded-full">
+                   <Text className="text-primary font-bold text-[10px] uppercase">Done</Text>
                 </TouchableOpacity>
               </View>
-              <View style={{ maxHeight: 300 }}>
+              <View style={{ maxHeight: 280 }}>
                 {(members || []).map(uid => {
                   const isInRotation = rotationOrder.includes(uid);
                   const isPrimaryAssignee = assignedTo === uid;
@@ -800,7 +805,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                   return (
                     <TouchableOpacity 
                       key={uid} 
-                      className={`flex-row items-center p-3 rounded-xl mb-2 border ${isSelected ? 'bg-warning/10 border-warning/30' : 'bg-background border-border'} `}
+                      className={`flex-row items-center p-2.5 rounded-xl mb-1.5 border ${isSelected ? 'bg-warning/10 border-warning/30' : 'bg-background border-border'} `}
                       onPress={() => {
                         if (isRotationEnabled) {
                           if (isInRotation) {
@@ -841,6 +846,29 @@ export default function ChoresScreen({ route, navigation }: Props) {
           )}
         </View>
       </SlideModal>
+
+      <Modal
+        visible={showTimePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTimePicker(false)}
+      >
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Pressable 
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+            onPress={() => setShowTimePicker(false)}
+          />
+          <View style={{ width: '92%', maxWidth: 350 }}>
+            {showTimePicker && (
+              <TimeWheelPicker 
+                initialTime={time}
+                onConfirm={(date) => { setTime(date); setShowTimePicker(false); }}
+                onCancel={() => setShowTimePicker(false)}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
