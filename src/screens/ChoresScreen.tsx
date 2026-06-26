@@ -662,10 +662,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         visible={isModalVisible}
         onClose={() => { setIsModalVisible(false); setEditingChore(null); setChoreTitle(''); }}
         title={editingChore ? "Edit Chore" : "Add Chore"}
-<<<<<<< HEAD
-=======
         scrollEnabled={true}
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
       >
         <View className="pt-1 pb-1">
           {!showSplitOptions ? (
@@ -712,17 +709,10 @@ export default function ChoresScreen({ route, navigation }: Props) {
                   onPress={() => setShowTimePicker(true)}
                   className={`flex-row items-baseline rounded-xl px-3 py-0.5 ${showTimePicker ? 'bg-primary/5' : ''}`}
                 >
-<<<<<<< HEAD
-                  <Text className="text-lg font-black text-textMain">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[0]}</Text>
-                  <Text className="text-sm font-black text-textMuted mx-0.5">:</Text>
-                  <Text className="text-lg font-black text-textMain">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).split(':')[1]}</Text>
-                  <Text className="text-[9px] font-black text-textMuted ml-1 uppercase">{time.getHours() >= 12 ? 'PM' : 'AM'}</Text>
-=======
                   <Text className="text-xl font-black text-textMain">{(time.getHours() % 12 || 12).toString().padStart(2, '0')}</Text>
                   <Text className="text-base font-black text-textMuted mx-0.5">:</Text>
                   <Text className="text-xl font-black text-textMain">{time.getMinutes().toString().padStart(2, '0')}</Text>
                   <Text className="text-[10px] font-black text-textMuted ml-1 uppercase">{time.getHours() >= 12 ? 'PM' : 'AM'}</Text>
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
                 </TouchableOpacity>
               </View>
 
@@ -761,11 +751,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                 <MaterialIcons name="chevron-right" size={18} color="#9CA3AF" />
               </TouchableOpacity>
 
-<<<<<<< HEAD
-              <View className="flex-row justify-between mt-1">
-=======
               <View style={{ paddingBottom: 40 }} className="flex-row justify-between mt-2">
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
                 <TouchableOpacity 
                   className="flex-1 bg-background py-2.5 rounded-xl items-center mr-3 border border-border/40"
                   onPress={() => { setIsModalVisible(false); setShowSplitOptions(false); setChoreTitle(''); }}
