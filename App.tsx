@@ -11,7 +11,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Alert } from 'react-native';
+import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { validateInvitation, acceptInvitation } from './src/utils/invitationApi';
+import { useToast } from './src/context/ToastContext';
 import { UserProvider, useUser } from './src/context/UserContext';
 import { HouseholdProvider, useHousehold } from './src/context/HouseholdContext';
 import { ToastProvider } from './src/context/ToastContext';
@@ -49,7 +53,7 @@ function MainTabs() {
       <Tab.Screen name="Grocery"   component={GroceryScreen} />
       <Tab.Screen name="Expenses"  component={ExpenseScreen} />
       <Tab.Screen name="Chores"    component={ChoresScreen} />
-      <Tab.Screen name="Chat"      component={ChatScreen} />
+      <Tab.Screen name="Chat"      component={ChatScreen} options={{ tabBarStyle: { display: 'none' } }} />
     </Tab.Navigator>
   );
 }
@@ -130,9 +134,101 @@ export default Sentry.wrap(App);
 /** Reads theme inside NavigationContainer so StatusBar colour is reactive */
 function ThemedApp() {
   const { isDark } = useTheme();
+  const { user, loading: userLoading } = useUser();
+  const { householdId, setHouseholdId } = useHousehold();
+  const { showToast } = useToast();
+  const url = Linking.useURL();
+
+  const extractToken = (urlStr: string): string | null => {
+    try {
+      const match = urlStr.match(/\/invite\/([a-zA-Z0-9_\-]+)/);
+      return match ? match[1] : null;
+    } catch (e) {
+      console.error("Error parsing invite URL:", e);
+      return null;
+    }
+  };
+
+  const processPendingInvitation = async (token: string) => {
+    try {
+      showToast("Validating invitation link...", "info");
+      const validation = await validateInvitation(token);
+      if (!validation.valid) {
+        Alert.alert("Invalid Link", validation.message || "This invitation link is invalid or expired.");
+        return;
+      }
+
+      // Show confirmation prompt
+      Alert.alert(
+        "Join Household",
+        `You have been invited to join the household "${validation.householdName}".\n\nWould you like to join?${
+          householdId ? "\n\nNote: This will remove you from your current household." : ""
+        }`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Join",
+            onPress: async () => {
+              try {
+                showToast("Joining household...", "info");
+                const result = await acceptInvitation(token);
+                if (result.success) {
+                  setHouseholdId(result.householdId);
+                  showToast(`Joined "${validation.householdName}" successfully!`, "success");
+                } else {
+                  showToast("Failed to join household", "error");
+                }
+              } catch (err: any) {
+                console.error("Error joining household:", err);
+                Alert.alert("Error Joining", err.message || "Something went wrong while joining.");
+              }
+            }
+          }
+        ]
+      );
+    } catch (err: any) {
+      console.error("Error validating invitation:", err);
+      showToast(err.message || "Error validating invitation link", "error");
+    }
+  };
+
+  useEffect(() => {
+    const handleUrl = async (rawUrl: string) => {
+      const token = extractToken(rawUrl);
+      if (token) {
+        await AsyncStorage.setItem("pending_invite_token", token);
+        if (!userLoading) {
+          if (user) {
+            await AsyncStorage.removeItem("pending_invite_token");
+            processPendingInvitation(token);
+          } else {
+            showToast("Please log in to accept the invitation.", "info");
+          }
+        }
+      }
+    };
+
+    if (url) {
+      handleUrl(url);
+    }
+  }, [url, user, userLoading]);
+
+  useEffect(() => {
+    const checkPending = async () => {
+      if (user && !userLoading) {
+        const token = await AsyncStorage.getItem("pending_invite_token");
+        if (token) {
+          await AsyncStorage.removeItem("pending_invite_token");
+          processPendingInvitation(token);
+        }
+      }
+    };
+    checkPending();
+  }, [user, userLoading]);
+
   return (
     <>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <StatusBar style={isDark ? "light" : "dark"} />
       <RootNavigator />
       <Toast />
     </>
