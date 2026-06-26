@@ -11,7 +11,11 @@ import {
   Linking,
   Animated,
   Dimensions,
+  Share,
+  Pressable,
 } from "react-native";
+import * as ExpoLinking from "expo-linking";
+import { createInvitation } from "../utils/invitationApi";
 import { createAudioPlayer } from "expo-audio";
 import { TimeWheelPicker } from "../components/TimeWheelPicker";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -134,6 +138,29 @@ export default function DashboardScreen({ navigation }: Props) {
   const [hasUnreadChores, setHasUnreadChores] = useState(false);
   const [unreadActivityCount, setUnreadActivityCount] = useState(0);
   const [lastSeenActivityTime, setLastSeenActivityTime] = useState<number | null>(null);
+
+  const [isInviting, setIsInviting] = useState(false);
+
+  const handleInviteRoommate = async () => {
+    if (!householdId) {
+      showToast("No active household found", "error");
+      return;
+    }
+    setIsInviting(true);
+    try {
+      const token = await createInvitation(householdId);
+      const inviteUrl = `https://shared-living-app.web.app/invite/${token}`;
+      await Share.share({
+        message: `You have been invited to join my household "${householdData?.name || "Shared Space"}" on Shared Living!\n\nClick the link to join: ${inviteUrl}`,
+        url: inviteUrl,
+      });
+    } catch (error: any) {
+      console.error("Error generating invitation:", error);
+      showToast(error.message || "Failed to generate invitation", "error");
+    } finally {
+      setIsInviting(false);
+    }
+  };
 
   const unreadCountRef = useRef(0);
   unreadCountRef.current = unreadActivityCount;
@@ -1852,6 +1879,26 @@ export default function DashboardScreen({ navigation }: Props) {
                 <MaterialIcons name="content-copy" size={20} color="white" />
               </TouchableOpacity>
             </View>
+            <TouchableOpacity
+              onPress={handleInviteRoommate}
+              disabled={isInviting}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "rgba(255,255,255,0.2)",
+                paddingVertical: 14,
+                borderRadius: 18,
+                marginTop: 14,
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.3)"
+              }}
+            >
+              <MaterialIcons name="share" size={20} color="white" style={{ marginRight: 8 }} />
+              <Text className="text-white font-bold text-sm">
+                {isInviting ? "Generating Link..." : "Invite Roommate via Link"}
+              </Text>
+            </TouchableOpacity>
           </View>
           <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-4 ml-1">
             Current Members
@@ -2759,59 +2806,58 @@ const HouseholdInfoModalContent = memo(
                       visible={activeTimePickerId === field.id}
                       transparent
                       animationType="fade"
+                      onRequestClose={() => setActiveTimePickerId(null)}
                     >
-                      <TouchableOpacity
-                        className="flex-1 bg-black/40 justify-center items-center px-6"
-                        activeOpacity={1}
-                        onPress={() => setActiveTimePickerId(null)}
-                      >
-                        <TouchableOpacity
-                          activeOpacity={1}
-                          className="w-full bg-surface rounded-[32px] p-6 shadow-2xl"
-                          onPress={(e) => e.stopPropagation()}
-                        >
-                          <TimeWheelPicker
-                            initialTime={(() => {
-                              if (
-                                !field.value ||
-                                typeof field.value !== "string" ||
-                                !field.value.includes(":")
-                              )
-                                return getSyncedDate();
-                              const parts = field.value.split(":").map(Number);
-                              const h = parts[0];
-                              const m = parts[1];
-                              if (isNaN(h) || isNaN(m)) return getSyncedDate();
-                              const d = getSyncedDate();
-                              d.setHours(h, m, 0, 0);
-                              return d;
-                            })()}
-                            onConfirm={(date) => {
-                              const hours = date
-                                .getHours()
-                                .toString()
-                                .padStart(2, "0");
-                              const minutes = date
-                                .getMinutes()
-                                .toString()
-                                .padStart(2, "0");
-                              handleUpdateField(field.id, {
-                                value: `${hours}:${minutes}`,
-                              });
-                              setActiveTimePickerId(null);
-                            }}
-                            onCancel={() => setActiveTimePickerId(null)}
-                          />
-                          <TouchableOpacity
-                            onPress={() => setActiveTimePickerId(null)}
-                            className="mt-4 py-3 items-center"
-                          >
-                            <Text className="text-textMuted font-bold text-sm">
-                              Cancel
-                            </Text>
-                          </TouchableOpacity>
-                        </TouchableOpacity>
-                      </TouchableOpacity>
+                      <View className="flex-1 justify-center items-center">
+                        <Pressable
+                          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)" }}
+                          onPress={() => setActiveTimePickerId(null)}
+                        />
+                        <View className="w-[92%] max-w-[350px]">
+                          <View className="bg-surface rounded-[32px] p-6 shadow-2xl">
+                            <TimeWheelPicker
+                              initialTime={(() => {
+                                if (
+                                  !field.value ||
+                                  typeof field.value !== "string" ||
+                                  !field.value.includes(":")
+                                )
+                                  return getSyncedDate();
+                                const parts = field.value.split(":").map(Number);
+                                const h = parts[0];
+                                const m = parts[1];
+                                if (isNaN(h) || isNaN(m)) return getSyncedDate();
+                                const d = getSyncedDate();
+                                d.setHours(h, m, 0, 0);
+                                return d;
+                              })()}
+                              onConfirm={(date) => {
+                                const hours = date
+                                  .getHours()
+                                  .toString()
+                                  .padStart(2, "0");
+                                const minutes = date
+                                  .getMinutes()
+                                  .toString()
+                                  .padStart(2, "0");
+                                handleUpdateField(field.id, {
+                                  value: `${hours}:${minutes}`,
+                                });
+                                setActiveTimePickerId(null);
+                              }}
+                              onCancel={() => setActiveTimePickerId(null)}
+                            />
+                            <TouchableOpacity
+                              onPress={() => setActiveTimePickerId(null)}
+                              className="mt-4 py-3 items-center"
+                            >
+                              <Text className="text-textMuted font-bold text-sm">
+                                Cancel
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
                     </Modal>
                   )}
                 </View>

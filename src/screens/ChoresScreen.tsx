@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   View, Text, FlatList, TextInput, TouchableOpacity, 
-  Alert, ScrollView, Switch, Modal
+  Alert, ScrollView, Switch, Modal, Pressable
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TimeWheelPicker } from '../components/TimeWheelPicker';
@@ -839,23 +839,21 @@ export default function ChoresScreen({ route, navigation }: Props) {
         animationType="fade"
         onRequestClose={() => setShowTimePicker(false)}
       >
-        <TouchableOpacity 
-          className="flex-1 bg-black/40 justify-center items-center px-6"
-          activeOpacity={1}
-          onPress={() => setShowTimePicker(false)}
-        >
-          <TouchableOpacity 
-            activeOpacity={1}
-            style={{ width: '92%', maxWidth: 350 }}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <TimeWheelPicker 
-              initialTime={time}
-              onConfirm={(date) => { setTime(date); setShowTimePicker(false); }}
-              onCancel={() => setShowTimePicker(false)}
-            />
-          </TouchableOpacity>
-        </TouchableOpacity>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Pressable 
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+            onPress={() => setShowTimePicker(false)}
+          />
+          <View style={{ width: '92%', maxWidth: 350 }}>
+            {showTimePicker && (
+              <TimeWheelPicker 
+                initialTime={time}
+                onConfirm={(date) => { setTime(date); setShowTimePicker(false); }}
+                onCancel={() => setShowTimePicker(false)}
+              />
+            )}
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

@@ -15,6 +15,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
+import { validateInvitation, acceptInvitation } from '../utils/invitationApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdSetup'>;
 
@@ -24,6 +25,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
   const [activeTab, setActiveTab] = useState<'create' | 'join'>(initialTab);
   const [householdName, setHouseholdName] = useState('');
   const [inviteCodeInput, setInviteCodeInput] = useState(route.params?.code || '');
+  const [pastedLink, setPastedLink] = useState('');
   const [loading, setLoading] = useState(false);
   const { setHouseholdId } = useHousehold();
 
@@ -105,6 +107,72 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
       handleJoinHousehold(route.params.code);
     }
   }, [route.params?.code, handleJoinHousehold]);
+
+  const extractToken = (urlStr: string): string | null => {
+    try {
+      const match = urlStr.match(/\/invite\/([a-zA-Z0-9_\-]+)/);
+      if (match) return match[1];
+      const isGuid = /^[a-zA-Z0-9_\-]{36}$/.test(urlStr.trim());
+      if (isGuid) return urlStr.trim();
+      return null;
+    } catch (e) {
+      console.error("Error parsing invite URL:", e);
+      return null;
+    }
+  };
+
+  const handleJoinViaLink = async () => {
+    const token = extractToken(pastedLink);
+    if (!token) {
+      Alert.alert("Invalid Input", "Please enter a valid invitation link or a 36-character token.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const validation = await validateInvitation(token);
+      if (!validation.valid) {
+        Alert.alert("Invalid Link", validation.message || "This invitation link is invalid or expired.");
+        setLoading(false);
+        return;
+      }
+
+      Alert.alert(
+        "Join Household",
+        `You have been invited to join the household "${validation.householdName}".\n\nWould you like to join?`,
+        [
+          { text: "Cancel", style: "cancel", onPress: () => setLoading(false) },
+          {
+            text: "Join",
+            onPress: async () => {
+              try {
+                setLoading(true);
+                const result = await acceptInvitation(token);
+                if (result.success) {
+                  setHouseholdId(result.householdId);
+                  Alert.alert("Success", `Joined "${validation.householdName}" successfully!`);
+                  const state = navigation.getState();
+                  if (state?.routeNames?.includes('MainTabs')) {
+                    navigation.navigate('MainTabs');
+                  }
+                } else {
+                  Alert.alert("Error", "Failed to join household.");
+                }
+              } catch (err: any) {
+                console.error("Error joining household:", err);
+                Alert.alert("Error Joining", err.message || "Something went wrong while joining.");
+              } finally {
+                setLoading(false);
+              }
+            }
+          }
+        ]
+      );
+    } catch (err: any) {
+      console.error("Error validating invitation:", err);
+      Alert.alert("Error", err.message || "Error validating invitation link");
+      setLoading(false);
+    }
+  };
 
   const handleCodeChange = (value: string, index: number) => {
     const newDigits = [...codeDigits];
@@ -194,7 +262,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
                 </View>
               )}
 
-              {/* Join Tab — OTP-style input */}
+              {/* Join Tab — OTP-style input & manual link paste option */}
               {activeTab === 'join' && (
                 <View style={{ backgroundColor: surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: bord }}>
                   <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, paddingLeft: 4 }}>Invite Code</Text>
@@ -217,8 +285,29 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
                     ))}
                   </View>
                   <TouchableOpacity onPress={() => handleJoinHousehold()} disabled={loading}
+                    style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginBottom: 20 }}>
+                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Join with Code</Text>}
+                  </TouchableOpacity>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+                    <View style={{ flex: 1, height: 1, backgroundColor: bord }} />
+                    <Text style={{ fontSize: 10, fontWeight: '900', color: muted, marginHorizontal: 12, textTransform: 'uppercase', letterSpacing: 1 }}>OR</Text>
+                    <View style={{ flex: 1, height: 1, backgroundColor: bord }} />
+                  </View>
+
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10, paddingLeft: 4 }}>Invitation Link or Token</Text>
+                  <TextInput
+                    style={{ backgroundColor: bg, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 16, color: text, fontSize: 15, fontWeight: '600', borderWidth: 1, borderColor: bord, marginBottom: 20 }}
+                    placeholder="Paste invite link or token here"
+                    placeholderTextColor="#475569"
+                    value={pastedLink}
+                    onChangeText={setPastedLink}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity onPress={handleJoinViaLink} disabled={loading}
                     style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center' }}>
-                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Join Space</Text>}
+                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Join via Link</Text>}
                   </TouchableOpacity>
                 </View>
               )}

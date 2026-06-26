@@ -12,7 +12,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "scheme": "shared-living",
+    "scheme": "sharedliving",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.jeevan0714.sharedliving",

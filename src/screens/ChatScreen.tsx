@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
 import { useHousehold } from '../context/HouseholdContext';
@@ -146,7 +147,6 @@ export default function ChatScreen({ route, navigation }: Props) {
       ? new Date(item.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Date grouping logic
     const showDateHeader = () => {
       const currentMsgDate = item.createdAt ? new Date(item.createdAt.seconds * 1000) : new Date();
       const nextMsg = index < messages.length - 1 ? messages[index + 1] : null;
@@ -167,21 +167,20 @@ export default function ChatScreen({ route, navigation }: Props) {
     const nextMessageFromSameSender = index > 0 && messages[index - 1].senderId === item.senderId;
     const showAvatar = !isMe && !isSystem && (!previousMessage || previousMessage.senderId !== item.senderId);
 
-    // System message pill
     if (isSystem) {
       return (
         <View>
           {showDateHeader() && (
-            <View style={{ alignItems: 'center', marginVertical: 16 }}>
-              <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B' }}>
+            <View style={{ alignItems: 'center', marginVertical: 18 }}>
+              <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(99, 102, 241, 0.06)', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(99, 102, 241, 0.04)' }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: isDark ? '#A78BFA' : '#4F46E5', letterSpacing: 0.5 }}>
                   {formatDateHeader(item.createdAt ? new Date(item.createdAt.seconds * 1000) : new Date())}
                 </Text>
               </View>
             </View>
           )}
           <View style={{ alignItems: 'center', marginVertical: 8 }}>
-            <View style={{ backgroundColor: isDark ? '#334155' : '#E2E8F0', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}>
+            <View style={{ backgroundColor: isDark ? '#1E293B' : '#E2E8F0', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }}>
               <Text style={{ fontSize: 12, fontWeight: '600', color: isDark ? '#94A3B8' : '#64748B' }}>{item.text}</Text>
             </View>
           </View>
@@ -189,60 +188,83 @@ export default function ChatScreen({ route, navigation }: Props) {
       );
     }
 
+    const bubbleContent = (
+      <View>
+        {showSenderName && (
+          <Text style={{ fontSize: 10, fontWeight: '800', color: isMe ? '#A5B4FC' : '#818CF8', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>
+            {item.senderName}
+          </Text>
+        )}
+        <Text style={{ fontSize: 15, color: isMe ? '#FFFFFF' : (isDark ? '#F1F5F9' : '#0F172A'), lineHeight: 21 }}>
+          {item.text}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4, gap: 4 }}>
+          <Text style={{ fontSize: 9, color: isMe ? 'rgba(255,255,255,0.7)' : (isDark ? '#64748B' : '#9CA3AF'), fontWeight: '600' }}>
+            {timeString}
+          </Text>
+          {isMe && (
+            <Ionicons name="checkmark-done" size={14} color={isReadByOthers ? "#38BDF8" : "rgba(255,255,255,0.5)"} />
+          )}
+        </View>
+      </View>
+    );
+
+    const bubbleStyle: any = {
+      maxWidth: '78%',
+      borderRadius: 22,
+      borderTopRightRadius: isMe ? 4 : 22,
+      borderTopLeftRadius: !isMe ? 4 : 22,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      shadowColor: isMe ? '#6366F1' : '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isMe ? 0.15 : 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    };
+
     return (
       <View>
         {showDateHeader() && (
-          <View style={{ alignItems: 'center', marginVertical: 16 }}>
-            <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B' }}>
+          <View style={{ alignItems: 'center', marginVertical: 18 }}>
+            <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(99, 102, 241, 0.06)', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(99, 102, 241, 0.04)' }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: isDark ? '#A78BFA' : '#4F46E5', letterSpacing: 0.5 }}>
                 {formatDateHeader(item.createdAt ? new Date(item.createdAt.seconds * 1000) : new Date())}
               </Text>
             </View>
           </View>
         )}
-        <View style={{ flexDirection: 'row', marginBottom: nextMessageFromSameSender ? 2 : 8, justifyContent: isMe ? 'flex-end' : 'flex-start', alignItems: 'flex-end' }}>
+        <View style={{ flexDirection: 'row', marginBottom: nextMessageFromSameSender ? 3 : 10, justifyContent: isMe ? 'flex-end' : 'flex-start', alignItems: 'flex-end' }}>
           {!isMe && (
             showAvatar ? (
-              <Avatar name={item.senderName} size={32} style={{ marginRight: 8, marginBottom: 2 }} />
+              <Avatar name={item.senderName} size={34} style={{ marginRight: 8, marginBottom: 2 }} />
             ) : (
-              <View style={{ width: 32, marginRight: 8 }} />
+              <View style={{ width: 34, marginRight: 8 }} />
             )
           )}
-          <View 
-            style={{
-              maxWidth: '75%',
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              backgroundColor: isMe ? '#6366F1' : (isDark ? '#1E293B' : '#FFFFFF'),
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              borderBottomLeftRadius: isMe ? 20 : (showAvatar ? 4 : 20),
-              borderBottomRightRadius: isMe ? (showAvatar ? 4 : 20) : 20,
-              borderWidth: isMe ? 0 : 1,
-              borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)',
-            }}
-          >
-            {showSenderName && (
-              <Text style={{ fontSize: 10, fontWeight: '800', color: '#818CF8', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 1 }}>
-                {item.senderName}
-              </Text>
-            )}
-            <View>
-              <Text style={{ fontSize: 15, color: isMe ? '#FFFFFF' : (isDark ? '#F1F5F9' : '#0F172A'), lineHeight: 20 }}>
-                {item.text}
-              </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 2 }}>
-                <Text style={{ fontSize: 9, color: isMe ? 'rgba(255,255,255,0.6)' : (isDark ? '#64748B' : '#9CA3AF'), fontWeight: '600' }}>
-                  {timeString}
-                </Text>
-                {isMe && (
-                  <View style={{ marginLeft: 4 }}>
-                    <Ionicons name="checkmark-done" size={14} color={isReadByOthers ? "#38BDF8" : "rgba(255,255,255,0.5)"} />
-                  </View>
-                )}
-              </View>
+          {isMe ? (
+            <LinearGradient
+              colors={['#6366F1', '#4F46E5']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={bubbleStyle}
+            >
+              {bubbleContent}
+            </LinearGradient>
+          ) : (
+            <View 
+              style={[
+                bubbleStyle,
+                { 
+                  backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+                  borderWidth: 1,
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(99, 102, 241, 0.06)',
+                }
+              ]}
+            >
+              {bubbleContent}
             </View>
-          </View>
+          )}
         </View>
       </View>
     );
@@ -261,36 +283,39 @@ export default function ChatScreen({ route, navigation }: Props) {
           borderBottomWidth: 1, 
           borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)',
           paddingTop: insets.top + 12,
-          zIndex: 10
+          zIndex: 10,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: isDark ? 0.2 : 0.04,
+          shadowRadius: 10,
+          elevation: 4
         }}
       >
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
-          style={{ marginRight: 12, width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#0F172A' : '#F1F5F9', borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}
+          activeOpacity={0.8}
+          style={{ marginRight: 12, width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#151D35' : '#F1F5F9', borderWidth: 1, borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)' }}
         >
-          <Ionicons name="arrow-back" size={20} color={isDark ? '#F1F5F9' : '#0F172A'} />
+          <Ionicons name="arrow-back" size={20} color={isDark ? '#F1F5F9' : '#1E1B4B'} />
         </TouchableOpacity>
 
-        <View style={{ flex: 1, justifyContent: 'center' }}>
-          <Text style={{ color: isDark ? '#F1F5F9' : '#0F172A', fontSize: 18, fontWeight: '800' }} numberOfLines={1}>
-            {householdData?.name || 'Household Chat'}
-          </Text>
-          <Text style={{ color: isDark ? '#64748B' : '#94A3B8', fontSize: 12, fontWeight: '600', marginTop: 2 }}>
-            {householdData?.members?.length || 0} members
-          </Text>
+        <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: '#6366F120', alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: '#6366F130' }}>
+          <Ionicons name="chatbubbles" size={20} color="#6366F1" />
         </View>
 
-        <TouchableOpacity style={{ width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#0F172A' : '#F1F5F9', borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }}>
-          <Ionicons name="information" size={20} color={isDark ? '#818CF8' : '#6366F1'} />
-        </TouchableOpacity>
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <Text style={{ color: isDark ? '#F1F5F9' : '#1E1B4B', fontSize: 18, fontWeight: '900', letterSpacing: -0.5 }} numberOfLines={1}>
+            {householdData?.name || 'Household Chat'}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981', marginRight: 6 }} />
+            <Text style={{ color: isDark ? '#818CF8' : '#4F46E5', fontSize: 12, fontWeight: '700' }}>
+              {householdData?.members?.length || 0} Roommates
+            </Text>
+          </View>
+        </View>
       </View>
 
-      {/*
-        KeyboardAvoidingView starts BELOW the header, so keyboardVerticalOffset = 0.
-        Use 'padding' on both platforms: it just adds bottom padding equal to the
-        keyboard height, pushing the input bar up without resizing or moving the
-        whole container. 'height' shrinks the container which throws messages up.
-      */}
       <KeyboardAvoidingView
         behavior="padding"
         style={{ flex: 1 }}
@@ -316,82 +341,112 @@ export default function ChatScreen({ route, navigation }: Props) {
               scrollEventThrottle={16}
               maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             />
-            )}
+          )}
 
-            {/* Quick Emoji Bar */}
-            {showEmojis && (
-              <View style={{ backgroundColor: isDark ? '#0E1324' : '#FFFFFF', borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)', paddingVertical: 10 }}>
-                <FlatList
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  data={[
-                    '❤️', '😂', '😮', '😢', '😡', '👍', '🙏', '🔥', '✨', '✔️', '🎉', 
-                    '😀', '😍', '😎', '🤩', '😊', '🤔', '🙄', '😴', '😭', '😔', '😤',
-                    '🏠', '🧹', '🧺', '💰', '🍕', '🍴', '☕', '🧼', '✅', '❌'
-                  ]}
-                  keyExtractor={(item) => item}
-                  contentContainerStyle={{ paddingHorizontal: 16 }}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity 
-                      onPress={() => setInputText(prev => prev + item)}
-                      style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      <Text style={{ fontSize: 24 }}>{item}</Text>
-                    </TouchableOpacity>
-                  )}
-                />
-              </View>
-            )}
+          {/* Quick Emoji Bar */}
+          {showEmojis && (
+            <View style={{ backgroundColor: isDark ? '#0E1324' : '#FFFFFF', borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)', paddingVertical: 12 }}>
+              <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={[
+                  '👋', '👍', '🙏', '❤️', '😂', '😮', '😢', '😡', '🔥', '✨', '✔️', '🎉', 
+                  '🏠', '🧹', '💰', '🍕', '🍴', '☕', '🧼', '✅', '❌', '😴', '😭', '🤔'
+                ]}
+                keyExtractor={(item) => item}
+                contentContainerStyle={{ paddingHorizontal: 16 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    onPress={() => setInputText(prev => prev + item)}
+                    activeOpacity={0.7}
+                    style={{ 
+                      width: 46, 
+                      height: 46, 
+                      borderRadius: 12,
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(99, 102, 241, 0.03)',
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      marginRight: 8,
+                      borderWidth: 1,
+                      borderColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(99, 102, 241, 0.04)'
+                    }}
+                  >
+                    <Text style={{ fontSize: 22 }}>{item}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          )}
 
-            {/* Input Bar */}
-            <View 
+          {/* Floating Pill Input Bar */}
+          <View 
+            style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              marginHorizontal: 16,
+              marginBottom: Math.max(insets.bottom, 12),
+              marginTop: 8,
+              paddingHorizontal: 8, 
+              paddingVertical: 4, 
+              backgroundColor: isDark ? '#0E1324' : '#FFFFFF', 
+              borderRadius: 28,
+              borderWidth: 1,
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: isDark ? 0.2 : 0.05,
+              shadowRadius: 12,
+              elevation: 6
+            }}
+          >
+            <TouchableOpacity 
+              onPress={() => setShowEmojis(!showEmojis)}
+              activeOpacity={0.8}
+              style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#151D35' : '#F1F5F9' }}
+            >
+              <Ionicons name={showEmojis ? "keypad-outline" : "happy-outline"} size={22} color={showEmojis ? "#6366F1" : (isDark ? '#94A3B8' : '#64748B')} />
+            </TouchableOpacity>
+
+            <TextInput
               style={{ 
-                flexDirection: 'row', 
-                alignItems: 'flex-end', 
-                paddingHorizontal: 16, 
-                paddingVertical: 12, 
-                backgroundColor: isDark ? '#0E1324' : '#FFFFFF', 
-                borderTopWidth: 1, 
-                borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)', 
-                minHeight: 70,
-                paddingBottom: Math.max(insets.bottom, 12)
+                flex: 1, 
+                fontSize: 15, 
+                color: isDark ? '#F1F5F9' : '#0F172A', 
+                maxHeight: 120, 
+                paddingTop: Platform.OS === 'ios' ? 8 : 6, 
+                paddingBottom: Platform.OS === 'ios' ? 8 : 6, 
+                paddingHorizontal: 12, 
+                fontWeight: '500',
+                textAlignVertical: 'center'
+              }}
+              placeholder="Message team..."
+              placeholderTextColor={isDark ? '#475569' : '#94A3B8'}
+              value={inputText}
+              onChangeText={setInputText}
+              multiline
+              onFocus={() => setShowEmojis(false)}
+            />
+
+            <TouchableOpacity 
+              onPress={handleSend}
+              disabled={!inputText.trim()}
+              activeOpacity={0.8}
+              style={{ 
+                width: 40, height: 40, borderRadius: 20, 
+                alignItems: 'center', justifyContent: 'center', 
+                backgroundColor: inputText.trim() ? '#6366F1' : (isDark ? '#1E293B' : '#F1F5F9'),
+                shadowColor: '#6366F1',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: inputText.trim() ? 0.3 : 0,
+                shadowRadius: 6,
+                elevation: inputText.trim() ? 4 : 0
               }}
             >
-              <TouchableOpacity 
-                onPress={() => setShowEmojis(!showEmojis)}
-                style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 8, marginBottom: 2 }}
-              >
-                <Ionicons name={showEmojis ? "keypad" : "happy-outline"} size={24} color={showEmojis ? "#6366F1" : (isDark ? '#64748B' : '#9CA3AF')} />
-              </TouchableOpacity>
- 
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: isDark ? '#070913' : '#F1F5F9', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 4, marginRight: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)' }}>
-                <TextInput
-                  style={{ flex: 1, fontSize: 15, color: isDark ? '#F1F5F9' : '#0F172A', maxHeight: 120, paddingTop: 12, paddingBottom: 12, minHeight: 46 }}
-                  placeholder="Type a message..."
-                  placeholderTextColor={isDark ? '#475569' : '#94A3B8'}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  multiline
-                  onFocus={() => setShowEmojis(false)}
-                />
-              </View>
-
-              <TouchableOpacity 
-                onPress={handleSend}
-                disabled={!inputText.trim()}
-                style={{ 
-                  width: 48, height: 48, borderRadius: 24, 
-                  alignItems: 'center', justifyContent: 'center', 
-                  backgroundColor: inputText.trim() ? '#6366F1' : (isDark ? '#334155' : '#F1F5F9'),
-                  marginBottom: 2 
-                }}
-              >
-                <Ionicons name="send" size={18} color={inputText.trim() ? "#FFF" : (isDark ? '#64748B' : '#9CA3AF')} style={{ marginLeft: 2 }} />
-              </TouchableOpacity>
-            </View>
+              <Ionicons name="send" size={16} color={inputText.trim() ? "#FFF" : (isDark ? '#475569' : '#94A3B8')} style={{ marginLeft: 2 }} />
+            </TouchableOpacity>
           </View>
+        </View>
       </KeyboardAvoidingView>
-
     </View>
   );
 }
