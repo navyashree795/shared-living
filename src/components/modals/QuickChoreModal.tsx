@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Modal, KeyboardAvoidingView, Platform } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
 import { useUser } from "../../context/UserContext";
@@ -95,99 +96,146 @@ export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModal
   const inputBg = isDark ? "#0F172A" : "#F8FAFC";
   const textMuted = isDark ? "#94A3B8" : "#64748B";
   const primary = isDark ? "#818CF8" : "#4F46E5";
+  const bgSurface = isDark ? "#0F172A" : "#FFFFFF";
 
   return (
-    <SlideModal visible={visible} onClose={onClose} title="Log Chore for Today">
-      <View style={{ gap: 20 }}>
-        <View>
-          <Text style={{ color: textMuted, fontSize: 10, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, marginLeft: 4 }}>
-            What needs to be done?
-          </Text>
-          <TextInput
-            ref={inputRef}
-            style={{ backgroundColor: inputBg, borderRadius: 20, padding: 18, color: textMain, fontSize: 16, fontWeight: "700", borderWidth: 1, borderColor: border }}
-            placeholder="e.g. Wash dishes, Water plants"
-            placeholderTextColor={textMuted}
-            value={title}
-            onChangeText={setTitle}
-          />
-        </View>
-
-        <View>
-          <Text style={{ color: textMuted, fontSize: 10, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12, marginLeft: 4 }}>
-            Assign to
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -10, paddingHorizontal: 10 }}>
-            {members.map((uid) => {
-              const name = getMemberName(uid);
-              const isSelected = assignedTo === uid;
-              return (
-                <TouchableOpacity
-                  key={uid}
-                  onPress={() => setAssignedTo(uid)}
-                  style={{
-                    alignItems: "center",
-                    marginRight: 16,
-                    padding: 12,
-                    borderRadius: 20,
-                    backgroundColor: isSelected
-                      ? isDark
-                        ? "rgba(99, 102, 241, 0.1)"
-                        : "#EEF2FF"
-                      : "transparent",
-                    borderWidth: 1,
-                    borderColor: isSelected ? primary : "transparent",
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 52,
-                      height: 52,
-                      borderRadius: 18,
-                      backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginBottom: 8,
-                      borderWidth: 1,
-                      borderColor: border,
-                    }}
-                  >
-                    <Text style={{ fontSize: 18, fontWeight: "900", color: primary }}>
-                      {name.replace("@", "")[0].toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 11, fontWeight: "800", color: textMain }}>
-                    {name.split(" ")[0]}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        <View style={{ backgroundColor: isDark ? "rgba(245,158,11,0.08)" : "#FFFBEB", padding: 16, borderRadius: 20, borderWidth: 1, borderColor: isDark ? "rgba(245,158,11,0.15)" : "rgba(245,158,11,0.1)" }}>
-          <Text style={{ color: "#D97706", fontSize: 12, fontWeight: "700", lineHeight: 18, textAlign: "center" }}>
-            ⏰ This task will be scheduled for 8:00 PM today by default.
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          onPress={handleSave}
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 20 }}
+      >
+        <View
           style={{
-            backgroundColor: "#EC4899",
-            borderRadius: 20,
-            height: 60,
-            alignItems: "center",
-            justifyContent: "center",
-            marginTop: 8,
+            width: "100%",
+            maxWidth: 400,
+            backgroundColor: bgSurface,
+            borderRadius: 32,
+            padding: 24,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 20 },
+            shadowOpacity: 0.25,
+            shadowRadius: 35,
+            elevation: 10,
+            borderWidth: 1,
+            borderColor: border,
           }}
         >
-          <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "900", textTransform: "uppercase" }}>
-            Log Chore
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </SlideModal>
+          {/* Header */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: isDark ? "rgba(236, 72, 153, 0.2)" : "#FDF2F8", alignItems: "center", justifyContent: "center" }}>
+                <MaterialIcons name="cleaning-services" size={20} color="#EC4899" />
+              </View>
+              <Text style={{ fontSize: 20, fontWeight: "900", color: textMain }}>Log Chore</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={{ padding: 4, backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "#F1F5F9", borderRadius: 20 }}>
+              <MaterialIcons name="close" size={20} color={textMuted} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ gap: 24 }}>
+            {/* Input Section */}
+            <View>
+              <Text style={{ color: textMuted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8, marginLeft: 4 }}>
+                What needs to be done?
+              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: inputBg, borderRadius: 20, borderWidth: 1, borderColor: border, paddingHorizontal: 16 }}>
+                <MaterialIcons name="edit" size={18} color={textMuted} style={{ marginRight: 10 }} />
+                <TextInput
+                  ref={inputRef}
+                  style={{ flex: 1, paddingVertical: 16, color: textMain, fontSize: 16, fontWeight: "700" }}
+                  placeholder="e.g. Wash dishes..."
+                  placeholderTextColor={textMuted}
+                  value={title}
+                  onChangeText={setTitle}
+                />
+              </View>
+            </View>
+
+            {/* Assignee Section */}
+            <View>
+              <Text style={{ color: textMuted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 12, marginLeft: 4 }}>
+                Assign To
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -10, paddingHorizontal: 10 }}>
+                {members.map((uid) => {
+                  const name = getMemberName(uid);
+                  const isSelected = assignedTo === uid;
+                  return (
+                    <TouchableOpacity
+                      key={uid}
+                      onPress={() => setAssignedTo(uid)}
+                      style={{
+                        alignItems: "center",
+                        marginRight: 16,
+                        opacity: isSelected ? 1 : 0.6,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: 28,
+                          backgroundColor: isSelected ? primary : (isDark ? "#1E293B" : "#F1F5F9"),
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginBottom: 8,
+                          shadowColor: isSelected ? primary : "transparent",
+                          shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.3,
+                          shadowRadius: 8,
+                          borderWidth: 2,
+                          borderColor: isSelected ? primary : "transparent",
+                        }}
+                      >
+                        <Text style={{ fontSize: 20, fontWeight: "900", color: isSelected ? "#FFF" : textMain }}>
+                          {name.replace("@", "")[0].toUpperCase()}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 12, fontWeight: isSelected ? "900" : "700", color: isSelected ? primary : textMain }}>
+                        {uid === auth.currentUser?.uid ? "You" : name.split(" ")[0]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Info Pill */}
+            <View style={{ backgroundColor: isDark ? "rgba(245,158,11,0.1)" : "#FFFBEB", paddingVertical: 12, paddingHorizontal: 16, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: isDark ? "rgba(245,158,11,0.2)" : "#FEF3C7" }}>
+              <MaterialIcons name="schedule" size={18} color="#D97706" />
+              <Text style={{ color: "#D97706", fontSize: 12, fontWeight: "700", flex: 1, lineHeight: 18 }}>
+                Schedules for 8:00 PM today.
+              </Text>
+            </View>
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              onPress={handleSave}
+              style={{
+                backgroundColor: "#EC4899",
+                borderRadius: 20,
+                height: 56,
+                alignItems: "center",
+                justifyContent: "center",
+                shadowColor: "#EC4899",
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.3,
+                shadowRadius: 12,
+                elevation: 6,
+                flexDirection: "row",
+                gap: 8,
+              }}
+            >
+              <MaterialIcons name="check-circle" size={20} color="#FFF" />
+              <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1 }}>
+                Log Chore
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 });
 

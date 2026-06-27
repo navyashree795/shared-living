@@ -1,21 +1,15 @@
-import React, { useState, useRef, useCallback, useMemo } from "react";
+import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   Animated,
-<<<<<<< HEAD
-  Dimensions,
-  Share,
-  Pressable,
-=======
   FlatList,
   Linking,
   Alert,
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
+  TextInput,
+  ScrollView,
 } from "react-native";
-import * as ExpoLinking from "expo-linking";
-import { createInvitation } from "../utils/invitationApi";
 import { createAudioPlayer } from "expo-audio";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -30,6 +24,7 @@ import {
   addDoc,
   serverTimestamp,
   Timestamp,
+  onSnapshot,
   setDoc,
 } from "firebase/firestore";
 import { scheduleChoreReminder, cancelChoreReminder } from "../utils/notificationUtils";
@@ -48,7 +43,7 @@ import { useDashboardData } from "../hooks/useDashboardData";
 import { HeroGreeting } from "../components/dashboard/HeroGreeting";
 import { InfoCardsDeck } from "../components/dashboard/InfoCardsDeck";
 import { QuickActions } from "../components/dashboard/QuickActions";
-import { HouseholdSwitcherModal } from "../components/modals/HouseholdSwitcherModal";
+import SlideModal from "../components/SlideModal";
 import { MembersModal } from "../components/modals/MembersModal";
 import { NotificationsModal } from "../components/modals/NotificationsModal";
 import { InfoEditModal } from "../components/modals/InfoEditModal";
@@ -56,6 +51,8 @@ import { QuickBuyModal } from "../components/modals/QuickBuyModal";
 import { QuickSettleModal } from "../components/modals/QuickSettleModal";
 import { QuickExpenseModal } from "../components/modals/QuickExpenseModal";
 import { QuickChoreModal } from "../components/modals/QuickChoreModal";
+import * as Location from "expo-location";
+import { isInsideHomeRadius } from "../utils/locationUtils";
 
 type Props = { navigation: any; route?: any };
 
@@ -65,27 +62,21 @@ export default function DashboardScreen({ navigation }: Props) {
   const { isDark } = useTheme();
   const { showToast } = useToast();
   const { user, profile: userData } = useUser();
-<<<<<<< HEAD
-  const { householdData, memberProfiles } = useHousehold();
-  const [stickyNote, setStickyNote] = useState<{ text: string; updatedBy: string; updatedAt: any } | null>(null);
-  const [isStickyModalVisible, setIsStickyModalVisible] = useState(false);
-  const [stickyText, setStickyText] = useState("");
-  const [isStatusModalVisible, setIsStatusModalVisible] = useState(false);
-
-  const [editUsername, setEditUsername] = useState(userData?.username ? userData.username.replace(/^@+/, "") : "");
-=======
   const { householdData, memberProfiles, getMemberName, members } = useHousehold();
 
   const [isMembersModalVisible, setIsMembersModalVisible] = useState(false);
   const [isInfoModalVisible, setIsInfoModalVisible] = useState(false);
   const [isNotificationsModalVisible, setIsNotificationsModalVisible] = useState(false);
-  const [isSwitchModalVisible, setIsSwitchModalVisible] = useState(false);
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
 
   const [isQuickBuyVisible, setIsQuickBuyVisible] = useState(false);
   const [isQuickSettleVisible, setIsQuickSettleVisible] = useState(false);
   const [isQuickExpenseVisible, setIsQuickExpenseVisible] = useState(false);
   const [isQuickChoreVisible, setIsQuickChoreVisible] = useState(false);
+
+  const [stickyNote, setStickyNote] = useState<{ text: string; updatedBy: string; updatedAt: any } | null>(null);
+  const [isStickyModalVisible, setIsStickyModalVisible] = useState(false);
+  const [stickyText, setStickyText] = useState("");
+  const [isStatusModalVisible, setIsStatusModalVisible] = useState(false);
 
   const infoModalTab = "all";
   const [isEditMode, setIsEditMode] = useState(false);
@@ -95,443 +86,6 @@ export default function DashboardScreen({ navigation }: Props) {
     setRevealedFields((prev) =>
       prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
     );
-<<<<<<< HEAD
-  };
-
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [loadingActivities, setLoadingActivities] = useState(true);
-  const [chores, setChores] = useState<any[]>([]);
-  const [groceries, setGroceries] = useState<any[]>([]);
-  const [expenses, setExpenses] = useState<any[]>([]);
-  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
-  const [hasUnreadChores, setHasUnreadChores] = useState(false);
-  const [unreadActivityCount, setUnreadActivityCount] = useState(0);
-  const [lastSeenActivityTime, setLastSeenActivityTime] = useState<number | null>(null);
-
-  const [isInviting, setIsInviting] = useState(false);
-
-  const handleInviteRoommate = async () => {
-    if (!householdId) {
-      showToast("No active household found", "error");
-      return;
-    }
-    setIsInviting(true);
-    try {
-      const token = await createInvitation(householdId);
-      const inviteUrl = `https://shared-living-app.web.app/invite/${token}`;
-      await Share.share({
-        message: `You have been invited to join my household "${householdData?.name || "Shared Space"}" on Shared Living!\n\nClick the link to join: ${inviteUrl}`,
-        url: inviteUrl,
-      });
-    } catch (error: any) {
-      console.error("Error generating invitation:", error);
-      showToast(error.message || "Failed to generate invitation", "error");
-    } finally {
-      setIsInviting(false);
-    }
-  };
-
-  const unreadCountRef = useRef(0);
-  unreadCountRef.current = unreadActivityCount;
-
-  const lastSeenRef = useRef<number | null>(null);
-  lastSeenRef.current = lastSeenActivityTime;
-
-  const bellAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (userData?.username) {
-      setEditUsername(userData.username.replace(/^@+/, ""));
-    }
-  }, [userData?.username]);
-
-  useEffect(() => {
-    const loadLastSeen = async () => {
-      try {
-        const val = await AsyncStorage.getItem(`lastSeenActivity_${user?.uid}`);
-        if (val) {
-          const parsed = Number(val);
-          setLastSeenActivityTime(parsed);
-        } else {
-          setLastSeenActivityTime(0);
-        }
-      } catch (e) {
-        console.warn("Error loading lastSeenActivityTime:", e);
-        setLastSeenActivityTime(0);
-      }
-    };
-    if (user?.uid) {
-      loadLastSeen();
-    }
-  }, [user?.uid]);
-
-  useEffect(() => {
-    if (!householdId || !householdData) return;
-    const startDay = householdData.billingCycleStartDay || 1;
-    enforceDataRetentionPolicy(householdId, startDay);
-  }, [householdId, householdData?.billingCycleStartDay]);
-
-  const handleUpdateProfile = async () => {
-    const cleaned = editUsername.trim().replace(/^@+/, "");
-    if (!cleaned || !auth.currentUser) {
-      showToast("Enter valid username", "error");
-      return;
-    }
-    try {
-      await updateDoc(doc(db, "users", auth.currentUser.uid), {
-        username: cleaned,
-      });
-      setIsProfileModalVisible(false);
-      showToast("Profile updated", "success");
-    } catch (e: any) {
-      showToast("Could not update profile", "error");
-    }
-  };
-
-  useEffect(() => {
-    if (!householdId) return;
-    setLoadingActivities(true);
-    const q = query(
-      collection(db, "households", hid, "activities"),
-      orderBy("createdAt", "desc"),
-      limit(30),
-    );
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const fetched = snap.docs.map(
-          (d) => ({ id: d.id, ...d.data() }) as Activity,
-        );
-        setActivities(fetched);
-        setLoadingActivities(false);
-
-        // Notification logic
-        if (user?.uid) {
-          const relevantNew = fetched.filter(
-            (a) =>
-              a.userId !== user.uid &&
-              (!a.targetUid || a.targetUid === user.uid),
-          );
-
-          const currentLastSeen = lastSeenRef.current;
-          if (currentLastSeen === null) {
-            // Wait until AsyncStorage loading is complete
-            return;
-          }
-
-          let newUnreadCount = 0;
-          if (currentLastSeen === 0) {
-            // First time or empty, initialize lastSeenTime to the newest activity's time
-            const latestTime = relevantNew.length > 0
-              ? (relevantNew[0].createdAt?.seconds ? relevantNew[0].createdAt.seconds * 1000 : Date.now())
-              : Date.now();
-            AsyncStorage.setItem(`lastSeenActivity_${user.uid}`, String(latestTime)).catch((err) =>
-              console.warn("Error initializing lastSeenActivity:", err),
-            );
-            setLastSeenActivityTime(latestTime);
-          } else {
-            const unreadItems = relevantNew.filter((a) => {
-              const activityTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : Date.now();
-              return activityTime > currentLastSeen;
-            });
-            newUnreadCount = unreadItems.length;
-
-            if (newUnreadCount > unreadCountRef.current) {
-              try {
-                const beep = createAudioPlayer({
-                  uri: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3",
-                });
-                beep.play();
-              } catch (e) {
-                console.warn("Could not play notification beep", e);
-              }
-
-              Animated.sequence([
-                Animated.timing(bellAnim, {
-                  toValue: 1.4,
-                  duration: 150,
-                  useNativeDriver: true,
-                }),
-                Animated.spring(bellAnim, {
-                  toValue: 1,
-                  friction: 4,
-                  useNativeDriver: true,
-                }),
-              ]).start();
-            }
-          }
-
-          setUnreadActivityCount(newUnreadCount);
-        }
-      },
-      (err) => {
-        console.error("Error subscribing to activities:", err);
-        setLoadingActivities(false);
-      },
-    );
-    return unsub;
-  }, [householdId, user?.uid]);
-
-  // TRASH COUNTDOWN & NOTIFICATION LOGIC (NTP SYNCED)
-  const isMounted = useRef(true);
-  useEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!householdId) return;
-
-    const timer = setInterval(async () => {
-      const now = getSyncedDate();
-      const info = householdData?.info;
-
-      if (!info?.trashArrivalTime) {
-        setTrashCountdown(null);
-        return;
-      }
-
-      const [h, m] = info.trashArrivalTime.split(":").map(Number);
-      const arrival = new Date(now);
-      arrival.setHours(h, m, 0, 0);
-
-      const diff = arrival.getTime() - now.getTime();
-      if (diff > 0 && diff < 3 * 60 * 60 * 1000) {
-        const totalMins = Math.floor(diff / 60000);
-        setTrashCountdown(`${totalMins}m`);
-
-        if (totalMins === 10 && !trashReminderSent) {
-          setTrashReminderSent(true);
-          try {
-            const player = createAudioPlayer({
-              uri: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
-            });
-            player.play();
-
-            if (isMounted.current) {
-              await logActivity(
-                householdId,
-                "chore_reminder",
-                `Trash Truck in 10m!`,
-                "Trash Bot",
-              );
-            }
-          } catch (e) {
-            console.error("Error in trash reminder:", e);
-          }
-        }
-      } else {
-        setTrashCountdown(null);
-        // Reset reminder flag once truck passes or is far away
-        if (diff < 0 || diff > 15 * 60 * 1000) {
-          setTrashReminderSent(false);
-        }
-      }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [householdData?.info, trashReminderSent, householdId]);
-
-  useEffect(() => {
-    if (!householdId || !user?.uid) return;
-    const q = query(
-      collection(db, "households", hid, "messages"),
-      orderBy("createdAt", "desc"),
-      limit(20),
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const unread = snap.docs.some((doc) => {
-        const data = doc.data();
-        return (
-          data.senderId !== user.uid &&
-          (!data.readBy || !data.readBy.includes(user.uid))
-        );
-      });
-      setHasUnreadMessages(unread);
-    });
-    return unsub;
-  }, [householdId, user?.uid]);
-
-  useEffect(() => {
-    if (!householdId) return;
-    const cycleStartDay = householdData?.billingCycleStartDay || 1;
-    const now = getSyncedDate();
-    const currentCycleStart = getCycleStartDate(now, cycleStartDay);
-    const mainStartDate = new Date(currentCycleStart);
-    mainStartDate.setMonth(mainStartDate.getMonth() - 2);
-
-    const q = query(
-      collection(db, "households", hid, "chores"),
-      where("createdAt", ">=", Timestamp.fromDate(mainStartDate)),
-      orderBy("createdAt", "desc"),
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const fetched = snap.docs.map((d) => ({ id: d.id, ...d.data() } as any));
-      setChores(fetched);
-    });
-    return unsub;
-  }, [householdId, householdData?.billingCycleStartDay]);
-
-  useEffect(() => {
-    if (!householdId) return;
-    const cycleStartDay = householdData?.billingCycleStartDay || 1;
-    const now = getSyncedDate();
-    const currentCycleStart = getCycleStartDate(now, cycleStartDay);
-    const mainStartDate = new Date(currentCycleStart);
-    mainStartDate.setMonth(mainStartDate.getMonth() - 2);
-
-    const q = query(
-      collection(db, "households", hid, "groceries"),
-      where("createdAt", ">=", Timestamp.fromDate(mainStartDate)),
-      orderBy("createdAt", "desc")
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const fetched = snap.docs.map((d) => ({ id: d.id, ...d.data() } as any));
-      setGroceries(fetched);
-    });
-    return unsub;
-  }, [householdId, householdData?.billingCycleStartDay]);
-
-  useEffect(() => {
-    if (!householdId) return;
-    const cycleStartDay = householdData?.billingCycleStartDay || 1;
-    const now = getSyncedDate();
-    const currentCycleStart = getCycleStartDate(now, cycleStartDay);
-    const mainStartDate = new Date(currentCycleStart);
-    mainStartDate.setMonth(mainStartDate.getMonth() - 2);
-
-    const q = query(
-      collection(db, "households", hid, "expenses"),
-      where("createdAt", ">=", Timestamp.fromDate(mainStartDate)),
-      orderBy("createdAt", "desc"),
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const fetched = snap.docs.map((d) => ({ id: d.id, ...d.data() } as any));
-      setExpenses(fetched);
-    });
-
-    const qRecurring = query(
-      collection(db, "households", hid, "expenses"),
-      where("isRecurring", "==", true)
-    );
-    const unsubRecurring = onSnapshot(qRecurring, (snap) => {
-      const fetched = snap.docs.map((d) => ({ id: d.id, ...d.data() } as any));
-      checkAndDraftRecurringExpenses(hid, fetched);
-    });
-
-    return () => {
-      unsub();
-      unsubRecurring();
-    };
-  }, [householdId, householdData?.billingCycleStartDay]);
-
-  useEffect(() => {
-    if (!householdId) {
-      setStickyNote(null);
-      return;
-    }
-    const docRef = doc(db, "households", hid, "announcements", "sticky");
-    const unsub = onSnapshot(docRef, (snap) => {
-      if (snap.exists()) {
-        setStickyNote(snap.data() as any);
-      } else {
-        setStickyNote(null);
-      }
-    }, (err) => {
-      console.warn("Error listening to sticky note:", err);
-    });
-    return unsub;
-  }, [householdId]);
-
-  const formatStickyTime = (timestamp: any) => {
-    if (!timestamp) return "";
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    const diffMs = getSyncedDate().getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return "just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
-  };
-
-  const handleSaveStickyNote = async () => {
-    if (!householdId) return;
-    const currentUserName = userData?.username ? userData.username : (auth.currentUser?.email?.split('@')[0] || "Roommate");
-    try {
-      const docRef = doc(db, "households", hid, "announcements", "sticky");
-      await setDoc(docRef, {
-        text: stickyText.trim(),
-        updatedBy: currentUserName,
-        updatedAt: serverTimestamp(),
-      });
-      setIsStickyModalVisible(false);
-      showToast("Sticky note updated", "success");
-    } catch (e) {
-      console.error("Error saving sticky note:", e);
-      showToast("Could not update note", "error");
-    }
-  };
-
-  const handleUpdateStatus = async (newStatus: "home" | "out" | "sleeping" | "away") => {
-    if (!user?.uid) return;
-    try {
-      const userDocRef = doc(db, "users", user.uid);
-      await updateDoc(userDocRef, { status: newStatus });
-      setIsStatusModalVisible(false);
-      const statusTextMap = {
-        home: "At Home",
-        out: "Out / Busy",
-        sleeping: "Sleeping",
-        away: "Away (Vacation)"
-      };
-      showToast(`Status updated to ${statusTextMap[newStatus]}`, "success");
-    } catch (e) {
-      console.error("Error updating status:", e);
-      showToast("Could not update status", "error");
-    }
-  };
-
-  const agendaItems = React.useMemo(() => {
-    const items: any[] = [];
-    if (!user?.uid) return items;
-
-    // 1. Chores
-    const now = getSyncedDate();
-    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const currentDay = daysOfWeek[now.getDay()];
-    const pendingChoresToday = chores.filter((c) => {
-      if (c.done || c.assignedToUid !== user.uid) return false;
-      if (c.targetDate) {
-        let target: Date;
-        if (typeof c.targetDate.toDate === 'function') {
-          target = c.targetDate.toDate();
-        } else if (c.targetDate.seconds) {
-          target = new Date(c.targetDate.seconds * 1000);
-        } else {
-          target = new Date(c.targetDate);
-        }
-        if (isNaN(target.getTime())) return false;
-        const targetDateOnly = new Date(target.getFullYear(), target.getMonth(), target.getDate());
-        const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        return targetDateOnly <= nowDateOnly;
-      }
-      return c.day?.includes(currentDay);
-    });
-    if (pendingChoresToday.length > 0) {
-      items.push({
-        id: "agenda-chores",
-        type: "chore",
-        title: `Good Morning! You have ${pendingChoresToday.length} chore${pendingChoresToday.length > 1 ? "s" : ""} today.`,
-        subtitle: pendingChoresToday
-          .map((c) => `${c.title} at ${c.time}`)
-          .join(", "),
-        icon: "cleaning-services",
-        color: "#D97706",
-        navTarget: "Chores",
-=======
   }, []);
 
   const bellAnim = useRef(new Animated.Value(1)).current;
@@ -541,7 +95,6 @@ export default function DashboardScreen({ navigation }: Props) {
     try {
       const beep = createAudioPlayer({
         uri: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3",
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
       });
       beep.play();
     } catch (e) {
@@ -638,92 +191,6 @@ export default function DashboardScreen({ navigation }: Props) {
       return c.day?.includes(currentDay);
     });
 
-<<<<<<< HEAD
-    // 3. Groceries
-    const pendingGroceries = groceries.filter((g) => !g.done);
-    if (pendingGroceries.length > 0) {
-      items.push({
-        id: "agenda-groceries",
-        type: "grocery",
-        title:
-          `We are out of ${pendingGroceries[0]?.name}` +
-          (pendingGroceries.length > 1
-            ? ` and ${pendingGroceries.length - 1} other item${pendingGroceries.length > 2 ? "s" : ""}`
-            : "") +
-          ".",
-        subtitle: `${pendingGroceries.length} pending item${pendingGroceries.length > 1 ? "s" : ""} in groceries.`,
-        icon: "shopping-cart",
-        color: "#059669",
-        navTarget: "Grocery",
-      });
-    }
-
-    return items;
-  }, [
-    chores,
-    expenses,
-    groceries,
-    user?.uid,
-    householdData?.members,
-    memberProfiles,
-  ]);
-
-  useEffect(() => {
-    if (!householdId || !user?.uid) return;
-    const q = query(
-      collection(db, "households", hid, "chores"),
-      where("assignedToUid", "==", user.uid),
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const unread = snap.docs.some((doc) => {
-        const data = doc.data();
-        return !data.seenBy || !data.seenBy.includes(user.uid);
-      });
-      setHasUnreadChores(unread);
-    });
-    return unsub;
-  }, [householdId, user?.uid]);
-
-  useEffect(() => {
-    const checkUpcomingChores = async () => {
-      if (!householdId || chores.length === 0) return;
-      const now = getSyncedDate();
-      const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const currentDay = daysOfWeek[now.getDay()];
-      for (const chore of chores) {
-        if (chore.done || chore.reminderSent) continue;
-        if (chore.day && !chore.day.includes(currentDay)) continue;
-        try {
-          const timeParts = (chore.time || "").split(" ");
-          if (timeParts.length < 2) continue;
-          const [timePart, period] = timeParts;
-          const [hours, minutes] = timePart.split(":").map(Number);
-          let h = hours % 12;
-          if (period.toUpperCase() === "PM") h += 12;
-          const choreTime = new Date();
-          choreTime.setHours(h, minutes, 0, 0);
-          const diffInMs = choreTime.getTime() - now.getTime();
-          const diffInMins = diffInMs / (1000 * 60);
-          if (diffInMins > 0 && diffInMins <= 5.1) {
-            const profile = memberProfiles[chore.assignedToUid];
-            const assigneeName = profile?.username
-              ? `${profile.username}`
-              : "Member";
-            await updateDoc(doc(db, "households", hid, "chores", chore.id), {
-              reminderSent: true,
-            });
-            await logActivity(
-              householdId,
-              "chore_reminder",
-              `${chore.title} in 5m`,
-              "Assistant",
-              0,
-              chore.assignedToUid,
-            );
-          }
-        } catch (e) {
-          console.error("Error in Dashboard reminder engine:", e);
-=======
     const parseTime = (timeStr: string) => {
       try {
         const timeMatch = timeStr.match(/(\d+):(\d+)(?::\d+)?\s*(AM|PM)?/i);
@@ -734,7 +201,6 @@ export default function DashboardScreen({ navigation }: Props) {
           if (ampm === "PM" && hours < 12) hours += 12;
           if (ampm === "AM" && hours === 12) hours = 0;
           return hours * 60 + minutes;
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
         }
       } catch (e) {
         console.warn("Parse time failed:", e);
@@ -855,6 +321,159 @@ export default function DashboardScreen({ navigation }: Props) {
       showToast("Could not update", "error");
     }
   }, [householdId, hid, isOwner, showToast]);
+
+
+  // Sticky Board listener
+  useEffect(() => {
+    if (!hid) return;
+    const docRef = doc(db, "households", hid, "announcements", "sticky");
+    const unsub = onSnapshot(
+      docRef,
+      (snap) => {
+        if (snap.exists()) {
+          setStickyNote(snap.data() as any);
+        } else {
+          setStickyNote(null);
+        }
+      },
+      (err) => {
+        console.warn("Error listening to sticky note:", err);
+      }
+    );
+    return unsub;
+  }, [hid]);
+
+  const formatStickyTime = useCallback((timestamp: any) => {
+    if (!timestamp) return "";
+    try {
+      const d = typeof timestamp.toDate === "function" ? timestamp.toDate() : new Date(timestamp);
+      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return "";
+    }
+  }, []);
+
+  const handleSaveStickyNote = useCallback(async () => {
+    if (!hid) return;
+    try {
+      const docRef = doc(db, "households", hid, "announcements", "sticky");
+      await setDoc(docRef, {
+        text: stickyText.trim(),
+        updatedBy: userData?.username || "Roommate",
+        updatedAt: serverTimestamp(),
+      });
+      setIsStickyModalVisible(false);
+      showToast("Sticky note updated", "success");
+    } catch (e) {
+      console.error("Error saving sticky note:", e);
+      showToast("Could not update note", "error");
+    }
+  }, [hid, stickyText, userData?.username, showToast]);
+
+  const handleUpdateStatus = useCallback(async (newStatus: "home" | "out" | "sleeping" | "away") => {
+    if (!user?.uid) return;
+    try {
+      const userDocRef = doc(db, "users", user.uid);
+      await updateDoc(userDocRef, { status: newStatus });
+      setIsStatusModalVisible(false);
+      const statusTextMap = {
+        home: "At Home",
+        out: "Out / Busy",
+        sleeping: "Sleeping",
+        away: "Away (Vacation)"
+      };
+      showToast(`Status updated to ${statusTextMap[newStatus]}`, "success");
+    } catch (e) {
+      console.error("Error updating status:", e);
+      showToast("Could not update status", "error");
+    }
+  }, [user?.uid, showToast]);
+ 
+  // 1. Request location permissions and auto-pin location for owner if not set
+  useEffect(() => {
+    if (!user?.uid || !householdId || !householdData) return;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const isOwner = householdData.createdBy === user.uid;
+          if (isOwner && !householdData.info?.homeLocation) {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Highest,
+            });
+            const homeLocation = {
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+            };
+            const householdDocRef = doc(db, "households", householdId);
+            const currentInfo = householdData.info || {};
+            await updateDoc(householdDocRef, {
+              info: {
+                ...currentInfo,
+                homeLocation,
+              },
+            });
+            showToast("📍 Automatically pinned your location as the household home location!", "success");
+          }
+        } else {
+          showToast("Location permission is required for home presence features.", "info");
+        }
+      } catch (e) {
+        console.warn("Failed to request location / auto-pin on mount:", e);
+      }
+    })();
+  }, [user?.uid, householdId, householdData]);
+
+  // 2. Dynamic GPS Presence Geofencing Tracker
+  useEffect(() => {
+    if (!user?.uid || !householdId || !householdData?.info?.homeLocation) return;
+
+    const homeLocation = householdData.info.homeLocation;
+    let locationInterval: NodeJS.Timeout;
+
+    const checkGeofence = async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== "granted") return;
+
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Highest,
+        });
+
+        const isInside = isInsideHomeRadius(
+          loc.coords.latitude,
+          loc.coords.longitude,
+          homeLocation.latitude,
+          homeLocation.longitude,
+          100 // 100 meters radius
+        );
+
+        const nextStatus = isInside ? "home" : "out";
+        const currentStatus = userData?.status || "home";
+        if (currentStatus !== nextStatus) {
+          // If the status has actually changed based on location, update it!
+          if (currentStatus === "home" || currentStatus === "out") {
+            const userDocRef = doc(db, "users", user.uid);
+            await updateDoc(userDocRef, { status: nextStatus });
+          }
+        }
+      } catch (e) {
+        console.warn("Geofence location check failed:", e);
+      }
+    };
+
+    // Run immediately on load/mount
+    checkGeofence();
+
+    // Check periodically every 60 seconds
+    locationInterval = setInterval(checkGeofence, 60000);
+
+    return () => {
+      if (locationInterval) clearInterval(locationInterval);
+    };
+  }, [user?.uid, householdId, householdData?.info?.homeLocation, userData?.status]);
+
+
 
   const handlePhoneCall = useCallback(async (phone: string) => {
     if (!phone) return;
@@ -1001,48 +620,6 @@ export default function DashboardScreen({ navigation }: Props) {
     );
   }, [isDark, glassBg, glassBorder, textMain]);
 
-<<<<<<< HEAD
-  const cardTheme = React.useMemo(() => {
-    const hours = getSyncedDate().getHours();
-    if (hours >= 5 && hours < 12) {
-      return {
-        greeting: "Good Morning",
-        subtext: "Rise and shine! Have a productive and wonderful day ahead.",
-        icon: "wb-sunny" as const,
-        iconColor: "#FF9800", // Amber / Warm Orange
-        gradient: isDark ? (["#2D1F10", "#0F0B06"] as const) : (["#FFF9F2", "#FFFFFF"] as const),
-        border: isDark ? "rgba(255, 152, 0, 0.12)" : "rgba(255, 152, 0, 0.18)",
-      };
-    } else if (hours >= 12 && hours < 17) {
-      return {
-        greeting: "Good Afternoon",
-        subtext: "Stay energized and focused for the rest of your day.",
-        icon: "wb-sunny" as const,
-        iconColor: "#0284C7", // Bright Sky Blue / Cyan
-        gradient: isDark ? (["#0D283E", "#06121D"] as const) : (["#F0F9FF", "#FFFFFF"] as const),
-        border: isDark ? "rgba(2, 132, 199, 0.12)" : "rgba(2, 132, 199, 0.18)",
-      };
-    } else {
-      return {
-        greeting: "Good Evening",
-        subtext: "Wind down and relax. Enjoy a peaceful evening at home.",
-        icon: "nights-stay" as const,
-        iconColor: "#8B5CF6", // Sunset Purple / Violet
-        gradient: isDark ? (["#1E1B4B", "#0F1320"] as const) : (["#F5F3FF", "#FFFFFF"] as const),
-        border: isDark ? "rgba(139, 92, 246, 0.12)" : "rgba(139, 92, 246, 0.18)",
-      };
-    }
-  }, [isDark]);
-
-  const dateInfo = React.useMemo(() => {
-    const now = getSyncedDate();
-    const daysOfWeekLong = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const dayName = daysOfWeekLong[now.getDay()];
-    const dateString = `${months[now.getMonth()]} ${now.getDate()}`;
-    return { dayName, dateString };
-  }, []);
-=======
   const renderEmptyActivities = useCallback(() => (
     <View
       style={{
@@ -1061,7 +638,6 @@ export default function DashboardScreen({ navigation }: Props) {
       </Text>
     </View>
   ), [isDark, glassBg, glassBorder]);
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
 
   return (
     <LinearGradient colors={bgColors} style={{ flex: 1 }}>
@@ -1122,37 +698,12 @@ export default function DashboardScreen({ navigation }: Props) {
                 style={{ borderRadius: 19 }}
               />
             </TouchableOpacity>
-<<<<<<< HEAD
-            <View>
-              {/* HOUSEHOLD HUB label */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  marginBottom: 1,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 10,
-                    fontWeight: "800",
-                    color: isDark ? "#A78BFA" : "#4F46E5",
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                  }}
-                >
-                  HOUSEHOLD HUB
-                </Text>
-=======
             
-            <TouchableOpacity onPress={() => setIsSwitchModalVisible(true)}>
+            <View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 1 }}>
                 <Text style={{ fontSize: 10, fontWeight: "800", color: isDark ? "#A78BFA" : "#4F46E5", textTransform: "uppercase", letterSpacing: 1 }}>
                   HOUSEHOLD HUB
                 </Text>
-                <MaterialIcons name="keyboard-arrow-down" size={14} color={isDark ? "#A78BFA" : "#4F46E5"} />
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
               </View>
               <Text style={{ fontSize: 22, fontWeight: "900", color: textMain, letterSpacing: -0.5, lineHeight: 26 }}>
                 {householdData?.name || "Loading..."}
@@ -1242,248 +793,6 @@ export default function DashboardScreen({ navigation }: Props) {
           renderItem={renderActivityItem}
           ListEmptyComponent={renderEmptyActivities}
           contentContainerStyle={{ paddingBottom: 60 }}
-<<<<<<< HEAD
-          nestedScrollEnabled={true}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Welcome Hero Card */}
-          <View style={{ paddingHorizontal: 20, marginTop: 12, marginBottom: 20 }}>
-            <LinearGradient
-              colors={cardTheme.gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{
-                borderRadius: 28,
-                padding: 22,
-                borderWidth: 1,
-                borderColor: cardTheme.border,
-                shadowColor: cardTheme.iconColor,
-                shadowOffset: { width: 0, height: 6 },
-                shadowOpacity: isDark ? 0.25 : 0.06,
-                shadowRadius: 12,
-                elevation: 4,
-              }}
-            >
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <View style={{ flex: 1, marginRight: 16 }}>
-                  {/* Styled Date String */}
-                  <Text style={{ fontSize: 10, fontWeight: "900", color: cardTheme.iconColor, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>
-                    {dateInfo.dayName}, {dateInfo.dateString}
-                  </Text>
-                  <Text style={{ fontSize: 26, fontWeight: "900", color: textMain, letterSpacing: -0.5, lineHeight: 32 }}>
-                    {cardTheme.greeting}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#64748B", marginTop: 6, fontWeight: "600", lineHeight: 18 }}>
-                    {cardTheme.subtext}
-                  </Text>
-                </View>
-                <View style={{ 
-                  width: 58, 
-                  height: 58, 
-                  borderRadius: 20, 
-                  backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.85)", 
-                  alignItems: "center", 
-                  justifyContent: "center",
-                  borderWidth: 1,
-                  borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.4)",
-                  shadowColor: cardTheme.iconColor,
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 8,
-                }}>
-                  <MaterialIcons name={cardTheme.icon} size={28} color={cardTheme.iconColor} />
-                </View>
-              </View>
-            </LinearGradient>
-          </View>
-
-          {/* Shared Sticky Notice Board */}
-          <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
-            <TouchableOpacity
-              onPress={() => {
-                setStickyText(stickyNote?.text || "");
-                setIsStickyModalVisible(true);
-              }}
-              activeOpacity={0.9}
-              style={{
-                backgroundColor: isDark ? "rgba(245, 158, 11, 0.06)" : "#FFFDF0",
-                borderRadius: 24,
-                padding: 18,
-                borderWidth: 1,
-                borderColor: isDark ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.25)",
-                shadowColor: "#F59E0B",
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: isDark ? 0.1 : 0.04,
-                shadowRadius: 8,
-                elevation: 2,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <MaterialIcons name="push-pin" size={16} color="#F59E0B" style={{ transform: [{ rotate: "45deg" }] }} />
-                  <Text style={{ fontSize: 10, fontWeight: "900", color: "#F59E0B", textTransform: "uppercase", letterSpacing: 1.5 }}>
-                    Sticky Notice Board
-                  </Text>
-                </View>
-                {stickyNote?.updatedBy && (
-                  <Text style={{ fontSize: 9, fontWeight: "700", color: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.35)", textTransform: "uppercase" }}>
-                    {stickyNote.updatedBy} {stickyNote.updatedAt ? `· ${formatStickyTime(stickyNote.updatedAt)}` : ""}
-                  </Text>
-                )}
-              </View>
-              <Text 
-                style={{ 
-                  fontSize: 14, 
-                  fontWeight: "700", 
-                  color: stickyNote?.text ? textMain : (isDark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.35)"),
-                  lineHeight: 20,
-                  fontStyle: stickyNote?.text ? "normal" : "italic"
-                }}
-              >
-                {stickyNote?.text || "No active announcements. Tap here to write a note! 📌"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Roommates Presence Row */}
-          <View style={{ marginBottom: 24 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginBottom: 14 }}>
-              <Text style={{ fontSize: 11, fontWeight: "900", color: isDark ? "#A78BFA" : "#4F46E5", textTransform: "uppercase", letterSpacing: 1.5 }}>
-                Roommate Presence
-              </Text>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.4)" }}>
-                {Object.values(memberProfiles).filter((m: any) => m.status === "home" || !m.status).length} at home
-              </Text>
-            </View>
-
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 20 }}
-            >
-              {Object.entries(memberProfiles).map(([uid, member]: [string, any]) => {
-                const status = member.status || "home";
-                const isMe = uid === auth.currentUser?.uid;
-                
-                // Status configurations
-                let statusEmoji = "🟢";
-                let statusText = "At Home";
-                if (status === "out") {
-                  statusEmoji = "🟡";
-                  statusText = "Out / Busy";
-                } else if (status === "sleeping") {
-                  statusEmoji = "💤";
-                  statusText = "Sleeping";
-                } else if (status === "away") {
-                  statusEmoji = "✈️";
-                  statusText = "Away";
-                }
-
-                const displayName = member.username || "Roommate";
-                const firstName = displayName.startsWith("@") ? displayName.slice(1) : displayName.split(" ")[0];
-
-                return (
-                  <TouchableOpacity
-                    key={uid}
-                    onPress={() => {
-                      if (isMe) {
-                        setIsStatusModalVisible(true);
-                      } else {
-                        showToast(`${displayName} is currently ${statusText.toLowerCase()}`, "info");
-                      }
-                    }}
-                    activeOpacity={isMe ? 0.7 : 0.9}
-                    style={{
-                      alignItems: "center",
-                      marginRight: 16,
-                      backgroundColor: isDark ? "rgba(255,255,255,0.02)" : "#FFFFFF",
-                      borderWidth: 1,
-                      borderColor: isMe ? (isDark ? "rgba(129,140,248,0.3)" : "rgba(99,102,241,0.2)") : bord,
-                      borderRadius: 24,
-                      padding: 12,
-                      width: 90,
-                      shadowColor: "#000",
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: isDark ? 0 : 0.04,
-                      shadowRadius: 5,
-                      elevation: 1,
-                    }}
-                  >
-                    {/* Avatar with Status badge overlay */}
-                    <View style={{ width: 50, height: 50, position: "relative", marginBottom: 8 }}>
-                      <Avatar
-                        name={displayName}
-                        size={50}
-                        bgColor={isDark ? "#1E1B4B" : "#F1F5F9"}
-                        color={isDark ? "#A78BFA" : "#4F46E5"}
-                        style={{ borderRadius: 18 }}
-                      />
-                      {/* Badge dot */}
-                      <View style={{
-                        position: "absolute",
-                        bottom: -2,
-                        right: -2,
-                        backgroundColor: isDark ? "#0E1324" : "#FFFFFF",
-                        borderRadius: 10,
-                        width: 20,
-                        height: 20,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        borderWidth: 1.5,
-                        borderColor: isDark ? "#0E1324" : "#FFFFFF",
-                      }}>
-                        <Text style={{ fontSize: 9 }}>{statusEmoji}</Text>
-                      </View>
-                    </View>
-
-                    <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: "800", color: textMain }}>
-                      {firstName} {isMe ? "(You)" : ""}
-                    </Text>
-                    <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: "700", color: isMe ? muted : (isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.4)"), marginTop: 2, textTransform: "uppercase" }}>
-                      {statusText}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-          {/* Daily Briefing Panel */}
-          <View style={{ paddingHorizontal: 20, marginBottom: 20, marginTop: 10 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 10,
-              }}
-            >
-              <Text
-                style={{
-                  color: textMuted,
-                  fontSize: 11,
-                  fontWeight: "900",
-                  textTransform: "uppercase",
-                  letterSpacing: 1.5,
-                }}
-              >
-                ⚡ Daily Briefing
-              </Text>
-              {agendaItems.length > 0 && (
-                <View
-                  style={{
-                    backgroundColor: "#EF4444",
-                    borderRadius: 12,
-                    paddingHorizontal: 8,
-                    paddingVertical: 2,
-                  }}
-                >
-                  <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>
-                    {agendaItems.length} ACTION{agendaItems.length > 1 ? "S" : ""}
-                  </Text>
-                </View>
-              )}
-            </View>
-=======
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <View>
@@ -1499,7 +808,6 @@ export default function DashboardScreen({ navigation }: Props) {
                 onNudgeRoommate={handleQuickNudge}
                 getMemberName={getMemberName}
               />
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
 
               {/* Quick Actions Tray */}
               <QuickActions
@@ -1509,6 +817,54 @@ export default function DashboardScreen({ navigation }: Props) {
                 onQuickChore={() => setIsQuickChoreVisible(true)}
                 isDark={isDark}
               />
+
+              {/* Shared Sticky Notice Board */}
+              <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setStickyText(stickyNote?.text || "");
+                    setIsStickyModalVisible(true);
+                  }}
+                  activeOpacity={0.9}
+                  style={{
+                    backgroundColor: isDark ? "rgba(245, 158, 11, 0.06)" : "#FFFDF0",
+                    borderRadius: 24,
+                    padding: 18,
+                    borderWidth: 1,
+                    borderColor: isDark ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.25)",
+                    shadowColor: "#F59E0B",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: isDark ? 0.1 : 0.04,
+                    shadowRadius: 8,
+                    elevation: 2,
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <MaterialIcons name="push-pin" size={16} color="#F59E0B" style={{ transform: [{ rotate: "45deg" }] }} />
+                      <Text style={{ fontSize: 10, fontWeight: "900", color: "#F59E0B", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                        Sticky Notice Board
+                      </Text>
+                    </View>
+                    {stickyNote?.updatedBy && (
+                      <Text style={{ fontSize: 9, fontWeight: "700", color: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.35)", textTransform: "uppercase" }}>
+                        {stickyNote.updatedBy} {stickyNote.updatedAt ? `· ${formatStickyTime(stickyNote.updatedAt)}` : ""}
+                      </Text>
+                    )}
+                  </View>
+                  <Text 
+                    style={{ 
+                      fontSize: 14, 
+                      fontWeight: "700", 
+                      color: stickyNote?.text ? textMain : (isDark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.35)"),
+                      lineHeight: 20,
+                      fontStyle: stickyNote?.text ? "normal" : "italic"
+                    }}
+                  >
+                    {stickyNote?.text || "No active announcements. Tap here to write a note! 📌"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Daily Briefing Panel */}
               <View style={{ paddingHorizontal: 20, marginBottom: 20, marginTop: 10 }}>
@@ -1615,59 +971,6 @@ export default function DashboardScreen({ navigation }: Props) {
                 </Text>
               </View>
             </View>
-<<<<<<< HEAD
-            <TouchableOpacity
-              onPress={handleInviteRoommate}
-              disabled={isInviting}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "rgba(255,255,255,0.2)",
-                paddingVertical: 14,
-                borderRadius: 18,
-                marginTop: 14,
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.3)"
-              }}
-            >
-              <MaterialIcons name="share" size={20} color="white" style={{ marginRight: 8 }} />
-              <Text className="text-white font-bold text-sm">
-                {isInviting ? "Generating Link..." : "Invite Roommate via Link"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-4 ml-1">
-            Current Members
-          </Text>
-          <View className="gap-3 mb-6">
-            {Object.entries(memberProfiles).map(
-              ([uid, member]: [string, any]) => (
-                <View
-                  key={uid}
-                  className="flex-row items-center gap-4 bg-surfaceRaised p-4 rounded-3xl border border-border/50"
-                >
-                  <Avatar
-                    name={member.username || "Member"}
-                    size={48}
-                    bgColor="#FFFFFF"
-                    color="#4F46E5"
-                    style={{
-                      borderRadius: 16,
-                      borderWidth: 1,
-                      borderColor: "#E2E8F0",
-                    }}
-                  />
-                  <View className="flex-1">
-                    <Text className="text-textMain font-black">
-                      {member.username || "Unknown Member"}
-                    </Text>
-                    <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mt-0.5">
-                      {uid === auth.currentUser?.uid ? "You" : "Member"}
-                    </Text>
-                  </View>
-                  {isOwner && uid !== auth.currentUser?.uid && (
-=======
           }
           ListFooterComponent={
             <View style={{ marginTop: 10 }}>
@@ -1678,7 +981,6 @@ export default function DashboardScreen({ navigation }: Props) {
                     ℹ️ Household Info
                   </Text>
                   {isOwner && (
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
                     <TouchableOpacity
                       onPress={() => {
                         setIsEditMode(true);
@@ -1695,7 +997,7 @@ export default function DashboardScreen({ navigation }: Props) {
                       }}
                     >
                       <MaterialIcons name="edit" size={14} color="#6366F1" />
-                      <Text style={{ fontSize: 11, fontWeight: "900", color: "#6366F1" }}>EDIT</Text>
+                      <Text style={{ fontSize: 11, fontWeight: "900", color: "#6366F1" }}>EDIT INFO</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -1716,15 +1018,6 @@ export default function DashboardScreen({ navigation }: Props) {
         />
 
         {/* Modals */}
-        <HouseholdSwitcherModal
-          visible={isSwitchModalVisible}
-          onClose={() => setIsSwitchModalVisible(false)}
-          householdsList={householdsList}
-          currentHouseholdId={hid}
-          setHouseholdId={setHouseholdId}
-          onNavigateToSelection={handleNavigateToSelection}
-          isDark={isDark}
-        />
 
         <QuickBuyModal
           visible={isQuickBuyVisible}
@@ -1773,120 +1066,11 @@ export default function DashboardScreen({ navigation }: Props) {
             setIsInfoModalVisible(false);
             setIsEditMode(false);
           }}
-<<<<<<< HEAD
-          title={isEditMode ? "Edit Household" : "Household Info"}
-          scrollEnabled={true}
-        >
-          <HouseholdInfoModalContent
-            tab={infoModalTab}
-            isEdit={isEditMode}
-            data={householdData?.info}
-            householdName={householdData?.name}
-            onSave={handleUpdateInfo}
-          />
-        </SlideModal>
-
-        {/* Switch Household Modal */}
-        <SlideModal
-          visible={isSwitchModalVisible}
-          onClose={() => setIsSwitchModalVisible(false)}
-          title="Switch Household"
-        >
-          <View style={{ gap: 12, paddingBottom: 24 }}>
-            {householdsList.map((h) => (
-              <TouchableOpacity
-                key={h.id}
-                onPress={() => {
-                  setHouseholdId(h.id);
-                  setIsSwitchModalVisible(false);
-                }}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  padding: 16,
-                  backgroundColor: isDark ? "#1E293B" : "#F8FAFC",
-                  borderRadius: 20,
-                  borderWidth: 1,
-                  borderColor: h.id === householdId ? "#6366F1" : bord,
-                }}
-              >
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 12,
-                    backgroundColor:
-                      h.id === householdId
-                        ? "#6366F1"
-                        : isDark
-                          ? "#334155"
-                          : "#E2E8F0",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 16,
-                  }}
-                >
-                  <MaterialIcons
-                    name="home"
-                    size={20}
-                    color={h.id === householdId ? "#FFFFFF" : muted}
-                  />
-                </View>
-                <Text
-                  style={{
-                    flex: 1,
-                    fontSize: 16,
-                    fontWeight: "700",
-                    color:
-                      h.id === householdId
-                        ? isDark
-                          ? "#F1F5F9"
-                          : "#0F172A"
-                        : text,
-                  }}
-                >
-                  {h.name}
-                </Text>
-                {h.id === householdId && (
-                  <MaterialIcons
-                    name="check-circle"
-                    size={24}
-                    color="#6366F1"
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-
-            <TouchableOpacity
-              onPress={() => {
-                setIsSwitchModalVisible(false);
-                navigation.navigate("HouseholdSelection");
-              }}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 16,
-                marginTop: 8,
-                backgroundColor: isDark ? "#334155" : "#F1F5F9",
-                borderRadius: 20,
-                borderStyle: "dashed",
-                borderWidth: 1,
-                borderColor: muted,
-              }}
-            >
-              <MaterialIcons
-                name="add"
-                size={20}
-                color={muted}
-                style={{ marginRight: 8 }}
-              />
-              <Text style={{ fontSize: 15, fontWeight: "700", color: muted }}>
-                Create or Join Another
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </SlideModal>
+          isEditMode={isEditMode}
+          householdData={householdData}
+          handleUpdateInfo={handleUpdateInfo}
+          infoModalTab={infoModalTab}
+        />
 
         {/* Sticky Note Edit Modal */}
         <SlideModal
@@ -1957,934 +1141,7 @@ export default function DashboardScreen({ navigation }: Props) {
             })}
           </View>
         </SlideModal>
-
-        {/* Notifications Modal */}
-        <SlideModal
-          visible={isNotificationsModalVisible}
-          onClose={() => setIsNotificationsModalVisible(false)}
-          title="Notifications"
-        >
-          <ScrollView
-            style={{ paddingBottom: 20 }}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Daily Agenda Section */}
-            {agendaItems.length > 0 && (
-              <View style={{ marginBottom: 20 }}>
-                <Text
-                  style={{
-                    color: textMuted,
-                    fontSize: 10,
-                    fontWeight: "900",
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                    marginBottom: 10,
-                    marginLeft: 4,
-                  }}
-                >
-                  Daily Agenda
-                </Text>
-                <View style={{ gap: 10 }}>
-                  {agendaItems.map((item) => (
-                    <TouchableOpacity
-                      key={item.id}
-                      onPress={() => {
-                        setIsNotificationsModalVisible(false);
-                        handleNav(item.navTarget as any);
-                      }}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        padding: 16,
-                        borderRadius: 20,
-                        backgroundColor: isDark
-                          ? "rgba(255,255,255,0.03)"
-                          : "rgba(99,102,241,0.03)",
-                        borderWidth: 1,
-                        borderColor: isDark
-                          ? "rgba(255,255,255,0.05)"
-                          : "rgba(99,102,241,0.05)",
-                      }}
-                    >
-                      <View
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: 12,
-                          backgroundColor: item.color + "20",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          marginRight: 12,
-                        }}
-                      >
-                        <MaterialIcons
-                          name={item.icon as any}
-                          size={20}
-                          color={item.color}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            color: textMain,
-                            fontWeight: "800",
-                            fontSize: 13,
-                          }}
-                        >
-                          {item.title}
-                        </Text>
-                        <Text
-                          style={{
-                            color: textMuted,
-                            fontSize: 11,
-                            marginTop: 4,
-                            fontWeight: "600",
-                          }}
-                        >
-                          {item.subtitle}
-                        </Text>
-                      </View>
-                      <MaterialIcons
-                        name="chevron-right"
-                        size={20}
-                        color={textMuted}
-                      />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Activity Section */}
-            <View>
-              <Text
-                style={{
-                  color: textMuted,
-                  fontSize: 10,
-                  fontWeight: "900",
-                  textTransform: "uppercase",
-                  letterSpacing: 1,
-                  marginBottom: 10,
-                  marginLeft: 4,
-                }}
-              >
-                Recent Activity
-              </Text>
-              {activities.filter((a) => {
-                const isFromOther = a.userId !== user?.uid;
-                const isForMe = !a.targetUid || a.targetUid === user?.uid;
-                return isFromOther && isForMe;
-              }).length === 0 ? (
-                <View style={{ alignItems: "center", paddingVertical: 40 }}>
-                  <MaterialIcons
-                    name="notifications-none"
-                    size={48}
-                    color={muted}
-                    style={{ opacity: 0.5 }}
-                  />
-                  <Text style={{ color: muted, fontSize: 14, marginTop: 12 }}>
-                    No new notifications from roommates
-                  </Text>
-                </View>
-              ) : (
-                <View style={{ gap: 10 }}>
-                  {activities
-                    .filter((a) => {
-                      const isFromOther = a.userId !== user?.uid;
-                      const isForMe = !a.targetUid || a.targetUid === user?.uid;
-                      return isFromOther && isForMe;
-                    }) // ONLY roommates' notifications in Bell icon, and only if for me
-                    .map((item, idx) => {
-                      const config = getActivityConfig(item.type);
-                      return (
-                        <View
-                          key={item.id}
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            padding: 16,
-                            borderRadius: 20,
-                            backgroundColor: isDark
-                              ? "rgba(255,255,255,0.03)"
-                              : "rgba(99,102,241,0.03)",
-                            borderWidth: 1,
-                            borderColor: isDark
-                              ? "rgba(255,255,255,0.05)"
-                              : "rgba(99,102,241,0.05)",
-                          }}
-                        >
-                          <View
-                            style={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: 12,
-                              backgroundColor: config.color + "20",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              marginRight: 12,
-                            }}
-                          >
-                            <MaterialIcons
-                              name={config.icon}
-                              size={20}
-                              color={config.color}
-                            />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <View
-                              style={{
-                                flexDirection: "row",
-                                flexWrap: "wrap",
-                                alignItems: "center",
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  color: textMain,
-                                  fontWeight: "800",
-                                  fontSize: 13,
-                                }}
-                              >
-                                {item.userName}
-                              </Text>
-                              <Text
-                                style={{
-                                  color: textMuted,
-                                  fontSize: 13,
-                                  marginHorizontal: 4,
-                                }}
-                              >
-                                {config.label}
-                              </Text>
-                              <Text
-                                style={{
-                                  color: textMain,
-                                  fontWeight: "700",
-                                  fontSize: 13,
-                                }}
-                              >
-                                {item.title}
-                              </Text>
-                            </View>
-                            <Text
-                              style={{
-                                color: textMuted,
-                                fontSize: 10,
-                                marginTop: 4,
-                                fontWeight: "600",
-                              }}
-                            >
-                              {item.createdAt?.seconds
-                                ? new Date(
-                                    item.createdAt.seconds * 1000,
-                                  ).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                    day: "2-digit",
-                                    month: "short",
-                                  })
-                                : "Just now"}
-                            </Text>
-                          </View>
-                        </View>
-                      );
-                    })}
-                </View>
-              )}
-            </View>
-          </ScrollView>
-        </SlideModal>
-=======
-          isEditMode={isEditMode}
-          householdData={householdData}
-          handleUpdateInfo={handleUpdateInfo}
-          infoModalTab={infoModalTab}
-        />
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a
       </SafeAreaView>
     </LinearGradient>
   );
 }
-<<<<<<< HEAD
-
-const HouseholdInfoModalContent = memo(
-  ({ tab, isEdit, data, householdName, onSave }: any) => {
-    const { isDark } = useTheme();
-    const { showToast } = useToast();
-    const [name, setName] = useState(householdName || "");
-    const [fields, setFields] = useState<any[]>(() => {
-      if (data?.details && data.details.length > 0) return data.details;
-      const initial = [];
-      if (data?.wifiName)
-        initial.push({
-          id: "wifi_net",
-          label: "WiFi Network",
-          value: data.wifiName,
-          type: "text",
-          icon: "wifi",
-        });
-      if (data?.wifiPass)
-        initial.push({
-          id: "wifi_pass",
-          label: "WiFi Password",
-          value: data.wifiPass,
-          type: "password",
-          icon: "vpn-key",
-        });
-      if (data?.landlordName)
-        initial.push({
-          id: "landlord_contact",
-          label: "Landlord",
-          value: data.landlordName,
-          type: "text",
-          icon: "phone-in-talk",
-        });
-      if (data?.trashArrivalTime)
-        initial.push({
-          id: "trash_truck",
-          label: "Trash Truck",
-          value: data.trashArrivalTime,
-          type: "time",
-          icon: "delete-outline",
-        });
-      return initial;
-    });
-
-    const [activeTimePickerId, setActiveTimePickerId] = useState<string | null>(
-      null,
-    );
-    const [revealedFields, setRevealedFields] = useState<string[]>([]);
-
-    const toggleFieldVisibility = (id: string) => {
-      setRevealedFields((prev) =>
-        prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id],
-      );
-    };
-
-    const handleSave = () => {
-      const updates: any = { details: fields };
-
-      // Fallback static values for backwards compatibility
-      const wifiF = fields.find(
-        (f) =>
-          f.id === "wifi_net" ||
-          f.label.toLowerCase().includes("network") ||
-          f.label.toLowerCase().includes("wifi name"),
-      );
-      const passF = fields.find(
-        (f) =>
-          f.id === "wifi_pass" ||
-          f.label.toLowerCase().includes("password") ||
-          f.label.toLowerCase().includes("wifi pass"),
-      );
-      const landF = fields.find(
-        (f) =>
-          f.id === "landlord_contact" ||
-          f.label.toLowerCase().includes("landlord"),
-      );
-      const trashF = fields.find(
-        (f) => f.type === "time" && f.icon === "delete-outline",
-      );
-
-      updates.wifiName = wifiF ? wifiF.value : "";
-      updates.wifiPass = passF ? passF.value : "";
-      updates.landlordName = landF ? landF.value : "";
-      updates.trashArrivalTime = trashF ? trashF.value : "";
-
-      onSave({ name: name.trim() || "My Household", info: updates });
-    };
-
-    const handleAddField = () => {
-      setFields((prev) => [
-        ...prev,
-        {
-          id: Math.random().toString(),
-          label: "",
-          value: "",
-          type: "text",
-          icon: "description",
-        },
-      ]);
-    };
-
-    const handleDeleteField = (id: string) => {
-      setFields((prev) => prev.filter((f) => f.id !== id));
-    };
-
-    const handleUpdateField = (id: string, updates: any) => {
-      setFields((prev) =>
-        prev.map((f) => (f.id === id ? { ...f, ...updates } : f)),
-      );
-    };
-
-    const copyToClipboard = async (text: string) => {
-      if (!text) return;
-      await Clipboard.setStringAsync(text);
-      showToast("Copied to clipboard", "success");
-    };
-
-    const handlePhoneCall = async (phone: string) => {
-      if (!phone) return;
-      const url = `tel:${phone.replace(/\s+/g, "")}`;
-      try {
-        const supported = await Linking.canOpenURL(url);
-        if (supported) {
-          await Linking.openURL(url);
-        } else {
-          await Clipboard.setStringAsync(phone);
-          showToast("Phone copied to clipboard", "success");
-        }
-      } catch {
-        await Clipboard.setStringAsync(phone);
-        showToast("Phone copied to clipboard", "success");
-      }
-    };
-
-    const handleOpenLink = async (link: string) => {
-      if (!link) return;
-      let formatted = link.trim();
-      if (!/^https?:\/\//i.test(formatted)) {
-        formatted = `https://${formatted}`;
-      }
-      try {
-        const supported = await Linking.canOpenURL(formatted);
-        if (supported) {
-          await Linking.openURL(formatted);
-        } else {
-          await Clipboard.setStringAsync(link);
-          showToast("Link copied to clipboard", "success");
-        }
-      } catch {
-        await Clipboard.setStringAsync(link);
-        showToast("Link copied to clipboard", "success");
-      }
-    };
-
-    const textMain = isDark ? "#F1F5F9" : "#1E1B4B";
-
-    if (isEdit) {
-      return (
-        <>
-          <View style={{ marginBottom: 16 }}>
-            <View style={{ gap: 16, paddingBottom: 24 }}>
-              {/* Household Name */}
-              <View
-                style={{
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.03)"
-                    : "rgba(0,0,0,0.02)",
-                  padding: 16,
-                  borderRadius: 20,
-                  borderWidth: 1,
-                  borderColor: isDark
-                    ? "rgba(255,255,255,0.05)"
-                    : "rgba(0,0,0,0.04)",
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 10,
-                    fontWeight: "800",
-                    color: isDark ? "#A78BFA" : "#4F46E5",
-                    textTransform: "uppercase",
-                    marginBottom: 6,
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  Household Name
-                </Text>
-                <TextInput
-                  style={{
-                    fontSize: 15,
-                    fontWeight: "700",
-                    color: isDark ? "#F1F5F9" : "#1E1B4B",
-                    backgroundColor: isDark ? "#070913" : "#FFFFFF",
-                    padding: 12,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: isDark
-                      ? "rgba(255,255,255,0.08)"
-                      : "rgba(0,0,0,0.08)",
-                  }}
-                  placeholder="e.g. My Flat"
-                  value={name}
-                  onChangeText={setName}
-                />
-              </View>
-
-              {/* Dynamic Fields List */}
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: "900",
-                  color: isDark ? "#94A3B8" : "#64748B",
-                  textTransform: "uppercase",
-                  letterSpacing: 1,
-                  marginTop: 8,
-                  marginLeft: 4,
-                }}
-              >
-                Custom Fields
-              </Text>
-
-              {fields.map((field) => (
-                <View
-                  key={field.id}
-                  style={{
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.03)"
-                      : "rgba(0,0,0,0.02)",
-                    padding: 14,
-                    borderRadius: 20,
-                    borderWidth: 1,
-                    borderColor: isDark
-                      ? "rgba(255,255,255,0.05)"
-                      : "rgba(0,0,0,0.04)",
-                    gap: 10,
-                  }}
-                >
-                  {/* Inputs Row */}
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: 10,
-                      alignItems: "center",
-                    }}
-                  >
-                    <TextInput
-                      style={{
-                        flex: 1,
-                        fontSize: 13,
-                        fontWeight: "800",
-                        color: isDark ? "#F1F5F9" : "#1E1B4B",
-                        backgroundColor: isDark ? "#070913" : "#FFFFFF",
-                        padding: 10,
-                        borderRadius: 10,
-                        borderWidth: 1,
-                        borderColor: isDark
-                          ? "rgba(255,255,255,0.06)"
-                          : "rgba(0,0,0,0.06)",
-                      }}
-                      placeholder="Label (e.g. WiFi Network)"
-                      value={field.label}
-                      onChangeText={(v) =>
-                        handleUpdateField(field.id, { label: v })
-                      }
-                    />
-                    {field.type === "time" ? (
-                      <TouchableOpacity
-                        onPress={() => setActiveTimePickerId(field.id)}
-                        style={{
-                          flex: 1.2,
-                          height: 42,
-                          backgroundColor: isDark ? "#070913" : "#FFFFFF",
-                          paddingHorizontal: 10,
-                          borderRadius: 10,
-                          borderWidth: 1,
-                          borderColor: isDark
-                            ? "rgba(255,255,255,0.06)"
-                            : "rgba(0,0,0,0.06)",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            fontWeight: "700",
-                            color: field.value
-                              ? isDark
-                                ? "#FBBF24"
-                                : "#D97706"
-                              : "#94A3B8",
-                          }}
-                        >
-                          {field.value || "Set Time"}
-                        </Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <TextInput
-                        style={{
-                          flex: 1.2,
-                          fontSize: 13,
-                          fontWeight: "700",
-                          color: isDark ? "#FBBF24" : "#1E1B4B",
-                          backgroundColor: isDark ? "#070913" : "#FFFFFF",
-                          padding: 10,
-                          borderRadius: 10,
-                          borderWidth: 1,
-                          borderColor: isDark
-                            ? "rgba(255,255,255,0.06)"
-                            : "rgba(0,0,0,0.06)",
-                        }}
-                        placeholder="Value"
-                        value={field.value}
-                        onChangeText={(v) =>
-                          handleUpdateField(field.id, { value: v })
-                        }
-                      />
-                    )}
-                    <TouchableOpacity
-                      onPress={() => handleDeleteField(field.id)}
-                      style={{
-                        padding: 8,
-                        backgroundColor: "rgba(239, 68, 68, 0.12)",
-                        borderRadius: 10,
-                      }}
-                    >
-                      <MaterialIcons
-                        name="delete-outline"
-                        size={18}
-                        color="#EF4444"
-                      />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Type Selection pills */}
-                  <View
-                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
-                  >
-                    {[
-                      { type: "text", label: "Text", icon: "description" },
-                      { type: "password", label: "Password", icon: "vpn-key" },
-                      { type: "time", label: "Time", icon: "delete-outline" },
-                      { type: "phone", label: "Phone", icon: "call" },
-                      { type: "link", label: "Link", icon: "link" },
-                    ].map((t) => (
-                      <TouchableOpacity
-                        key={t.type}
-                        onPress={() => {
-                          handleUpdateField(field.id, {
-                            type: t.type,
-                            icon: t.icon,
-                          });
-                          if (t.type === "time")
-                            setActiveTimePickerId(field.id);
-                        }}
-                        style={{
-                          paddingHorizontal: 10,
-                          paddingVertical: 5,
-                          borderRadius: 8,
-                          backgroundColor:
-                            field.type === t.type
-                              ? isDark
-                                ? "rgba(192, 132, 252, 0.22)"
-                                : "rgba(99, 102, 241, 0.12)"
-                              : "transparent",
-                          borderWidth: 1,
-                          borderColor:
-                            field.type === t.type
-                              ? isDark
-                                ? "#C084FC"
-                                : "#4F46E5"
-                              : "transparent",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 10,
-                            fontWeight: "800",
-                            color:
-                              field.type === t.type
-                                ? isDark
-                                  ? "#C084FC"
-                                  : "#4F46E5"
-                                : isDark
-                                  ? "#94A3B8"
-                                  : "#64748B",
-                          }}
-                        >
-                          {t.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Nested TimePicker Modal */}
-                  {activeTimePickerId === field.id && (
-                    <Modal
-                      visible={activeTimePickerId === field.id}
-                      transparent
-                      animationType="fade"
-                      onRequestClose={() => setActiveTimePickerId(null)}
-                    >
-                      <View className="flex-1 justify-center items-center">
-                        <Pressable
-                          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)" }}
-                          onPress={() => setActiveTimePickerId(null)}
-                        />
-                        <View className="w-[92%] max-w-[350px]">
-                          <View className="bg-surface rounded-[32px] p-6 shadow-2xl">
-                            <TimeWheelPicker
-                              initialTime={(() => {
-                                if (
-                                  !field.value ||
-                                  typeof field.value !== "string" ||
-                                  !field.value.includes(":")
-                                )
-                                  return getSyncedDate();
-                                const parts = field.value.split(":").map(Number);
-                                const h = parts[0];
-                                const m = parts[1];
-                                if (isNaN(h) || isNaN(m)) return getSyncedDate();
-                                const d = getSyncedDate();
-                                d.setHours(h, m, 0, 0);
-                                return d;
-                              })()}
-                              onConfirm={(date) => {
-                                const hours = date
-                                  .getHours()
-                                  .toString()
-                                  .padStart(2, "0");
-                                const minutes = date
-                                  .getMinutes()
-                                  .toString()
-                                  .padStart(2, "0");
-                                handleUpdateField(field.id, {
-                                  value: `${hours}:${minutes}`,
-                                });
-                                setActiveTimePickerId(null);
-                              }}
-                              onCancel={() => setActiveTimePickerId(null)}
-                            />
-                            <TouchableOpacity
-                              onPress={() => setActiveTimePickerId(null)}
-                              className="mt-4 py-3 items-center"
-                            >
-                              <Text className="text-textMuted font-bold text-sm">
-                                Cancel
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      </View>
-                    </Modal>
-                  )}
-                </View>
-              ))}
-
-              {/* Add Field Button */}
-              <TouchableOpacity
-                onPress={handleAddField}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 14,
-                  backgroundColor: isDark
-                    ? "rgba(192, 132, 252, 0.12)"
-                    : "rgba(99, 102, 241, 0.06)",
-                  borderRadius: 16,
-                  borderStyle: "dashed",
-                  borderWidth: 1,
-                  borderColor: isDark ? "#C084FC" : "#4F46E5",
-                  marginTop: 6,
-                }}
-              >
-                <MaterialIcons
-                  name="add"
-                  size={18}
-                  color={isDark ? "#C084FC" : "#4F46E5"}
-                  style={{ marginRight: 6 }}
-                />
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "800",
-                    color: isDark ? "#C084FC" : "#4F46E5",
-                  }}
-                >
-                  Add Custom Field
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            onPress={handleSave}
-            className="bg-indigo-600 rounded-2xl py-4 items-center shadow-lg shadow-indigo-300 mb-8"
-          >
-            <Text className="text-white font-black text-lg">Save Changes</Text>
-          </TouchableOpacity>
-        </>
-      );
-    }
-
-    return (
-      <>
-        <View style={{ marginBottom: 16 }}>
-          <View style={{ gap: 12, paddingBottom: 24 }}>
-            {fields.length > 0 ? (
-              fields.map((field) => (
-                <View
-                  key={field.id}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.03)"
-                      : "rgba(0,0,0,0.02)",
-                    padding: 12,
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: isDark
-                      ? "rgba(255,255,255,0.04)"
-                      : "rgba(0,0,0,0.02)",
-                  }}
-                >
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 10,
-                      flex: 1,
-                      marginRight: 8,
-                    }}
-                  >
-                    <View
-                      style={{
-                        backgroundColor: isDark
-                          ? "rgba(192, 132, 252, 0.15)"
-                          : "rgba(99, 102, 241, 0.08)",
-                        padding: 8,
-                        borderRadius: 12,
-                      }}
-                    >
-                      <MaterialIcons
-                        name={field.icon || "description"}
-                        size={18}
-                        color={isDark ? "#C084FC" : "#4F46E5"}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          fontSize: 9,
-                          color: isDark ? "#94A3B8" : "#64748B",
-                          fontWeight: "800",
-                          textTransform: "uppercase",
-                          letterSpacing: 0.5,
-                        }}
-                      >
-                        {field.label}
-                      </Text>
-                      <Text
-                        numberOfLines={2}
-                        style={{
-                          fontSize: 14,
-                          fontWeight: "800",
-                          color: textMain,
-                        }}
-                      >
-                        {field.type === "password" && field.value
-                          ? revealedFields.includes(field.id)
-                            ? field.value
-                            : "••••••••"
-                          : field.value || "Not Set"}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Actions Based on Type */}
-                  <View style={{ flexDirection: "row", gap: 6 }}>
-                    {field.type === "password" && field.value ? (
-                      <>
-                        <TouchableOpacity
-                          onPress={() => toggleFieldVisibility(field.id)}
-                          style={{
-                            padding: 7,
-                            backgroundColor: isDark
-                              ? "rgba(255,255,255,0.08)"
-                              : "rgba(0,0,0,0.04)",
-                            borderRadius: 10,
-                          }}
-                        >
-                          <MaterialIcons
-                            name={
-                              revealedFields.includes(field.id)
-                                ? "visibility"
-                                : "visibility-off"
-                            }
-                            size={14}
-                            color={isDark ? "#A78BFA" : "#4F46E5"}
-                          />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => copyToClipboard(field.value)}
-                          style={{
-                            padding: 7,
-                            backgroundColor: isDark
-                              ? "rgba(255,255,255,0.08)"
-                              : "rgba(0,0,0,0.04)",
-                            borderRadius: 10,
-                          }}
-                        >
-                          <MaterialIcons
-                            name="content-copy"
-                            size={14}
-                            color={isDark ? "#A78BFA" : "#4F46E5"}
-                          />
-                        </TouchableOpacity>
-                      </>
-                    ) : null}
-                    {field.type === "phone" && field.value ? (
-                      <TouchableOpacity
-                        onPress={() => handlePhoneCall(field.value)}
-                        style={{
-                          padding: 7,
-                          backgroundColor: isDark
-                            ? "rgba(255,255,255,0.08)"
-                            : "rgba(0,0,0,0.04)",
-                          borderRadius: 10,
-                        }}
-                      >
-                        <MaterialIcons
-                          name="call"
-                          size={14}
-                          color={isDark ? "#A78BFA" : "#4F46E5"}
-                        />
-                      </TouchableOpacity>
-                    ) : null}
-                    {field.type === "link" && field.value ? (
-                      <TouchableOpacity
-                        onPress={() => handleOpenLink(field.value)}
-                        style={{
-                          padding: 7,
-                          backgroundColor: isDark
-                            ? "rgba(255,255,255,0.08)"
-                            : "rgba(0,0,0,0.04)",
-                          borderRadius: 10,
-                        }}
-                      >
-                        <MaterialIcons
-                          name="link"
-                          size={14}
-                          color={isDark ? "#A78BFA" : "#4F46E5"}
-                        />
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                </View>
-              ))
-            ) : (
-              <View style={{ alignItems: "center", paddingVertical: 24 }}>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontWeight: "700",
-                    color: isDark ? "#94A3B8" : "#64748B",
-                  }}
-                >
-                  No custom fields added yet. Tap Edit to begin!
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </>
-    );
-  },
-);
-HouseholdInfoModalContent.displayName = "HouseholdInfoModalContent";
-=======
->>>>>>> d04ba456fe011bb83b2746bb7e2df586cd62253a

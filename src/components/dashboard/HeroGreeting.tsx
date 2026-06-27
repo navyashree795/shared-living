@@ -106,7 +106,7 @@ export const HeroGreeting = React.memo(({
               {greeting}
             </Text>
             <Text style={{ fontSize: 26, fontWeight: "900", color: textMain, marginTop: 4, letterSpacing: -0.5 }}>
-              @{username}
+              {username}
             </Text>
           </View>
           

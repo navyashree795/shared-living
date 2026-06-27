@@ -77,6 +77,29 @@ export const MembersModal = React.memo(({
                 {uid === currentUserId ? "You" : "Member"}
               </Text>
             </View>
+            {(() => {
+              const status = member.status || "home";
+              let statusEmoji = "🟢";
+              let statusText = "At Home";
+              if (status === "out") {
+                statusEmoji = "🟡";
+                statusText = "Out";
+              } else if (status === "sleeping") {
+                statusEmoji = "💤";
+                statusText = "Sleeping";
+              } else if (status === "away") {
+                statusEmoji = "✈️";
+                statusText = "Away";
+              }
+              return (
+                <View className={`flex-row items-center gap-1 px-2.5 py-1 rounded-xl ${status === "home" || status === "sleeping" ? "bg-emerald-500/10" : "bg-slate-500/10"}`}>
+                  <Text style={{ fontSize: 10 }}>{statusEmoji}</Text>
+                  <Text className="text-[9px] font-black uppercase tracking-wider text-textMain">
+                    {statusText}
+                  </Text>
+                </View>
+              );
+            })()}
             {isOwner && uid !== currentUserId && (
               <TouchableOpacity
                 onPress={() => handleRemoveMember(uid)}
