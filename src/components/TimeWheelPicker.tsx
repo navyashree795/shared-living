@@ -146,6 +146,7 @@ interface TimeWheelPickerProps {
 }
 
 export const TimeWheelPicker: React.FC<TimeWheelPickerProps> = ({ initialTime, onConfirm, onCancel }) => {
+  const { isDark } = useTheme();
   // Use separate refs for selection to avoid closure issues with onSelect and prevent janky re-renders during gesture scrolling
   const selectedHour = useRef(initialTime.getHours() % 12 || 12);
   const selectedMinute = useRef(initialTime.getMinutes());

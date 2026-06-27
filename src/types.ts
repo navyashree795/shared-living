@@ -49,6 +49,7 @@ export interface Household {
     landlordPhone?: string;
     other?: string;
     details?: HouseholdDetailField[];
+    homeLocation?: { latitude: number; longitude: number };
   };
 }
 

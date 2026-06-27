@@ -1,12 +1,15 @@
-import React, { useState, memo } from "react";
+import React, { useState, useEffect, useRef, memo } from "react";
 import { View, Text, TextInput, TouchableOpacity, Modal, Linking } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
+import MapView, { Marker } from "react-native-maps";
+import * as Location from "expo-location";
 import SlideModal from "../SlideModal";
 import { TimeWheelPicker } from "../TimeWheelPicker";
 import { getSyncedDate } from "../../utils/timeUtils";
 import { useTheme } from "../../context/ThemeContext";
 import { useToast } from "../../context/ToastContext";
+import { auth } from "../../firebaseConfig";
 
 interface InfoEditModalProps {
   visible: boolean;
@@ -23,10 +26,47 @@ export const HouseholdInfoModalContent = memo(({
   data,
   householdName,
   onSave,
+  isOwner,
 }: any) => {
   const { isDark } = useTheme();
   const { showToast } = useToast();
   const [name, setName] = useState(householdName || "");
+  const [homeLocation, setHomeLocation] = useState<{ latitude: number; longitude: number } | null>(
+    data?.homeLocation || null
+  );
+  const mapRef = useRef<MapView | null>(null);
+
+  useEffect(() => {
+    if (homeLocation && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: homeLocation.latitude,
+        longitude: homeLocation.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      }, 1000);
+    }
+  }, [homeLocation]);
+
+  useEffect(() => {
+    if (!homeLocation && isEdit && isOwner) {
+      (async () => {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === "granted") {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Highest,
+            });
+            setHomeLocation({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+            });
+          }
+        } catch (e) {
+          console.warn("Could not fetch current location for map center", e);
+        }
+      })();
+    }
+  }, [isEdit, isOwner]);
   const [fields, setFields] = useState<any[]>(() => {
     if (data?.details && data.details.length > 0) return data.details;
     const initial = [];
@@ -75,7 +115,7 @@ export const HouseholdInfoModalContent = memo(({
   };
 
   const handleSave = () => {
-    const updates: any = { details: fields };
+    const updates: any = { details: fields, homeLocation };
 
     const wifiF = fields.find(
       (f) =>
@@ -217,6 +257,62 @@ export const HouseholdInfoModalContent = memo(({
                 onChangeText={setName}
               />
             </View>
+
+            {isOwner && (
+              <View
+                style={{
+                  backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                  padding: 16,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "800",
+                    color: isDark ? "#A78BFA" : "#4F46E5",
+                    textTransform: "uppercase",
+                    marginBottom: 6,
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  Household Pin Location (At Home Radius)
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: isDark ? "#94A3B8" : "#64748B",
+                    marginBottom: 10,
+                  }}
+                >
+                  Tap the map or drag the pin to set the home location for presence geofencing.
+                </Text>
+                
+                <View style={{ height: 220, borderRadius: 16, overflow: "hidden" }}>
+                  <MapView
+                    ref={mapRef}
+                    style={{ flex: 1 }}
+                    initialRegion={{
+                      latitude: homeLocation?.latitude || 37.78825,
+                      longitude: homeLocation?.longitude || -122.4324,
+                      latitudeDelta: 0.005,
+                      longitudeDelta: 0.005,
+                    }}
+                    onPress={(e) => {
+                      setHomeLocation(e.nativeEvent.coordinate);
+                    }}
+                  >
+                    <Marker
+                      coordinate={homeLocation || { latitude: 37.78825, longitude: -122.4324 }}
+                      draggable
+                      onDragEnd={(e) => setHomeLocation(e.nativeEvent.coordinate)}
+                    />
+                  </MapView>
+                </View>
+              </View>
+            )}
 
             {/* Dynamic Fields List */}
             <Text
@@ -611,6 +707,49 @@ export const HouseholdInfoModalContent = memo(({
               </Text>
             </View>
           )}
+          {data?.homeLocation && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                padding: 12,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.02)",
+                marginTop: 4,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                <View
+                  style={{
+                    backgroundColor: isDark ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.08)",
+                    padding: 8,
+                    borderRadius: 12,
+                  }}
+                >
+                  <MaterialIcons name="my-location" size={18} color="#F59E0B" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 9,
+                      color: isDark ? "#94A3B8" : "#64748B",
+                      fontWeight: "800",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Home Location
+                  </Text>
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: textMain }}>
+                    📍 Geofence Active (100m Radius)
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
       </View>
     </>
@@ -627,6 +766,7 @@ export const InfoEditModal = React.memo(({
   handleUpdateInfo,
   infoModalTab,
 }: InfoEditModalProps) => {
+  const isOwner = householdData?.createdBy === auth.currentUser?.uid;
   return (
     <SlideModal
       visible={visible}
@@ -640,6 +780,7 @@ export const InfoEditModal = React.memo(({
         data={householdData?.info}
         householdName={householdData?.name}
         onSave={handleUpdateInfo}
+        isOwner={isOwner}
       />
     </SlideModal>
   );
