@@ -1,9 +1,10 @@
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, Share, Alert } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import SlideModal from "../SlideModal";
 import { Avatar } from "../Avatar";
+import { createInvitation } from "../../utils/invitationApi";
 
 interface MembersModalProps {
   visible: boolean;
@@ -26,6 +27,21 @@ export const MembersModal = React.memo(({
   handleRemoveMember,
   showToast,
 }: MembersModalProps) => {
+  const handleShareInvite = async () => {
+    try {
+      if (!householdData?.id) return;
+      const token = await createInvitation(householdData.id);
+      const inviteUrl = `https://shared-living-app.web.app/invite/${token}`;
+      const message = `Join my household on Shared Living!\n\nUse this link to join directly:\n${inviteUrl}\n\nOr enter the invite code: ${householdData.inviteCode}`;
+      await Share.share({
+        message,
+        url: inviteUrl,
+      });
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Could not generate invitation link.");
+    }
+  };
+
   return (
     <SlideModal visible={visible} onClose={onClose} title="House Team">
       <View className="bg-indigo-600 rounded-[32px] p-6 mb-6 shadow-lg shadow-indigo-200">
@@ -46,6 +62,13 @@ export const MembersModal = React.memo(({
             <MaterialIcons name="content-copy" size={20} color="white" />
           </TouchableOpacity>
         </View>
+        <TouchableOpacity
+          onPress={handleShareInvite}
+          className="flex-row items-center justify-center bg-white/20 py-3 rounded-2xl border border-white/20 mt-4"
+        >
+          <MaterialIcons name="share" size={20} color="white" style={{ marginRight: 8 }} />
+          <Text className="text-white font-bold">Share Invite Link</Text>
+        </TouchableOpacity>
       </View>
       
       <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-4 ml-1">

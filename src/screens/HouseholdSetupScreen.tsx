@@ -4,8 +4,9 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
   TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { getKeyboardAvoidingProps } from '../utils/keyboardUtils';
 import { auth, db } from '../firebaseConfig';
 import { useHousehold } from '../context/HouseholdContext';
 import {
@@ -20,6 +21,9 @@ import { validateInvitation, acceptInvitation } from '../utils/invitationApi';
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdSetup'>;
 
 export default function HouseholdSetupScreen({ navigation, route }: Props) {
+  const insets = useSafeAreaInsets();
+  const { behavior, keyboardVerticalOffset } = getKeyboardAvoidingProps('setup', insets.top);
+
   const { isDark } = useTheme();
   const initialTab = route.params?.activeTab || 'create';
   const [activeTab, setActiveTab] = useState<'create' | 'join'>(initialTab);
@@ -208,7 +212,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={behavior} keyboardVerticalOffset={keyboardVerticalOffset} style={{ flex: 1 }}>
         <ScrollView 
           contentContainerStyle={{ flexGrow: 1 }} 
           keyboardShouldPersistTaps="handled" 

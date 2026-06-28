@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, Alert, ScrollView, ActivityIndicator,
-  Platform, KeyboardAvoidingView,
+  Platform, KeyboardAvoidingView, Share,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { createInvitation } from '../utils/invitationApi';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { getKeyboardAvoidingProps } from '../utils/keyboardUtils';
 import { useNavigation } from '@react-navigation/native';
 import { auth, db } from '../firebaseConfig';
-import { doc, updateDoc, collection, getDocs, deleteDoc, arrayRemove } from 'firebase/firestore';
+import { doc, updateDoc, collection, getDocs, deleteDoc, arrayRemove, writeBatch, getDoc } from 'firebase/firestore';
 import { useUser } from '../context/UserContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useTheme } from '../context/ThemeContext';
@@ -20,6 +22,9 @@ import * as WebBrowser from 'expo-web-browser';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const { behavior, keyboardVerticalOffset } = getKeyboardAvoidingProps('profile', insets.top);
+
   const { user, profile } = useUser();
   const { householdId, householdData, setHouseholdId } = useHousehold();
   const { isDark, toggleTheme } = useTheme();
@@ -56,14 +61,34 @@ export default function ProfileScreen() {
 
   const handleSave = async () => {
     const cleaned = editUsername.trim().replace(/^@+/, '');
-    if (!cleaned || !auth.currentUser) {
+    const lowerUsername = cleaned.toLowerCase();
+    if (!lowerUsername || !auth.currentUser) {
       Alert.alert('Error', 'Please enter a valid username');
       return;
     }
+
+    if (profile?.username && lowerUsername === profile.username.toLowerCase()) {
+      setEditing(false);
+      return;
+    }
+
     try {
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        username: cleaned.toLowerCase(),
+      const usernameSnap = await getDoc(doc(db, 'usernames', lowerUsername));
+      if (usernameSnap.exists()) {
+        Alert.alert('Error', 'Username is already taken.');
+        return;
+      }
+
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'usernames', lowerUsername), { uid: auth.currentUser.uid });
+      if (profile?.username) {
+        batch.delete(doc(db, 'usernames', profile.username.toLowerCase()));
+      }
+      batch.update(doc(db, 'users', auth.currentUser.uid), {
+        username: lowerUsername,
       });
+
+      await batch.commit();
       setEditing(false);
       Alert.alert('Success', 'Username updated!');
     } catch (e: any) {
@@ -245,10 +270,11 @@ export default function ProfileScreen() {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={behavior}
+        keyboardVerticalOffset={keyboardVerticalOffset}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40, paddingTop: 16 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingBottom: 40, paddingTop: 16 }} showsVerticalScrollIndicator={false}>
 
         {/* Avatar + Name */}
         <View style={{ alignItems: 'center', marginBottom: 32 }}>
@@ -328,12 +354,43 @@ export default function ProfileScreen() {
             </Text>
             <TouchableOpacity
               onPress={copyCode}
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: raised, borderRadius: 14, padding: 16, marginBottom: 16 }}
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: raised, borderRadius: 14, padding: 16, marginBottom: 12 }}
             >
               <Text style={{ fontSize: 22, fontWeight: '900', color: primary, letterSpacing: 6 }}>
                 {householdData.inviteCode}
               </Text>
               <MaterialIcons name="content-copy" size={20} color={muted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={async () => {
+                try {
+                  const token = await createInvitation(householdData.id || householdId || '');
+                  const inviteUrl = `https://shared-living-app.web.app/invite/${token}`;
+                  const message = `Join my household on Shared Living!\n\nUse this link to join directly:\n${inviteUrl}\n\nOr enter the invite code: ${householdData.inviteCode}`;
+                  await Share.share({
+                    message,
+                    url: inviteUrl,
+                  });
+                } catch (error: any) {
+                  Alert.alert("Error", error.message || "Could not generate invitation link.");
+                }
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: primary,
+                borderRadius: 14,
+                padding: 16,
+                marginBottom: 16,
+                gap: 8
+              }}
+            >
+              <MaterialIcons name="share" size={20} color="#fff" />
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
+                Share Invite Link
+              </Text>
             </TouchableOpacity>
 
             {/* Billing Cycle Setting */}
