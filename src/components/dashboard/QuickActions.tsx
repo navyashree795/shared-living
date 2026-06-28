@@ -9,6 +9,7 @@ interface QuickActionsProps {
   onQuickExpense: () => void;
   onQuickChore: () => void;
   isDark: boolean;
+  isTravel?: boolean;
 }
 
 export function QuickActions({
@@ -17,6 +18,7 @@ export function QuickActions({
   onQuickExpense,
   onQuickChore,
   isDark,
+  isTravel = false,
 }: QuickActionsProps) {
   const textMain = isDark ? "#F1F5F9" : "#1E1B4B";
   const textMuted = isDark ? "#94A3B8" : "#64748B";
@@ -62,6 +64,13 @@ export function QuickActions({
     },
   ];
 
+  const filteredActions = actions.filter((act) => {
+    if (isTravel && (act.id === "quick-buy" || act.id === "quick-chore")) {
+      return false;
+    }
+    return true;
+  });
+
   return (
     <View style={{ marginBottom: 24 }}>
       <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
@@ -82,7 +91,7 @@ export function QuickActions({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}
       >
-        {actions.map((item) => (
+        {filteredActions.map((item) => (
           <TouchableOpacity
             key={item.id}
             onPress={item.onPress}

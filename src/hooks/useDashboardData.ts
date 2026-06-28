@@ -39,7 +39,7 @@ export function useDashboardData({
   const [chores, setChores] = useState<any[]>([]);
   const [groceries, setGroceries] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
-  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [hasUnreadChores, setHasUnreadChores] = useState(false);
   const [unreadActivityCount, setUnreadActivityCount] = useState(0);
   const [lastSeenActivityTime, setLastSeenActivityTime] = useState<number | null>(null);
@@ -227,14 +227,14 @@ export function useDashboardData({
       limit(20),
     );
     const unsub = onSnapshot(q, (snap) => {
-      const unread = snap.docs.some((doc) => {
+      const count = snap.docs.filter((doc) => {
         const data = doc.data();
         return (
           data.senderId !== userId &&
           (!data.readBy || !data.readBy.includes(userId))
         );
-      });
-      setHasUnreadMessages(unread);
+      }).length;
+      setUnreadMessagesCount(count);
     });
     return unsub;
   }, [householdId, userId]);
@@ -492,7 +492,7 @@ export function useDashboardData({
     chores,
     groceries,
     expenses,
-    hasUnreadMessages,
+    unreadMessagesCount,
     hasUnreadChores,
     unreadActivityCount,
     lastSeenActivityTime,

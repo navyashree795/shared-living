@@ -5,6 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../context/ThemeContext';
+import { useHousehold } from '../context/HouseholdContext';
 
 type TabConfig = {
   name: string;
@@ -23,6 +24,7 @@ const TAB_CONFIG: TabConfig[] = [
 export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
+  const { unreadMessagesCount, pendingGroceriesCount, pendingChoresCount } = useHousehold();
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
@@ -47,6 +49,8 @@ export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
     return null;
   }
 
+  const tabBgColor = isDark ? '#1A1D3B' : '#FFFFFF';
+
   return (
     <View style={{
       position: 'absolute',
@@ -54,7 +58,7 @@ export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
       left: 20,
       right: 20,
       height: 72,
-      backgroundColor: isDark ? '#1A1D3B' : '#FFFFFF',
+      backgroundColor: tabBgColor,
       borderRadius: 36,
       shadowColor: '#4F46E5',
       shadowOffset: { width: 0, height: 8 },
@@ -74,6 +78,11 @@ export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
           ? (isDark ? '#A78BFA' : '#4F46E5') 
           : (isDark ? '#64748B' : '#94A3B8');
 
+        let badgeCount = 0;
+        if (route.name === 'Chat') badgeCount = unreadMessagesCount;
+        if (route.name === 'Grocery') badgeCount = pendingGroceriesCount;
+        if (route.name === 'Chores') badgeCount = pendingChoresCount;
+
         return (
           <TouchableOpacity
             key={route.key}
@@ -82,20 +91,44 @@ export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
             style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
           >
             <View style={{ alignItems: 'center', gap: 3 }}>
-              {/* Icon Container with background when active */}
-              <View style={{
-                backgroundColor: isFocused ? (isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF') : 'transparent',
-                width: 34,
-                height: 34,
-                borderRadius: 10,
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <MaterialIcons
-                  name={config.icon as any}
-                  size={22}
-                  color={color}
-                />
+              {/* Icon Container with relative positioning for Badge */}
+              <View style={{ position: 'relative' }}>
+                <View style={{
+                  backgroundColor: isFocused ? (isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF') : 'transparent',
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <MaterialIcons
+                    name={config.icon as any}
+                    size={22}
+                    color={color}
+                  />
+                </View>
+                {/* Red Notification Badge */}
+                {badgeCount > 0 && (
+                  <View style={{
+                    position: 'absolute',
+                    top: -4,
+                    right: -4,
+                    backgroundColor: '#EF4444',
+                    borderRadius: 9,
+                    minWidth: 16,
+                    height: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingHorizontal: 3,
+                    borderWidth: 1.5,
+                    borderColor: tabBgColor,
+                    zIndex: 10,
+                  }}>
+                    <Text style={{ color: '#FFFFFF', fontSize: 8, fontWeight: '900' }}>
+                      {badgeCount}
+                    </Text>
+                  </View>
+                )}
               </View>
               <Text style={{ 
                 fontSize: 10, 

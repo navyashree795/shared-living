@@ -14,6 +14,7 @@ interface HeroGreetingProps {
   onMarkChoreDone: (chore: any) => Promise<void>;
   onNudgeRoommate: (chore: any) => void;
   getMemberName: (uid: string) => string;
+  isTravel?: boolean;
 }
 
 export const HeroGreeting = React.memo(({
@@ -26,6 +27,7 @@ export const HeroGreeting = React.memo(({
   onMarkChoreDone,
   onNudgeRoommate,
   getMemberName,
+  isTravel = false,
 }: HeroGreetingProps) => {
   const currentUid = auth.currentUser?.uid;
   
@@ -135,12 +137,12 @@ export const HeroGreeting = React.memo(({
         <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "#EEF2FF", marginVertical: 16 }} />
         
         {/* Balance Status Message */}
-        <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#4F46E5", fontWeight: "700", marginBottom: nextChore ? 16 : 0 }}>
+        <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#4F46E5", fontWeight: "700", marginBottom: nextChore && !isTravel ? 16 : 0 }}>
           {statusMsg}
         </Text>
 
         {/* Actionable Chore Card */}
-        {nextChore && (
+        {nextChore && !isTravel && (
           <View
             style={{
               backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(99, 102, 241, 0.04)",

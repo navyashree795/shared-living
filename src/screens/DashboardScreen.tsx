@@ -26,6 +26,9 @@ import {
   Timestamp,
   onSnapshot,
   setDoc,
+  deleteDoc,
+  query,
+  orderBy,
 } from "firebase/firestore";
 import { scheduleChoreReminder, cancelChoreReminder } from "../utils/notificationUtils";
 import { logActivity, getActivityConfig } from "../utils/activityUtils";
@@ -47,6 +50,11 @@ import SlideModal from "../components/SlideModal";
 import { MembersModal } from "../components/modals/MembersModal";
 import { NotificationsModal } from "../components/modals/NotificationsModal";
 import { InfoEditModal } from "../components/modals/InfoEditModal";
+import { HouseholdSwitcherModal } from "../components/modals/HouseholdSwitcherModal";
+import { TripDetailsEditModal } from "../components/modals/TripDetailsEditModal";
+import { ItineraryEditModal } from "../components/modals/ItineraryEditModal";
+import { PackingEditModal } from "../components/modals/PackingEditModal";
+import { ItineraryItem, PackingItem } from "../types";
 import { QuickBuyModal } from "../components/modals/QuickBuyModal";
 import { QuickSettleModal } from "../components/modals/QuickSettleModal";
 import { QuickExpenseModal } from "../components/modals/QuickExpenseModal";
@@ -67,6 +75,10 @@ export default function DashboardScreen({ navigation }: Props) {
   const [isMembersModalVisible, setIsMembersModalVisible] = useState(false);
   const [isInfoModalVisible, setIsInfoModalVisible] = useState(false);
   const [isNotificationsModalVisible, setIsNotificationsModalVisible] = useState(false);
+  const [isHouseholdSwitcherVisible, setIsHouseholdSwitcherVisible] = useState(false);
+  const [isTripDetailsModalVisible, setIsTripDetailsModalVisible] = useState(false);
+  const [isItineraryModalVisible, setIsItineraryModalVisible] = useState(false);
+  const [isPackingModalVisible, setIsPackingModalVisible] = useState(false);
 
   const [isQuickBuyVisible, setIsQuickBuyVisible] = useState(false);
   const [isQuickSettleVisible, setIsQuickSettleVisible] = useState(false);
@@ -119,10 +131,12 @@ export default function DashboardScreen({ navigation }: Props) {
   const {
     activities,
     chores,
+    groceries,
     expenses,
     agendaItems,
     householdsList,
     unreadActivityCount,
+    unreadMessagesCount,
     setLastSeenActivityTime,
     setUnreadActivityCount,
   } = useDashboardData({
@@ -132,6 +146,35 @@ export default function DashboardScreen({ navigation }: Props) {
     memberProfiles,
     onNewUnreadActivity: handleNewUnreadActivity,
   });
+
+  // User chores completed/total calculations for today
+  const { userChoresDoneToday, userChoresTotalToday } = useMemo(() => {
+    if (!user?.uid || chores.length === 0) return { userChoresDoneToday: 0, userChoresTotalToday: 0 };
+    const now = getSyncedDate();
+    const currentDay = now.toLocaleDateString("en-US", { weekday: "short" });
+
+    const myTodayChores = chores.filter((c) => {
+      if (c.assignedToUid !== user.uid) return false;
+      if (c.targetDate) {
+        const target = typeof c.targetDate.toDate === "function" ? c.targetDate.toDate() : new Date(c.targetDate);
+        const targetDateOnly = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+        const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        return targetDateOnly <= nowDateOnly;
+      }
+      return c.day?.includes(currentDay);
+    });
+
+    const doneCount = myTodayChores.filter(c => c.done).length;
+    return {
+      userChoresDoneToday: doneCount,
+      userChoresTotalToday: myTodayChores.length
+    };
+  }, [chores, user?.uid]);
+
+  // Pending groceries count calculation
+  const pendingGroceriesCount = useMemo(() => {
+    return groceries.filter((g) => !g.done).length;
+  }, [groceries]);
 
   // Calculate Net Balancing Standings (positive = roommates owe user, negative = user owes roommates)
   const netBalance = useMemo(() => {
@@ -247,7 +290,7 @@ export default function DashboardScreen({ navigation }: Props) {
           rotationEnabled: true,
           rotationOrder: chore.rotationOrder,
           currentRotationIndex: nextIndex,
-          createdByUid: chore.createdByUid || auth.currentUser?.uid || "",
+          createdByUid: chore.createdByUid || user?.uid || "",
           createdAt: serverTimestamp(),
           seenBy: [nextAssignee],
           targetDate: Timestamp.fromDate(nextTargetDate),
@@ -274,7 +317,108 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [householdId, showToast]);
 
-  const isOwner = householdData?.createdBy === auth.currentUser?.uid;
+  const isOwner = householdData?.createdBy === user?.uid;
+
+  const isTravel = householdData?.type === "travel";
+
+  const [packingList, setPackingList] = useState<PackingItem[]>([]);
+  const [itinerary, setItinerary] = useState<ItineraryItem[]>([]);
+
+  useEffect(() => {
+    if (!hid || !isTravel) return;
+    const q = query(collection(db, "households", hid, "packing_list"), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      setPackingList(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as PackingItem)));
+    });
+    return unsub;
+  }, [hid, isTravel]);
+
+  useEffect(() => {
+    if (!hid || !isTravel) return;
+    const q = query(collection(db, "households", hid, "itinerary"), orderBy("date", "asc"), orderBy("time", "asc"));
+    const unsub = onSnapshot(q, (snap) => {
+      setItinerary(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ItineraryItem)));
+    });
+    return unsub;
+  }, [hid, isTravel]);
+
+  const handleSaveTripDetails = useCallback(async (updates: any) => {
+    if (!hid) return;
+    try {
+      await updateDoc(doc(db, "households", hid), { tripDetails: updates });
+      showToast("Trip details updated!", "success");
+    } catch (e) {
+      console.error(e);
+      showToast("Could not update trip details", "error");
+    }
+  }, [hid, showToast]);
+
+  const handleAddItemPacking = useCallback(async (name: string) => {
+    if (!hid) return;
+    try {
+      await addDoc(collection(db, "households", hid, "packing_list"), {
+        name,
+        done: false,
+        createdAt: serverTimestamp(),
+      });
+      showToast("Item added!", "success");
+    } catch (e) {
+      console.error(e);
+    }
+  }, [hid, showToast]);
+
+  const handleToggleItemPacking = useCallback(async (id: string, done: boolean) => {
+    if (!hid) return;
+    try {
+      await updateDoc(doc(db, "households", hid, "packing_list", id), { done });
+    } catch (e) {
+      console.error(e);
+    }
+  }, [hid]);
+
+  const handleDeleteItemPacking = useCallback(async (id: string) => {
+    if (!hid) return;
+    try {
+      await deleteDoc(doc(db, "households", hid, "packing_list", id));
+      showToast("Item deleted", "info");
+    } catch (e) {
+      console.error(e);
+    }
+  }, [hid, showToast]);
+
+  const handleAddItineraryItem = useCallback(async (item: any) => {
+    if (!hid) return;
+    try {
+      await addDoc(collection(db, "households", hid, "itinerary"), {
+        ...item,
+        proposedBy: user?.uid || "",
+        createdAt: serverTimestamp(),
+      });
+      showToast(item.approved ? "Activity added!" : "Activity proposed!", "success");
+    } catch (e) {
+      console.error(e);
+    }
+  }, [hid, user?.uid, showToast]);
+
+  const handleApproveItineraryItem = useCallback(async (id: string) => {
+    if (!hid) return;
+    try {
+      await updateDoc(doc(db, "households", hid, "itinerary", id), { approved: true });
+      showToast("Activity approved!", "success");
+    } catch (e) {
+      console.error(e);
+    }
+  }, [hid, showToast]);
+
+  const handleDeleteItineraryItem = useCallback(async (id: string) => {
+    if (!hid) return;
+    try {
+      await deleteDoc(doc(db, "households", hid, "itinerary", id));
+      showToast("Activity removed", "info");
+    } catch (e) {
+      console.error(e);
+    }
+  }, [hid, showToast]);
 
   const handleRemoveMember = useCallback(async (memberUid: string) => {
     const profile = memberProfiles[memberUid];
@@ -573,71 +717,7 @@ export default function DashboardScreen({ navigation }: Props) {
   const glassBorder = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(99, 102, 241, 0.1)";
   const glassBg = isDark ? "rgba(255, 255, 255, 0.05)" : "#FFFFFF";
 
-  const renderActivityItem = useCallback(({ item }: { item: Activity }) => {
-    const config = getActivityConfig(item.type);
-    return (
-      <View
-        style={{
-          backgroundColor: glassBg,
-          borderRadius: 20,
-          paddingVertical: 12,
-          paddingHorizontal: 16,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          borderWidth: 1,
-          borderColor: glassBorder,
-          shadowColor: "#4F46E5",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: isDark ? 0 : 0.02,
-          shadowRadius: 6,
-          elevation: 1,
-          marginHorizontal: 20,
-          marginBottom: 10,
-        }}
-      >
-        <View
-          style={{
-            backgroundColor: config.color + "18",
-            padding: 8,
-            borderRadius: 12,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <MaterialIcons name={config.icon} size={18} color={config.color} />
-        </View>
 
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 13, fontWeight: "900", color: textMain }} numberOfLines={1}>
-            {item.userName} {config.label}
-          </Text>
-          <Text style={{ fontSize: 11, color: isDark ? "#94A3B8" : "#64748B", marginTop: 2 }}>
-            {item.title}
-          </Text>
-        </View>
-      </View>
-    );
-  }, [isDark, glassBg, glassBorder, textMain]);
-
-  const renderEmptyActivities = useCallback(() => (
-    <View
-      style={{
-        backgroundColor: glassBg,
-        borderRadius: 20,
-        padding: 16,
-        alignItems: "center",
-        borderWidth: 1,
-        borderColor: glassBorder,
-        marginHorizontal: 20,
-        marginBottom: 10,
-      }}
-    >
-      <Text style={{ fontSize: 12, color: isDark ? "#64748B" : "#94A3B8" }}>
-        No recent activity
-      </Text>
-    </View>
-  ), [isDark, glassBg, glassBorder]);
 
   return (
     <LinearGradient colors={bgColors} style={{ flex: 1 }}>
@@ -699,16 +779,23 @@ export default function DashboardScreen({ navigation }: Props) {
               />
             </TouchableOpacity>
             
-            <View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 1 }}>
-                <Text style={{ fontSize: 10, fontWeight: "800", color: isDark ? "#A78BFA" : "#4F46E5", textTransform: "uppercase", letterSpacing: 1 }}>
-                  HOUSEHOLD HUB
+            <TouchableOpacity
+              onPress={() => setIsHouseholdSwitcherVisible(true)}
+              activeOpacity={0.7}
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+            >
+              <View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 1 }}>
+                  <Text style={{ fontSize: 10, fontWeight: "800", color: isDark ? "#A78BFA" : "#4F46E5", textTransform: "uppercase", letterSpacing: 1 }}>
+                    HOUSEHOLD HUB
+                  </Text>
+                  <MaterialIcons name="keyboard-arrow-down" size={14} color={isDark ? "#A78BFA" : "#4F46E5"} />
+                </View>
+                <Text style={{ fontSize: 22, fontWeight: "900", color: textMain, letterSpacing: -0.5, lineHeight: 26 }}>
+                  {householdData?.name || "Loading..."}
                 </Text>
               </View>
-              <Text style={{ fontSize: 22, fontWeight: "900", color: textMain, letterSpacing: -0.5, lineHeight: 26 }}>
-                {householdData?.name || "Loading..."}
-              </Text>
-            </View>
+            </TouchableOpacity>
           </View>
 
           <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
@@ -788,10 +875,8 @@ export default function DashboardScreen({ navigation }: Props) {
 
         {/* Unified FlatList layout representing root view */}
         <FlatList
-          data={activities.slice(0, 3)}
-          keyExtractor={(item, index) => item.id || String(index)}
-          renderItem={renderActivityItem}
-          ListEmptyComponent={renderEmptyActivities}
+          data={[]}
+          renderItem={() => null}
           contentContainerStyle={{ paddingBottom: 60 }}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
@@ -807,6 +892,7 @@ export default function DashboardScreen({ navigation }: Props) {
                 onMarkChoreDone={handleQuickChoreDone}
                 onNudgeRoommate={handleQuickNudge}
                 getMemberName={getMemberName}
+                isTravel={isTravel}
               />
 
               {/* Quick Actions Tray */}
@@ -816,204 +902,431 @@ export default function DashboardScreen({ navigation }: Props) {
                 onQuickExpense={() => setIsQuickExpenseVisible(true)}
                 onQuickChore={() => setIsQuickChoreVisible(true)}
                 isDark={isDark}
+                isTravel={isTravel}
               />
 
-              {/* Shared Sticky Notice Board */}
-              <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setStickyText(stickyNote?.text || "");
-                    setIsStickyModalVisible(true);
-                  }}
-                  activeOpacity={0.9}
-                  style={{
-                    backgroundColor: isDark ? "rgba(245, 158, 11, 0.06)" : "#FFFDF0",
-                    borderRadius: 24,
-                    padding: 18,
-                    borderWidth: 1,
-                    borderColor: isDark ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.25)",
-                    shadowColor: "#F59E0B",
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: isDark ? 0.1 : 0.04,
-                    shadowRadius: 8,
-                    elevation: 2,
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <MaterialIcons name="push-pin" size={16} color="#F59E0B" style={{ transform: [{ rotate: "45deg" }] }} />
-                      <Text style={{ fontSize: 10, fontWeight: "900", color: "#F59E0B", textTransform: "uppercase", letterSpacing: 1.5 }}>
-                        Sticky Notice Board
-                      </Text>
-                    </View>
-                    {stickyNote?.updatedBy && (
-                      <Text style={{ fontSize: 9, fontWeight: "700", color: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.35)", textTransform: "uppercase" }}>
-                        {stickyNote.updatedBy} {stickyNote.updatedAt ? `· ${formatStickyTime(stickyNote.updatedAt)}` : ""}
-                      </Text>
-                    )}
-                  </View>
-                  <Text 
-                    style={{ 
-                      fontSize: 14, 
-                      fontWeight: "700", 
-                      color: stickyNote?.text ? textMain : (isDark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.35)"),
-                      lineHeight: 20,
-                      fontStyle: stickyNote?.text ? "normal" : "italic"
-                    }}
-                  >
-                    {stickyNote?.text || "No active announcements. Tap here to write a note! 📌"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Daily Briefing Panel */}
-              <View style={{ paddingHorizontal: 20, marginBottom: 20, marginTop: 10 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <Text style={{ color: textMuted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1.5 }}>
-                    ⚡ Daily Briefing
-                  </Text>
-                  {agendaItems.length > 0 && (
-                    <View style={{ backgroundColor: "#EF4444", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
-                      <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>
-                        {agendaItems.length} ACTION{agendaItems.length > 1 ? "S" : ""}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                {agendaItems.length === 0 ? (
+              {isTravel ? (
+                /* Travel Dashboard Widgets */
+                <View style={{ paddingHorizontal: 20, gap: 16, marginBottom: 20 }}>
+                  
+                  {/* 1. Trip Details Summary Card */}
                   <View
                     style={{
                       backgroundColor: glassBg,
                       borderRadius: 24,
-                      padding: 16,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 12,
+                      padding: 20,
                       borderWidth: 1,
                       borderColor: glassBorder,
                     }}
                   >
-                    <View
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <MaterialIcons name="card-travel" size={18} color="#6366F1" />
+                        <Text style={{ fontSize: 10, fontWeight: "900", color: "#6366F1", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                          Trip Summary
+                        </Text>
+                      </View>
+                      {isOwner && (
+                        <TouchableOpacity
+                          onPress={() => setIsTripDetailsModalVisible(true)}
+                          style={{ backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "#EEF2FF", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}
+                        >
+                          <Text style={{ fontSize: 9, fontWeight: "900", color: "#6366F1" }}>EDIT</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    <Text style={{ fontSize: 18, fontWeight: "900", color: textMain, marginBottom: 8 }}>
+                      ✈️ {householdData?.tripDetails?.destination || "Destination Not Set"}
+                    </Text>
+
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: textMuted, marginBottom: 12 }}>
+                      📅 {householdData?.tripDetails?.startDate || "TBD"} to {householdData?.tripDetails?.endDate || "TBD"}
+                    </Text>
+
+                    {householdData?.tripDetails?.hotelName && (
+                      <View style={{ gap: 6, borderTopWidth: 1, borderTopColor: glassBorder, paddingTop: 12 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: textMain }}>
+                          🏨 Stay: {householdData.tripDetails.hotelName}
+                        </Text>
+                        {householdData.tripDetails.hotelAddress && (
+                          <Text style={{ fontSize: 11, color: textMuted }}>
+                            📍 {householdData.tripDetails.hotelAddress}
+                          </Text>
+                        )}
+                        {householdData.tripDetails.bookingRef && (
+                          <Text style={{ fontSize: 11, color: textMuted }}>
+                            🔑 Ref: {householdData.tripDetails.bookingRef}
+                          </Text>
+                        )}
+                        {householdData.tripDetails.hotelPhone && (
+                          <Text style={{ fontSize: 11, color: "#6366F1", fontWeight: "700" }}>
+                            📞 {householdData.tripDetails.hotelPhone}
+                          </Text>
+                        )}
+                      </View>
+                    )}
+                  </View>
+
+                  {/* 2. Collaborative Itinerary Timeline */}
+                  <View
+                    style={{
+                      backgroundColor: glassBg,
+                      borderRadius: 24,
+                      padding: 20,
+                      borderWidth: 1,
+                      borderColor: glassBorder,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <MaterialIcons name="event" size={18} color="#EC4899" />
+                        <Text style={{ fontSize: 10, fontWeight: "900", color: "#EC4899", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                          Itinerary Timeline
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setIsItineraryModalVisible(true)}
+                        style={{ backgroundColor: isDark ? "rgba(236,72,153,0.15)" : "#FDF2F8", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}
+                      >
+                        <Text style={{ fontSize: 9, fontWeight: "900", color: "#EC4899" }}>ADD EVENT</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Proposed Activities needing Creator approval */}
+                    {isOwner && itinerary.filter(item => !item.approved).length > 0 && (
+                      <View style={{ marginBottom: 14, backgroundColor: isDark ? "rgba(245,158,11,0.06)" : "#FEF8E7", borderRadius: 16, padding: 12, borderLeftWidth: 3, borderLeftColor: "#F59E0B" }}>
+                        <Text style={{ fontSize: 10, fontWeight: "900", color: "#F59E0B", textTransform: "uppercase", marginBottom: 6 }}>
+                          Proposed Activities ({itinerary.filter(item => !item.approved).length})
+                        </Text>
+                        {itinerary.filter(item => !item.approved).map((item) => (
+                          <View key={item.id} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                            <View style={{ flex: 1, marginRight: 8 }}>
+                              <Text style={{ fontSize: 12, fontWeight: "800", color: textMain }}>
+                                {item.activity} ({item.date} at {item.time})
+                              </Text>
+                              <Text style={{ fontSize: 10, color: textMuted }}>
+                                Proposed by {getMemberName(item.proposedBy)}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: "row", gap: 6 }}>
+                              <TouchableOpacity onPress={() => handleApproveItineraryItem(item.id)} style={{ padding: 4, backgroundColor: "#10B981", borderRadius: 6 }}>
+                                <MaterialIcons name="check" size={14} color="#FFF" />
+                              </TouchableOpacity>
+                              <TouchableOpacity onPress={() => handleDeleteItineraryItem(item.id)} style={{ padding: 4, backgroundColor: "#EF4444", borderRadius: 6 }}>
+                                <MaterialIcons name="close" size={14} color="#FFF" />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* Approved timeline items */}
+                    {itinerary.filter(item => item.approved).length === 0 ? (
+                      <Text style={{ fontSize: 12, color: textMuted, fontStyle: "italic", textAlign: "center", marginVertical: 10 }}>
+                        No approved itinerary activities yet. Propose one!
+                      </Text>
+                    ) : (
+                      <View style={{ gap: 12 }}>
+                        {itinerary.filter(item => item.approved).map((item, index, arr) => (
+                          <View key={item.id} style={{ flexDirection: "row", gap: 12 }}>
+                            {/* Vertical Line Connector */}
+                            <View style={{ alignItems: "center" }}>
+                              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#EC4899", marginTop: 4 }} />
+                              {index < arr.length - 1 && (
+                                <View style={{ width: 1.5, flex: 1, backgroundColor: glassBorder, marginVertical: 4 }} />
+                              )}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                <Text style={{ fontSize: 11, fontWeight: "800", color: "#EC4899" }}>
+                                  {item.date} · {item.time}
+                                </Text>
+                                {(isOwner || item.proposedBy === user?.uid) && (
+                                  <TouchableOpacity onPress={() => handleDeleteItineraryItem(item.id)}>
+                                    <MaterialIcons name="delete-outline" size={14} color="#EF4444" />
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                              <Text style={{ fontSize: 13, fontWeight: "800", color: textMain, marginTop: 2 }}>
+                                {item.activity}
+                              </Text>
+                              {item.notes ? (
+                                <Text style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>
+                                  📝 {item.notes}
+                                </Text>
+                              ) : null}
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+
+                  {/* 3. Packing Checklist widget */}
+                  <View
+                    style={{
+                      backgroundColor: glassBg,
+                      borderRadius: 24,
+                      padding: 20,
+                      borderWidth: 1,
+                      borderColor: glassBorder,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <MaterialIcons name="playlist-add-check" size={18} color="#10B981" />
+                        <Text style={{ fontSize: 10, fontWeight: "900", color: "#10B981", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                          Packing Checklist
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setIsPackingModalVisible(true)}
+                        style={{ backgroundColor: isDark ? "rgba(16,185,129,0.15)" : "#E6FDF5", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}
+                      >
+                        <Text style={{ fontSize: 9, fontWeight: "900", color: "#10B981" }}>MANAGE</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {packingList.length === 0 ? (
+                      <Text style={{ fontSize: 12, color: textMuted, fontStyle: "italic", textAlign: "center", marginVertical: 10 }}>
+                        No items on the list. Tap Manage to add!
+                      </Text>
+                    ) : (
+                      <View style={{ gap: 6 }}>
+                        {packingList.slice(0, 3).map((item) => (
+                          <TouchableOpacity
+                            key={item.id}
+                            onPress={() => handleToggleItemPacking(item.id, !item.done)}
+                            style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4 }}
+                          >
+                            <MaterialIcons
+                              name={item.done ? "check-box" : "check-box-outline-blank"}
+                              size={18}
+                              color={item.done ? "#10B981" : textMuted}
+                            />
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: "700",
+                                color: item.done ? textMuted : textMain,
+                                textDecorationLine: item.done ? "line-through" : "none",
+                              }}
+                            >
+                              {item.name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                        {packingList.length > 3 && (
+                          <TouchableOpacity onPress={() => setIsPackingModalVisible(true)}>
+                            <Text style={{ fontSize: 11, fontWeight: "800", color: "#10B981", marginTop: 4 }}>
+                              + {packingList.length - 3} more items...
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                  </View>
+
+                </View>
+              ) : (
+                <>
+                  {/* Shared Sticky Notice Board */}
+                  <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setStickyText(stickyNote?.text || "");
+                        setIsStickyModalVisible(true);
+                      }}
+                      activeOpacity={0.9}
                       style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 12,
-                        backgroundColor: "rgba(16, 185, 129, 0.12)",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        backgroundColor: isDark ? "rgba(245, 158, 11, 0.06)" : "#FFFDF0",
+                        borderRadius: 24,
+                        padding: 18,
+                        borderWidth: 1,
+                        borderColor: isDark ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.25)",
+                        shadowColor: "#F59E0B",
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: isDark ? 0.1 : 0.04,
+                        shadowRadius: 8,
+                        elevation: 2,
                       }}
                     >
-                      <MaterialIcons name="done-all" size={20} color="#10B981" />
-                    </View>
-                    <View>
-                      <Text style={{ fontSize: 14, fontWeight: "800", color: textMain }}>
-                        All Caught Up!
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <MaterialIcons name="push-pin" size={16} color="#F59E0B" style={{ transform: [{ rotate: "45deg" }] }} />
+                          <Text style={{ fontSize: 10, fontWeight: "900", color: "#F59E0B", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                            Sticky Notice Board
+                          </Text>
+                        </View>
+                        {stickyNote?.updatedBy && (
+                          <Text style={{ fontSize: 9, fontWeight: "700", color: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.35)", textTransform: "uppercase" }}>
+                            {stickyNote.updatedBy} {stickyNote.updatedAt ? `· ${formatStickyTime(stickyNote.updatedAt)}` : ""}
+                          </Text>
+                        )}
+                      </View>
+                      <Text 
+                        style={{ 
+                          fontSize: 14, 
+                          fontWeight: "700", 
+                          color: stickyNote?.text ? textMain : (isDark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.35)"),
+                          lineHeight: 20,
+                          fontStyle: stickyNote?.text ? "normal" : "italic"
+                        }}
+                      >
+                        {stickyNote?.text || "No active announcements. Tap here to write a note! 📌"}
                       </Text>
-                      <Text style={{ fontSize: 12, color: isDark ? "#94A3B8" : "#64748B" }}>
-                        No pending chores or outstanding balances.
-                      </Text>
-                    </View>
+                    </TouchableOpacity>
                   </View>
-                ) : (
-                  <View style={{ gap: 10 }}>
-                    {agendaItems.map((item) => (
-                      <TouchableOpacity
-                        key={item.id}
-                        onPress={() => handleNav(item.navTarget)}
+
+                  {/* Daily Briefing Panel */}
+                  <View style={{ paddingHorizontal: 20, marginBottom: 20, marginTop: 10 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <Text style={{ color: textMuted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                        ⚡ Daily Briefing
+                      </Text>
+                      {agendaItems.length > 0 && (
+                        <View style={{ backgroundColor: "#EF4444", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
+                          <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>
+                            {agendaItems.length} ACTION{agendaItems.length > 1 ? "S" : ""}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {agendaItems.length === 0 ? (
+                      <View
                         style={{
+                          backgroundColor: glassBg,
+                          borderRadius: 24,
+                          padding: 16,
                           flexDirection: "row",
                           alignItems: "center",
-                          padding: 16,
-                          borderRadius: 24,
-                          backgroundColor: glassBg,
+                          gap: 12,
                           borderWidth: 1,
                           borderColor: glassBorder,
-                          shadowColor: "#4F46E5",
-                          shadowOffset: { width: 0, height: 2 },
-                          shadowOpacity: isDark ? 0 : 0.03,
-                          shadowRadius: 6,
-                          elevation: isDark ? 0 : 1,
                         }}
                       >
                         <View
                           style={{
-                            width: 42,
-                            height: 42,
-                            borderRadius: 14,
-                            backgroundColor: item.color + "18",
+                            width: 36,
+                            height: 36,
+                            borderRadius: 12,
+                            backgroundColor: "rgba(16, 185, 129, 0.12)",
                             alignItems: "center",
                             justifyContent: "center",
-                            marginRight: 12,
                           }}
                         >
-                          <MaterialIcons name={item.icon} size={22} color={item.color} />
+                          <MaterialIcons name="done-all" size={20} color="#10B981" />
                         </View>
-                        <View style={{ flex: 1 }}>
+                        <View>
                           <Text style={{ fontSize: 14, fontWeight: "800", color: textMain }}>
-                            {item.title}
+                            All Caught Up!
                           </Text>
-                          <Text style={{ fontSize: 12, color: isDark ? "#94A3B8" : "#64748B", marginTop: 2 }}>
-                            {item.subtitle}
+                          <Text style={{ fontSize: 12, color: isDark ? "#94A3B8" : "#64748B" }}>
+                            No pending chores or outstanding balances.
                           </Text>
                         </View>
-                        <MaterialIcons name="chevron-right" size={18} color={isDark ? "#94A3B8" : "#64748B"} />
-                      </TouchableOpacity>
-                    ))}
+                      </View>
+                    ) : (
+                      <View style={{ gap: 10 }}>
+                        {agendaItems.map((item) => (
+                          <TouchableOpacity
+                            key={item.id}
+                            onPress={() => handleNav(item.navTarget)}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              padding: 16,
+                              borderRadius: 24,
+                              backgroundColor: glassBg,
+                              borderWidth: 1,
+                              borderColor: glassBorder,
+                              shadowColor: "#4F46E5",
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: isDark ? 0 : 0.03,
+                              shadowRadius: 6,
+                              elevation: isDark ? 0 : 1,
+                            }}
+                          >
+                            <View
+                              style={{
+                                width: 42,
+                                height: 42,
+                                borderRadius: 14,
+                                backgroundColor: item.color + "18",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                marginRight: 12,
+                              }}
+                            >
+                              <MaterialIcons name={item.icon} size={22} color={item.color} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 14, fontWeight: "800", color: textMain }}>
+                                {item.title}
+                              </Text>
+                              <Text style={{ fontSize: 12, color: isDark ? "#94A3B8" : "#64748B", marginTop: 2 }}>
+                                {item.subtitle}
+                              </Text>
+                            </View>
+                            <MaterialIcons name="chevron-right" size={18} color={isDark ? "#94A3B8" : "#64748B"} />
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
+                </>
+              )}
 
-              {/* Recent Feed Section Header */}
-              <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
-                <Text style={{ color: textMuted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1.5 }}>
-                  💬 Recent Feed
-                </Text>
-              </View>
+
             </View>
           }
           ListFooterComponent={
-            <View style={{ marginTop: 10 }}>
-              {/* Household Details Section Header */}
-              <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={{ color: textMuted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1.5 }}>
-                    ℹ️ Household Info
-                  </Text>
-                  {isOwner && (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setIsEditMode(true);
-                        setIsInfoModalVisible(true);
-                      }}
-                      style={{
-                        backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "#EEF2FF",
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 12,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                    >
-                      <MaterialIcons name="edit" size={14} color="#6366F1" />
-                      <Text style={{ fontSize: 11, fontWeight: "900", color: "#6366F1" }}>EDIT INFO</Text>
-                    </TouchableOpacity>
-                  )}
+            !isTravel ? (
+              <View style={{ marginTop: 10 }}>
+                {/* Household Details Section Header */}
+                <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text style={{ color: textMuted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                      ℹ️ Household Info
+                    </Text>
+                    {isOwner && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setIsEditMode(true);
+                          setIsInfoModalVisible(true);
+                        }}
+                        style={{
+                          backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "#EEF2FF",
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 12,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <MaterialIcons name="edit" size={14} color="#6366F1" />
+                        <Text style={{ fontSize: 11, fontWeight: "900", color: "#6366F1" }}>EDIT INFO</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
-              </View>
 
-              {/* Horizontally scrolling list of fields */}
-              <InfoCardsDeck
-                detailsList={detailsList}
-                isDark={isDark}
-                revealedFields={revealedFields}
-                toggleFieldVisibility={toggleFieldVisibility}
-                handlePhoneCall={handlePhoneCall}
-                handleOpenLink={handleOpenLink}
-                showToast={showToast}
-              />
-            </View>
+                {/* Horizontally scrolling list of fields */}
+                <InfoCardsDeck
+                  detailsList={detailsList}
+                  isDark={isDark}
+                  revealedFields={revealedFields}
+                  toggleFieldVisibility={toggleFieldVisibility}
+                  handlePhoneCall={handlePhoneCall}
+                  handleOpenLink={handleOpenLink}
+                  showToast={showToast}
+                />
+              </View>
+            ) : null
           }
         />
 
@@ -1070,6 +1383,39 @@ export default function DashboardScreen({ navigation }: Props) {
           householdData={householdData}
           handleUpdateInfo={handleUpdateInfo}
           infoModalTab={infoModalTab}
+        />
+
+        <HouseholdSwitcherModal
+          visible={isHouseholdSwitcherVisible}
+          onClose={() => setIsHouseholdSwitcherVisible(false)}
+          householdsList={householdsList}
+          currentHouseholdId={hid}
+          setHouseholdId={setHouseholdId}
+          onNavigateToSelection={handleNavigateToSelection}
+          isDark={isDark}
+        />
+
+        <TripDetailsEditModal
+          visible={isTripDetailsModalVisible}
+          onClose={() => setIsTripDetailsModalVisible(false)}
+          tripDetails={householdData?.tripDetails}
+          onSave={handleSaveTripDetails}
+        />
+
+        <ItineraryEditModal
+          visible={isItineraryModalVisible}
+          onClose={() => setIsItineraryModalVisible(false)}
+          isCreator={isOwner}
+          onAdd={handleAddItineraryItem}
+        />
+
+        <PackingEditModal
+          visible={isPackingModalVisible}
+          onClose={() => setIsPackingModalVisible(false)}
+          packingList={packingList}
+          onAddItem={handleAddItemPacking}
+          onToggleItem={handleToggleItemPacking}
+          onDeleteItem={handleDeleteItemPacking}
         />
 
         {/* Sticky Note Edit Modal */}

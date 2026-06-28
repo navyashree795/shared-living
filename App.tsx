@@ -44,15 +44,18 @@ const Tab = createBottomTabNavigator();
 
 /** Bottom-tab group — shown once a household is selected */
 function MainTabs() {
+  const { householdData } = useHousehold();
+  const isTravel = householdData?.type === 'travel';
+
   return (
     <Tab.Navigator
       tabBar={(props) => <BottomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Grocery"   component={GroceryScreen} />
+      {!isTravel && <Tab.Screen name="Grocery" component={GroceryScreen} />}
       <Tab.Screen name="Expenses"  component={ExpenseScreen} />
-      <Tab.Screen name="Chores"    component={ChoresScreen} />
+      {!isTravel && <Tab.Screen name="Chores" component={ChoresScreen} />}
       <Tab.Screen name="Chat"      component={ChatScreen} options={{ tabBarStyle: { display: 'none' } }} />
     </Tab.Navigator>
   );
