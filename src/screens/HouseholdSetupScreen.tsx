@@ -24,6 +24,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
   const initialTab = route.params?.activeTab || 'create';
   const [activeTab, setActiveTab] = useState<'create' | 'join'>(initialTab);
   const [householdName, setHouseholdName] = useState('');
+  const [householdType, setHouseholdType] = useState<'roommate' | 'travel'>('roommate');
   const [inviteCodeInput, setInviteCodeInput] = useState(route.params?.code || '');
   const [pastedLink, setPastedLink] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,7 +58,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
       if (!user) throw new Error("No user logged in");
       const code = generateInviteCode();
       const householdId = `hh_${Date.now()}_${code}`;
-      const householdData = { name: householdName, inviteCode: code, members: [user.uid], createdBy: user.uid, createdAt: new Date().toISOString() };
+      const householdData = { name: householdName, inviteCode: code, members: [user.uid], createdBy: user.uid, createdAt: new Date().toISOString(), type: householdType };
       await setDoc(doc(db, "households", householdId), householdData);
       await setDoc(doc(db, "users", user.uid), { householdId }, { merge: true });
       setHouseholdId(householdId);
@@ -207,7 +208,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView 
           contentContainerStyle={{ flexGrow: 1 }} 
           keyboardShouldPersistTaps="handled" 
@@ -255,6 +256,17 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
                     returnKeyType="done"
                     onSubmitEditing={handleCreateHousehold}
                   />
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10, paddingLeft: 4 }}>Purpose</Text>
+                  <View style={{ flexDirection: 'row', backgroundColor: bg, borderRadius: 16, padding: 4, marginBottom: 20, borderWidth: 1, borderColor: bord }}>
+                    {(['roommate', 'travel'] as const).map(t => (
+                      <TouchableOpacity key={t} onPress={() => setHouseholdType(t)}
+                        style={{ flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', backgroundColor: householdType === t ? accent : 'transparent' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: householdType === t ? '#fff' : muted }}>
+                          {t === 'roommate' ? '🏡 Roommates' : '✈️ Travel'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                   <TouchableOpacity onPress={handleCreateHousehold} disabled={loading}
                     style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center' }}>
                     {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Create Space</Text>}

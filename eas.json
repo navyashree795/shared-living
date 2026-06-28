@@ -13,6 +13,7 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCnp_SZ0uT16bOSqeGP_bxPhQ2TPQR4GlM",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "shared-living-app.firebaseapp.com",
         "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "shared-living-app",
@@ -26,6 +27,7 @@
       "autoIncrement": true,
       "channel": "production",
       "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCnp_SZ0uT16bOSqeGP_bxPhQ2TPQR4GlM",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "shared-living-app.firebaseapp.com",
         "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "shared-living-app",

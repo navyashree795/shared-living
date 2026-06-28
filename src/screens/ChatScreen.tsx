@@ -317,7 +317,7 @@ export default function ChatScreen({ route, navigation }: Props) {
       </View>
 
       <KeyboardAvoidingView
-        behavior="padding"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.bottom : 0}
       >

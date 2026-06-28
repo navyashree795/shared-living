@@ -41,6 +41,16 @@ export interface Household {
   inviteCode: string;
   members: string[];
   billingCycleStartDay?: number;
+  type?: 'roommate' | 'travel';
+  tripDetails?: {
+    startDate?: string;
+    endDate?: string;
+    destination?: string;
+    hotelName?: string;
+    bookingRef?: string;
+    hotelPhone?: string;
+    hotelAddress?: string;
+  };
   info?: {
     wifiName?: string;
     wifiPass?: string;
@@ -51,6 +61,24 @@ export interface Household {
     details?: HouseholdDetailField[];
     homeLocation?: { latitude: number; longitude: number };
   };
+}
+
+export interface ItineraryItem {
+  id: string;
+  date: string;
+  time: string;
+  activity: string;
+  notes?: string;
+  proposedBy: string;
+  approved: boolean;
+  createdAt: any;
+}
+
+export interface PackingItem {
+  id: string;
+  name: string;
+  done: boolean;
+  createdAt: any;
 }
 
 export interface Activity {
