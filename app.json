@@ -24,6 +24,11 @@
       "package": "com.jeevan0714.sharedliving",
       "googleServicesFile": "./google-services.json",
       "softwareKeyboardLayoutMode": "resize",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCnp_SZ0uT16bOSqeGP_bxPhQ2TPQR4GlM"
+        }
+      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

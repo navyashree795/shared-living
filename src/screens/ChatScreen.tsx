@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Animated
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getKeyboardAvoidingProps } from '../utils/keyboardUtils';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../firebaseConfig';
@@ -21,6 +22,9 @@ import { RootStackParamList, Message } from '../types';
 type Props = { navigation: any; route?: any };
 
 export default function ChatScreen({ route, navigation }: Props) {
+  const insets = useSafeAreaInsets();
+  const { behavior, keyboardVerticalOffset } = getKeyboardAvoidingProps('chat', insets.top);
+
   const { householdId, members, memberProfiles } = useHousehold();
   const hid = householdId ?? '';
   const { isDark } = useTheme();
@@ -33,8 +37,6 @@ export default function ChatScreen({ route, navigation }: Props) {
   const { profile: userData } = useUser();
   const { householdData } = useHousehold();
   const flatListRef = useRef<FlatList>(null);
-  const insets = useSafeAreaInsets();
-  
   const isFirstLoad = useRef(true);
 
   useEffect(() => {
@@ -317,9 +319,9 @@ export default function ChatScreen({ route, navigation }: Props) {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={behavior}
+        keyboardVerticalOffset={keyboardVerticalOffset}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.bottom : 0}
       >
         <View style={{ flex: 1 }}>
           {loading ? (

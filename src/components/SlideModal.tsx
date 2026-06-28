@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { getKeyboardAvoidingProps } from '../utils/keyboardUtils';
 
 interface SlideModalProps {
   visible: boolean;
@@ -18,6 +19,7 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MAX_MODAL_HEIGHT = SCREEN_HEIGHT * 0.85;
 
 const SlideModal: React.FC<SlideModalProps> = ({ visible, onClose, title, children, scrollEnabled = true }) => {
+  const { behavior, keyboardVerticalOffset } = getKeyboardAvoidingProps('modal');
   const { isDark } = useTheme();
   const surface = isDark ? '#0F1320' : '#FFFFFF';
   const text = isDark ? '#E2E8F0' : '#0F172A';
@@ -44,7 +46,8 @@ const SlideModal: React.FC<SlideModalProps> = ({ visible, onClose, title, childr
         />
         
         <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+          behavior={behavior} 
+          keyboardVerticalOffset={keyboardVerticalOffset}
           style={{ width: '92%', maxWidth: 350 }}
         >
           <View style={{ backgroundColor: surface, borderRadius: 24, overflow: 'hidden', maxHeight: MAX_MODAL_HEIGHT, elevation: 24 }}>

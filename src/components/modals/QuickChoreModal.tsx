@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Modal, KeyboardAvoidingView, Platform } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { getKeyboardAvoidingProps } from "../../utils/keyboardUtils";
 import { collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
 import { useUser } from "../../context/UserContext";
@@ -18,6 +19,7 @@ interface QuickChoreModalProps {
 }
 
 export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModalProps) => {
+  const { behavior, keyboardVerticalOffset } = getKeyboardAvoidingProps('modal');
   const { householdId, members, getMemberName } = useHousehold();
   const { profile: userData } = useUser();
   const { showToast } = useToast();
@@ -101,7 +103,8 @@ export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModal
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={behavior}
+        keyboardVerticalOffset={keyboardVerticalOffset}
         style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 20 }}
       >
         <View

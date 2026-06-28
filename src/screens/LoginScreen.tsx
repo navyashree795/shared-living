@@ -4,8 +4,9 @@ import {
   TextInput, KeyboardAvoidingView, Platform, ScrollView,
   TouchableWithoutFeedback, Keyboard 
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { getKeyboardAvoidingProps } from '../utils/keyboardUtils';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -19,6 +20,9 @@ import { RootStackParamList } from '../types';
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
+  const { behavior, keyboardVerticalOffset } = getKeyboardAvoidingProps('login', insets.top);
+
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -153,7 +157,7 @@ export default function LoginScreen({ navigation }: Props) {
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={{ flexGrow: 1, paddingHorizontal: 24, paddingVertical: 40, justifyContent: 'space-between' }}>
-          <View style={{ flex: 1, justifyContent: 'center' }}>
+          <View style={{ flexGrow: 1, justifyContent: 'center' }}>
             {/* App Branding */}
             <View style={{ alignItems: 'center', marginBottom: 40 }}>
               <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: accent, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
@@ -221,7 +225,7 @@ export default function LoginScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={behavior} keyboardVerticalOffset={keyboardVerticalOffset} style={{ flex: 1 }}>
         {innerContent}
       </KeyboardAvoidingView>
     </SafeAreaView>
