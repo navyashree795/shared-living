@@ -54,7 +54,7 @@ export async function registerForPushNotificationsAsync() {
         );
       } else {
         token = (await Notifications.getExpoPushTokenAsync({
-          projectId: "6e612ca1-cfbc-4727-aadb-4f1283e2636d",
+          projectId: Constants.expoConfig?.extra?.eas?.projectId || "361ec070-905c-40e3-a8fe-a1f271449b2b",
         })).data;
 
         const user = auth.currentUser;

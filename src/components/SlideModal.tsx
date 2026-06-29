@@ -27,7 +27,13 @@ const SlideModal: React.FC<SlideModalProps> = ({ visible, onClose, title, childr
   const closeBg = isDark ? '#151C30' : '#F1F5F9';
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal 
+      visible={visible} 
+      transparent 
+      animationType="slide" 
+      onRequestClose={onClose}
+      statusBarTranslucent={true}
+    >
       <View style={{ 
         flex: 1, 
         backgroundColor: 'rgba(0,0,0,0.5)', 

@@ -18,9 +18,16 @@ export function getKeyboardAvoidingProps(
 ): KeyboardAvoidingProps {
   const isIOS = Platform.OS === 'ios';
 
+  if (!isIOS) {
+    return {
+      behavior: screenName === 'modal' ? 'padding' : undefined,
+      keyboardVerticalOffset: 0,
+    };
+  }
+
   if (screenName === 'modal') {
     return {
-      behavior: isIOS ? 'padding' : 'height',
+      behavior: 'padding',
       keyboardVerticalOffset: 0,
     };
   }
@@ -28,27 +35,24 @@ export function getKeyboardAvoidingProps(
   if (screenName === 'chat') {
     // For Chat screen, we offset by the custom header height (approx. 66 + safeAreaTop)
     return {
-      behavior: isIOS ? 'padding' : 'height',
-      keyboardVerticalOffset: isIOS ? safeAreaTop + 66 : 0,
+      behavior: 'padding',
+      keyboardVerticalOffset: safeAreaTop + 66,
     };
   }
 
   // Scrollable screens (login, profile, setup)
-  // On Android, we rely on native adjustResize (behavior: undefined) to avoid double-shrinking.
   // On iOS, we pad by the custom header offset.
   let offset = 0;
-  if (isIOS) {
-    if (screenName === 'profile') {
-      offset = safeAreaTop + 64;
-    } else if (screenName === 'setup') {
-      offset = safeAreaTop + 50;
-    } else {
-      offset = safeAreaTop + 40; // login default offset
-    }
+  if (screenName === 'profile') {
+    offset = safeAreaTop + 64;
+  } else if (screenName === 'setup') {
+    offset = safeAreaTop + 50;
+  } else {
+    offset = safeAreaTop + 40; // login default offset
   }
 
   return {
-    behavior: isIOS ? 'padding' : undefined,
+    behavior: 'padding',
     keyboardVerticalOffset: offset,
   };
 }

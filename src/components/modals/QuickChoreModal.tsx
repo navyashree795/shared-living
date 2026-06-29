@@ -101,7 +101,13 @@ export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModal
   const bgSurface = isDark ? "#0F172A" : "#FFFFFF";
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <Modal 
+      visible={visible} 
+      animationType="fade" 
+      transparent 
+      onRequestClose={onClose}
+      statusBarTranslucent={true}
+    >
       <KeyboardAvoidingView
         behavior={behavior}
         keyboardVerticalOffset={keyboardVerticalOffset}
