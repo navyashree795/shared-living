@@ -335,9 +335,18 @@ export default function DashboardScreen({ navigation }: Props) {
 
   useEffect(() => {
     if (!hid || !isTravel) return;
-    const q = query(collection(db, "households", hid, "itinerary"), orderBy("date", "asc"), orderBy("time", "asc"));
+    const q = collection(db, "households", hid, "itinerary");
     const unsub = onSnapshot(q, (snap) => {
-      setItinerary(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ItineraryItem)));
+      const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ItineraryItem));
+      // Sort in-memory to avoid needing a Firestore composite index
+      items.sort((a, b) => {
+        const dateComp = (a.date || "").localeCompare(b.date || "");
+        if (dateComp !== 0) return dateComp;
+        return (a.time || "").localeCompare(b.time || "");
+      });
+      setItinerary(items);
+    }, (err) => {
+      console.error("Itinerary subscription failed:", err);
     });
     return unsub;
   }, [hid, isTravel]);
@@ -533,13 +542,35 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [user?.uid, showToast]);
  
-  // 1. Request location permissions and auto-pin location for owner if not set
+  // 1. Persist user info & home location to AsyncStorage for background context access
+  useEffect(() => {
+    if (user?.uid) {
+      AsyncStorage.setItem("user_uid", user.uid).catch(err => console.warn("AsyncStorage save user_uid failed:", err));
+    }
+    if (userData?.status) {
+      AsyncStorage.setItem("last_presence_status", userData.status).catch(err => console.warn("AsyncStorage save status failed:", err));
+    }
+  }, [user?.uid, userData?.status]);
+
+  useEffect(() => {
+    if (householdData?.info?.homeLocation) {
+      AsyncStorage.setItem("home_location", JSON.stringify(householdData.info.homeLocation)).catch(err => console.warn("AsyncStorage save home_location failed:", err));
+    }
+  }, [householdData?.info?.homeLocation]);
+
+  // 2. Location Tracking and Geofencing Setup
   useEffect(() => {
     if (!user?.uid || !householdId || !householdData) return;
-    (async () => {
+
+    const LOCATION_TASK_NAME = "background-location-task";
+    let locationInterval: NodeJS.Timeout;
+    let isBackgroundActive = false;
+
+    const setupLocationTracking = async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === "granted") {
+        // A. Foreground location permissions request & Auto-pin logic
+        const { status: foreStatus } = await Location.requestForegroundPermissionsAsync();
+        if (foreStatus === "granted") {
           const isOwner = householdData.createdBy === user.uid;
           if (isOwner && !householdData.info?.homeLocation) {
             const loc = await Location.getCurrentPositionAsync({
@@ -559,63 +590,84 @@ export default function DashboardScreen({ navigation }: Props) {
             });
             showToast("📍 Automatically pinned your location as the household home location!", "success");
           }
+
+          // B. Request Background location permissions
+          const { status: backStatus } = await Location.requestBackgroundPermissionsAsync();
+          if (backStatus === "granted") {
+            const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+            if (!hasStarted) {
+              await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+                accuracy: Location.Accuracy.Balanced,
+                timeInterval: 60000,
+                distanceInterval: 10,
+                foregroundService: {
+                  notificationTitle: "Presence Geofencing",
+                  notificationBody: "Tracking your location to update household presence status",
+                  notificationColor: "#6366F1",
+                },
+              });
+            }
+            isBackgroundActive = true;
+            console.log("[Location] Background tracking setup successfully completed.");
+          } else {
+            console.log("[Location] Background permission denied, running in foreground-only fallback mode.");
+          }
         } else {
           showToast("Location permission is required for home presence features.", "info");
         }
-      } catch (e) {
-        console.warn("Failed to request location / auto-pin on mount:", e);
-      }
-    })();
-  }, [user?.uid, householdId, householdData]);
 
-  // 2. Dynamic GPS Presence Geofencing Tracker
-  useEffect(() => {
-    if (!user?.uid || !householdId || !householdData?.info?.homeLocation) return;
+        // C. Foreground Geofencing check logic
+        const checkGeofence = async () => {
+          if (!householdData?.info?.homeLocation) return;
+          try {
+            const { status } = await Location.getForegroundPermissionsAsync();
+            if (status !== "granted") return;
 
-    const homeLocation = householdData.info.homeLocation;
-    let locationInterval: NodeJS.Timeout;
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Highest,
+            });
 
-    const checkGeofence = async () => {
-      try {
-        const { status } = await Location.getForegroundPermissionsAsync();
-        if (status !== "granted") return;
+            const isInside = isInsideHomeRadius(
+              loc.coords.latitude,
+              loc.coords.longitude,
+              householdData.info.homeLocation.latitude,
+              householdData.info.homeLocation.longitude,
+              100 // 100 meters radius
+            );
 
-        const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Highest,
-        });
+            const nextStatus = isInside ? "home" : "out";
+            const currentStatus = userData?.status || "home";
+            const shouldUpdate =
+              (nextStatus === "home" && (currentStatus === "out" || currentStatus === "away")) ||
+              (nextStatus === "out" && (currentStatus === "home" || currentStatus === "sleeping"));
 
-        const isInside = isInsideHomeRadius(
-          loc.coords.latitude,
-          loc.coords.longitude,
-          homeLocation.latitude,
-          homeLocation.longitude,
-          100 // 100 meters radius
-        );
-
-        const nextStatus = isInside ? "home" : "out";
-        const currentStatus = userData?.status || "home";
-        if (currentStatus !== nextStatus) {
-          // If the status has actually changed based on location, update it!
-          if (currentStatus === "home" || currentStatus === "out") {
-            const userDocRef = doc(db, "users", user.uid);
-            await updateDoc(userDocRef, { status: nextStatus });
+            if (shouldUpdate) {
+              const userDocRef = doc(db, "users", user.uid);
+              await updateDoc(userDocRef, { status: nextStatus });
+            }
+          } catch (e) {
+            console.warn("Geofence location check failed:", e);
           }
+        };
+
+        // Check foreground status immediately
+        await checkGeofence();
+
+        // If background tracking isn't running, set up periodic checks in foreground
+        if (!isBackgroundActive) {
+          locationInterval = setInterval(checkGeofence, 60000);
         }
       } catch (e) {
-        console.warn("Geofence location check failed:", e);
+        console.warn("Failed to configure location tracking:", e);
       }
     };
 
-    // Run immediately on load/mount
-    checkGeofence();
-
-    // Check periodically every 60 seconds
-    locationInterval = setInterval(checkGeofence, 60000);
+    setupLocationTracking();
 
     return () => {
       if (locationInterval) clearInterval(locationInterval);
     };
-  }, [user?.uid, householdId, householdData?.info?.homeLocation, userData?.status]);
+  }, [user?.uid, householdId, householdData, userData?.status]);
 
 
 

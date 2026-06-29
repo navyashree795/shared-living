@@ -4,7 +4,6 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Animated
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getKeyboardAvoidingProps } from '../utils/keyboardUtils';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../firebaseConfig';
@@ -23,7 +22,11 @@ type Props = { navigation: any; route?: any };
 
 export default function ChatScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const { behavior, keyboardVerticalOffset } = getKeyboardAvoidingProps('chat', insets.top);
+  
+  // Decoupled KeyboardAvoidingView configuration for ChatScreen.
+  // This allows tuning Android & iOS keyboard behaviors independently for the chat screen without affecting other screens.
+  const behavior = 'padding';
+  const keyboardVerticalOffset = Platform.OS === 'ios' ? insets.top + 66 : 0;
 
   const { householdId, members, memberProfiles } = useHousehold();
   const hid = householdId ?? '';
