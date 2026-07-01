@@ -80,9 +80,23 @@ export const HouseholdProvider = ({ children }: { children: ReactNode }) => {
     const unsub = onSnapshot(doc(db, 'households', householdId), (snap) => {
       if (snap.exists()) {
         const data = { id: snap.id, ...snap.data() } as Household;
+        
+        // Expiration check for travel households
+        if (data.type === 'travel' && data.expiresAt) {
+          const expirationTime = new Date(data.expiresAt).getTime();
+          if (expirationTime <= Date.now()) {
+            console.log("Household has expired! Clearing household state.");
+            changeHouseholdId(null);
+            setHouseholdData(null);
+            setFirestoreLoading(false);
+            return;
+          }
+        }
+
         setHouseholdData(data);
       } else {
         setHouseholdData(null);
+        changeHouseholdId(null);
       }
       setFirestoreLoading(false);
     }, (err) => {
@@ -91,7 +105,7 @@ export const HouseholdProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return unsub;
-  }, [householdId]);
+  }, [householdId, changeHouseholdId]);
 
   // 2. Fetch/Sync member profiles when members list changes
   const membersDeps = householdData?.members?.join(',') || '';

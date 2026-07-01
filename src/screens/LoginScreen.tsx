@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   View, Text, TouchableOpacity, ActivityIndicator, Alert, 
   TextInput, KeyboardAvoidingView, Platform, ScrollView,
-  TouchableWithoutFeedback, Keyboard 
+  TouchableWithoutFeedback, Keyboard, Image 
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -159,11 +159,12 @@ export default function LoginScreen({ navigation }: Props) {
         <View style={{ flexGrow: 1, paddingHorizontal: 24, paddingVertical: 40, justifyContent: 'space-between' }}>
           <View style={{ flexGrow: 1, justifyContent: 'center' }}>
             {/* App Branding */}
-            <View style={{ alignItems: 'center', marginBottom: 40 }}>
-              <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: accent, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-                <MaterialIcons name="home" size={32} color="#fff" />
-              </View>
-              <Text style={{ fontSize: 28, fontWeight: '900', color: text, letterSpacing: -1, marginBottom: 8 }}>Shared Living</Text>
+            <View style={{ alignItems: 'center', marginBottom: 32 }}>
+              <Image 
+                source={require('../../assets/logo.png')} 
+                style={{ width: 180, height: 135, marginBottom: 12 }} 
+                resizeMode="contain" 
+              />
               <Text style={{ fontSize: 14, color: muted, textAlign: 'center', lineHeight: 22, maxWidth: 280 }}>
                 Manage your household tasks, expenses, and groceries effortlessly.
               </Text>

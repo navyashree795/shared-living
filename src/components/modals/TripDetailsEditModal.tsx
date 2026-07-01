@@ -25,6 +25,7 @@ export const TripDetailsEditModal = React.memo(({
   const [hotelAddress, setHotelAddress] = useState(tripDetails?.hotelAddress || "");
   const [hotelPhone, setHotelPhone] = useState(tripDetails?.hotelPhone || "");
   const [bookingRef, setBookingRef] = useState(tripDetails?.bookingRef || "");
+  const [distanceTraveled, setDistanceTraveled] = useState(tripDetails?.distanceTraveled || "");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export const TripDetailsEditModal = React.memo(({
       setHotelAddress(tripDetails?.hotelAddress || "");
       setHotelPhone(tripDetails?.hotelPhone || "");
       setBookingRef(tripDetails?.bookingRef || "");
+      setDistanceTraveled(tripDetails?.distanceTraveled || "");
     }
   }, [visible, tripDetails]);
 
@@ -50,6 +52,7 @@ export const TripDetailsEditModal = React.memo(({
         hotelAddress: hotelAddress.trim(),
         hotelPhone: hotelPhone.trim(),
         bookingRef: bookingRef.trim(),
+        distanceTraveled: distanceTraveled.trim(),
       });
       onClose();
     } catch (e) {
@@ -108,6 +111,7 @@ export const TripDetailsEditModal = React.memo(({
         {renderInput("Hotel Address", hotelAddress, setHotelAddress, "e.g. 123 Rue de Rivoli")}
         {renderInput("Hotel Phone", hotelPhone, setHotelPhone, "e.g. +33 1 23 45 67 89")}
         {renderInput("Booking Reference", bookingRef, setBookingRef, "e.g. AB1234XYZ")}
+        {renderInput("Distance Traveled (km)", distanceTraveled, setDistanceTraveled, "e.g. 1250")}
 
         <TouchableOpacity
           onPress={handleSave}

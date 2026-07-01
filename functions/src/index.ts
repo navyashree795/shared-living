@@ -201,3 +201,48 @@ export const acceptInvitation = functions.https.onCall(async (data, context) => 
     throw new functions.https.HttpsError('internal', error.message || 'Failed to accept invitation.');
   }
 });
+
+// 4. Automatically delete expired travel households and reset members
+export const cleanupExpiredHouseholds = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
+  const now = new Date().toISOString();
+  try {
+    const expiredHouseholdsSnap = await db.collection('households')
+      .where('type', '==', 'travel')
+      .where('expiresAt', '<=', now)
+      .get();
+
+    if (expiredHouseholdsSnap.empty) {
+      console.log('No expired travel households found.');
+      return null;
+    }
+
+    console.log(`Found ${expiredHouseholdsSnap.size} expired travel households. Starting cleanup.`);
+
+    for (const householdDoc of expiredHouseholdsSnap.docs) {
+      const data = householdDoc.data();
+      const members = data.members || [];
+      const householdId = householdDoc.id;
+
+      // A. Reset householdId for all members
+      if (members.length > 0) {
+        const batch = db.batch();
+        members.forEach((uid: string) => {
+          const userRef = db.collection('users').doc(uid);
+          batch.update(userRef, { householdId: null });
+        });
+        await batch.commit();
+        console.log(`Reset householdId for members of household ${householdId}`);
+      }
+
+      // B. Recursively delete the household document and all of its subcollections
+      await db.recursiveDelete(householdDoc.ref);
+      console.log(`Recursively deleted household document and subcollections for ${householdId}`);
+    }
+
+    console.log('Successfully completed cleanup of all expired households.');
+    return null;
+  } catch (err: any) {
+    console.error('Error during expired households cleanup:', err);
+    return null;
+  }
+});

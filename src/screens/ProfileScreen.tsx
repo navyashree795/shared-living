@@ -8,8 +8,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { getKeyboardAvoidingProps } from '../utils/keyboardUtils';
 import { useNavigation } from '@react-navigation/native';
-import { auth, db } from '../firebaseConfig';
+import { auth, db, storage } from '../firebaseConfig';
 import { doc, updateDoc, collection, getDocs, deleteDoc, arrayRemove, writeBatch, getDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import * as ImagePicker from 'expo-image-picker';
 import { useUser } from '../context/UserContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useTheme } from '../context/ThemeContext';
@@ -31,6 +33,57 @@ export default function ProfileScreen() {
 
   const [editUsername, setEditUsername] = useState(profile?.username ? profile.username.replace(/^@+/, '') : '');
   const [editing, setEditing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const handlePickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'We need access to your photos to upload a profile picture.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.3, // Compressed to keep document size small
+        base64: true, // Request base64 data
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        if (asset.base64) {
+          const base64Uri = `data:image/jpeg;base64,${asset.base64}`;
+          handleUploadImage(base64Uri);
+        } else {
+          // Fallback to local URI if base64 is not available for some reason
+          handleUploadImage(asset.uri);
+        }
+      }
+    } catch (error: any) {
+      Alert.alert('Error', 'Failed to pick image: ' + error.message);
+    }
+  };
+
+  const handleUploadImage = async (photoUri: string) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    setUploading(true);
+    try {
+      // Direct update in Firestore - bypasses Firebase Storage completely
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        photoUrl: photoUri,
+      });
+      Alert.alert('Success', 'Profile photo updated!');
+    } catch (error: any) {
+      console.error('Upload photo error:', error);
+      Alert.alert('Error', 'Failed to update photo: ' + error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // Retention and archive states
   const [isArchiveModalVisible, setIsArchiveModalVisible] = useState(false);
@@ -249,6 +302,42 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleLeaveHousehold = () => {
+    if (!householdId) return;
+
+    Alert.alert(
+      'Leave Household',
+      `Are you sure you want to leave the household "${householdData?.name || ''}"? You will lose access to its chores, expenses, groceries, and chat history.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const currentUser = auth.currentUser;
+              if (!currentUser) return;
+
+              // 1. Remove user UID from household members list in Firestore
+              const hhRef = doc(db, 'households', householdId);
+              await updateDoc(hhRef, {
+                members: arrayRemove(currentUser.uid)
+              });
+
+              // 2. Clear householdId in state & AsyncStorage
+              setHouseholdId(null);
+              
+              Alert.alert('Left Household', `You have successfully left "${householdData?.name || ''}".`);
+            } catch (e: any) {
+              console.error('Leave household error:', e);
+              Alert.alert('Error', e.message || 'Could not leave the household. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const copyCode = async () => {
     await Clipboard.setStringAsync(householdData?.inviteCode || '');
     Alert.alert('Copied!', 'Invite code copied to clipboard');
@@ -278,13 +367,25 @@ export default function ProfileScreen() {
 
         {/* Avatar + Name */}
         <View style={{ alignItems: 'center', marginBottom: 32 }}>
-          <Avatar
-            name={profile?.username || user?.email || 'U'}
-            size={80}
-            bgColor={primary}
-            color="#fff"
-            style={{ borderRadius: 28, marginBottom: 12 }}
-          />
+          <TouchableOpacity onPress={handlePickImage} disabled={uploading} activeOpacity={0.8}>
+            <View style={{ position: 'relative' }}>
+              <Avatar
+                name={profile?.username || user?.email || 'U'}
+                size={80}
+                bgColor={primary}
+                color="#fff"
+                photoUrl={profile?.photoUrl}
+                style={{ borderRadius: 28 }}
+              />
+              <View style={{ position: 'absolute', bottom: 0, right: -4, width: 28, height: 28, borderRadius: 14, backgroundColor: raised, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: bord }}>
+                {uploading ? (
+                  <ActivityIndicator size="small" color={primary} />
+                ) : (
+                  <MaterialIcons name="photo-camera" size={14} color={muted} />
+                )}
+              </View>
+            </View>
+          </TouchableOpacity>
           <Text style={{ fontSize: 22, fontWeight: '800', color: text }}>
             {profile?.username ? profile.username.replace(/^@+/, '') : 'unknown'}
           </Text>
@@ -478,6 +579,29 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               <MaterialIcons name="archive" size={22} color={primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleLeaveHousehold}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginTop: 16,
+                paddingTop: 16,
+                borderTopWidth: 1,
+                borderTopColor: bord
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: isDark ? '#3B1219' : '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="exit-to-app" size={20} color="#EF4444" />
+                </View>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#EF4444' }}>
+                  Leave Household
+                </Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color="#EF4444" />
             </TouchableOpacity>
           </View>
         )}
