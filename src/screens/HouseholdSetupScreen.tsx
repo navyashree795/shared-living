@@ -29,6 +29,8 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
   const [activeTab, setActiveTab] = useState<'create' | 'join'>(initialTab);
   const [householdName, setHouseholdName] = useState('');
   const [householdType, setHouseholdType] = useState<'roommate' | 'travel'>('roommate');
+  const [tripEndDate, setTripEndDate] = useState('');
+  const [retentionPolicy, setRetentionPolicy] = useState<'7_days_trip_end' | '15_days_trip_end'>('7_days_trip_end');
   const [inviteCodeInput, setInviteCodeInput] = useState(route.params?.code || '');
   const [pastedLink, setPastedLink] = useState('');
   const [loading, setLoading] = useState(false);
@@ -56,13 +58,60 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
 
   const handleCreateHousehold = async () => {
     if (!householdName.trim()) { Alert.alert("Error", "Please enter a household name."); return; }
+    
+    if (householdType === 'travel') {
+      if (!tripEndDate.trim()) {
+        Alert.alert("Error", "Please enter the Trip End Date.");
+        return;
+      }
+      const dateMatch = tripEndDate.trim().match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/);
+      if (!dateMatch) {
+        Alert.alert("Error", "Please enter a valid date in YYYY-MM-DD format.");
+        return;
+      }
+      const year = parseInt(dateMatch[1], 10);
+      const month = parseInt(dateMatch[2], 10) - 1;
+      const day = parseInt(dateMatch[3], 10);
+      const parsedDate = new Date(year, month, day);
+      if (isNaN(parsedDate.getTime())) {
+        Alert.alert("Error", "Please enter a valid calendar date.");
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const user = auth.currentUser;
       if (!user) throw new Error("No user logged in");
       const code = generateInviteCode();
       const householdId = `hh_${Date.now()}_${code}`;
-      const householdData = { name: householdName, inviteCode: code, members: [user.uid], createdBy: user.uid, createdAt: new Date().toISOString(), type: householdType };
+
+      const householdData: any = { 
+        name: householdName.trim(), 
+        inviteCode: code, 
+        members: [user.uid], 
+        createdBy: user.uid, 
+        createdAt: new Date().toISOString(), 
+        type: householdType 
+      };
+
+      if (householdType === 'travel') {
+        const dateMatch = tripEndDate.trim().match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/)!;
+        const year = parseInt(dateMatch[1], 10);
+        const month = parseInt(dateMatch[2], 10) - 1;
+        const day = parseInt(dateMatch[3], 10);
+        const parsedDate = new Date(year, month, day, 23, 59, 59, 999); // Trip end of day
+        
+        const daysToAdd = retentionPolicy === '15_days_trip_end' ? 15 : 7;
+        const expirationDate = new Date(parsedDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+
+        householdData.tripDetails = {
+          endDate: tripEndDate.trim()
+        };
+        householdData.retentionPolicy = retentionPolicy;
+        householdData.expiresAt = expirationDate.toISOString();
+      }
+
       await setDoc(doc(db, "households", householdId), householdData);
       await setDoc(doc(db, "users", user.uid), { householdId }, { merge: true });
       setHouseholdId(householdId);
@@ -271,6 +320,33 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
                       </TouchableOpacity>
                     ))}
                   </View>
+
+                  {householdType === 'travel' && (
+                    <>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10, paddingLeft: 4 }}>Trip End Date</Text>
+                      <TextInput
+                        style={{ backgroundColor: bg, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 16, color: text, fontSize: 15, fontWeight: '600', borderWidth: 1, borderColor: bord, marginBottom: 20 }}
+                        placeholder="YYYY-MM-DD (e.g. 2026-07-10)"
+                        placeholderTextColor="#475569"
+                        value={tripEndDate}
+                        onChangeText={setTripEndDate}
+                        returnKeyType="done"
+                      />
+                      
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10, paddingLeft: 4 }}>Auto-Delete Policy</Text>
+                      <View style={{ flexDirection: 'row', backgroundColor: bg, borderRadius: 16, padding: 4, marginBottom: 20, borderWidth: 1, borderColor: bord }}>
+                        {(['7_days_trip_end', '15_days_trip_end'] as const).map(p => (
+                          <TouchableOpacity key={p} onPress={() => setRetentionPolicy(p)}
+                            style={{ flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', backgroundColor: retentionPolicy === p ? accent : 'transparent' }}>
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: retentionPolicy === p ? '#fff' : muted }}>
+                              {p === '7_days_trip_end' ? 'Delete after 7 days' : 'Delete after 15 days'}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </>
+                  )}
+
                   <TouchableOpacity onPress={handleCreateHousehold} disabled={loading}
                     style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center' }}>
                     {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Create Space</Text>}

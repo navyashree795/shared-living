@@ -86,6 +86,7 @@ export const MembersModal = React.memo(({
               size={48}
               bgColor="#FFFFFF"
               color="#4F46E5"
+              photoUrl={member.photoUrl}
               style={{
                 borderRadius: 16,
                 borderWidth: 1,

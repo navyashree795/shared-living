@@ -4,6 +4,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 import { db, auth } from '../firebaseConfig';
 import { doc, updateDoc } from 'firebase/firestore';
+import { ItineraryItem } from '../types';
 
 // Configure notification behavior for when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -149,3 +150,115 @@ export async function sendRemotePushNotification(targetTokens: string[], title: 
     console.error('Error sending remote push notification via Expo:', e);
   }
 }
+
+/**
+ * Parses travel itinerary date string (e.g. "YYYY-MM-DD") and time string (e.g. "10:00 AM")
+ * into a valid JavaScript Date object.
+ */
+export function parseItineraryDateTime(dateStr: string, timeStr: string): Date | null {
+  try {
+    const dateMatch = dateStr.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/);
+    if (!dateMatch) return null;
+    const year = parseInt(dateMatch[1], 10);
+    const month = parseInt(dateMatch[2], 10) - 1; // 0-indexed month
+    const day = parseInt(dateMatch[3], 10);
+
+    const timeMatch = timeStr.match(/(\d+):(\d+)(?::\d+)?\s*(AM|PM)?/i);
+    let hours = 0;
+    let minutes = 0;
+    if (timeMatch) {
+      hours = parseInt(timeMatch[1], 10);
+      minutes = parseInt(timeMatch[2], 10);
+      const ampm = timeMatch[3]?.toUpperCase();
+      if (ampm === "PM" && hours < 12) hours += 12;
+      if (ampm === "AM" && hours === 12) hours = 0;
+    }
+
+    return new Date(year, month, day, hours, minutes, 0, 0);
+  } catch (e) {
+    console.error("Failed to parse itinerary date/time:", e);
+    return null;
+  }
+}
+
+/**
+ * Automatically syncs device local notifications for approved future travel itinerary items.
+ */
+export async function syncItineraryReminders(items: ItineraryItem[]) {
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const itineraryNotifs = scheduled.filter(n => n.content.data?.itineraryId);
+
+    const activeApprovedFutureItems = new Map<string, ItineraryItem>();
+    const now = Date.now();
+
+    items.forEach(item => {
+      if (!item.approved) return;
+      
+      const eventDate = parseItineraryDateTime(item.date, item.time);
+      if (!eventDate) return;
+
+      if (eventDate.getTime() > now) {
+        activeApprovedFutureItems.set(item.id, item);
+      }
+    });
+
+    // Cancel notifications for items that were deleted, unapproved, or are now in the past
+    for (const notif of itineraryNotifs) {
+      const itineraryId = notif.content.data.itineraryId as string;
+      const activeItem = activeApprovedFutureItems.get(itineraryId);
+      
+      if (!activeItem) {
+        await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+      } else {
+        if (notif.content.data.date !== activeItem.date || notif.content.data.time !== activeItem.time) {
+          await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+        }
+      }
+    }
+
+    // Schedule reminders for items that don't have one scheduled yet
+    const currentScheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const currentIds = new Set(
+      currentScheduled
+        .map(n => n.content.data?.itineraryId)
+        .filter(Boolean)
+    );
+
+    for (const [id, item] of activeApprovedFutureItems.entries()) {
+      if (currentIds.has(id)) {
+        continue;
+      }
+
+      const eventDate = parseItineraryDateTime(item.date, item.time);
+      if (!eventDate) continue;
+
+      const triggerTime = new Date(eventDate.getTime() - 30 * 60 * 1000); // 30 minutes prior
+      const hasTriggerPassed = triggerTime.getTime() <= now;
+
+      const trigger = hasTriggerPassed 
+        ? null 
+        : {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: triggerTime,
+          };
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '✈️ Trip Activity Reminder',
+          body: `"${item.activity}" starts at ${item.time}!`,
+          data: { 
+            itineraryId: item.id, 
+            date: item.date, 
+            time: item.time, 
+            screen: 'Dashboard' 
+          },
+        },
+        trigger: trigger as any,
+      });
+    }
+  } catch (e) {
+    console.error('Error syncing itinerary reminders:', e);
+  }
+}
+

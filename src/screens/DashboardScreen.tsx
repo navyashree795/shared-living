@@ -30,7 +30,7 @@ import {
   query,
   orderBy,
 } from "firebase/firestore";
-import { scheduleChoreReminder, cancelChoreReminder } from "../utils/notificationUtils";
+import { scheduleChoreReminder, cancelChoreReminder, syncItineraryReminders } from "../utils/notificationUtils";
 import { logActivity, getActivityConfig } from "../utils/activityUtils";
 import { db, auth } from "../firebaseConfig";
 import { useUser } from "../context/UserContext";
@@ -54,6 +54,7 @@ import { HouseholdSwitcherModal } from "../components/modals/HouseholdSwitcherMo
 import { TripDetailsEditModal } from "../components/modals/TripDetailsEditModal";
 import { ItineraryEditModal } from "../components/modals/ItineraryEditModal";
 import { PackingEditModal } from "../components/modals/PackingEditModal";
+import { TravelWrapModal } from "../components/modals/TravelWrapModal";
 import { ItineraryItem, PackingItem } from "../types";
 import { QuickBuyModal } from "../components/modals/QuickBuyModal";
 import { QuickSettleModal } from "../components/modals/QuickSettleModal";
@@ -79,6 +80,7 @@ export default function DashboardScreen({ navigation }: Props) {
   const [isTripDetailsModalVisible, setIsTripDetailsModalVisible] = useState(false);
   const [isItineraryModalVisible, setIsItineraryModalVisible] = useState(false);
   const [isPackingModalVisible, setIsPackingModalVisible] = useState(false);
+  const [isTravelWrapModalVisible, setIsTravelWrapModalVisible] = useState(false);
 
   const [isQuickBuyVisible, setIsQuickBuyVisible] = useState(false);
   const [isQuickSettleVisible, setIsQuickSettleVisible] = useState(false);
@@ -345,6 +347,7 @@ export default function DashboardScreen({ navigation }: Props) {
         return (a.time || "").localeCompare(b.time || "");
       });
       setItinerary(items);
+      syncItineraryReminders(items);
     }, (err) => {
       console.error("Itinerary subscription failed:", err);
     });
@@ -354,13 +357,31 @@ export default function DashboardScreen({ navigation }: Props) {
   const handleSaveTripDetails = useCallback(async (updates: any) => {
     if (!hid) return;
     try {
-      await updateDoc(doc(db, "households", hid), { tripDetails: updates });
+      const fieldsToUpdate: any = { tripDetails: updates };
+      
+      if (householdData?.type === 'travel' && householdData?.retentionPolicy && updates.endDate) {
+        const dateMatch = updates.endDate.trim().match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/);
+        if (dateMatch) {
+          const year = parseInt(dateMatch[1], 10);
+          const month = parseInt(dateMatch[2], 10) - 1;
+          const day = parseInt(dateMatch[3], 10);
+          const parsedDate = new Date(year, month, day, 23, 59, 59, 999);
+          
+          if (!isNaN(parsedDate.getTime())) {
+            const daysToAdd = householdData.retentionPolicy === '15_days_trip_end' ? 15 : 7;
+            const expirationDate = new Date(parsedDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+            fieldsToUpdate.expiresAt = expirationDate.toISOString();
+          }
+        }
+      }
+
+      await updateDoc(doc(db, "households", hid), fieldsToUpdate);
       showToast("Trip details updated!", "success");
     } catch (e) {
       console.error(e);
       showToast("Could not update trip details", "error");
     }
-  }, [hid, showToast]);
+  }, [hid, householdData, showToast]);
 
   const handleAddItemPacking = useCallback(async (name: string) => {
     if (!hid) return;
@@ -827,6 +848,7 @@ export default function DashboardScreen({ navigation }: Props) {
                 size={38}
                 bgColor={isDark ? "#1E1B4B" : "#EEF2FF"}
                 color={isDark ? "#A78BFA" : "#4F46E5"}
+                photoUrl={userData?.photoUrl}
                 style={{ borderRadius: 19 }}
               />
             </TouchableOpacity>
@@ -1018,6 +1040,25 @@ export default function DashboardScreen({ navigation }: Props) {
                         )}
                       </View>
                     )}
+
+                    <TouchableOpacity
+                      onPress={() => setIsTravelWrapModalVisible(true)}
+                      style={{
+                        backgroundColor: "#6366F1",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                        paddingVertical: 12,
+                        borderRadius: 16,
+                        marginTop: 16,
+                      }}
+                    >
+                      <MaterialIcons name="card-giftcard" size={16} color="#FFF" />
+                      <Text style={{ color: "#FFF", fontSize: 13, fontWeight: "800" }}>
+                        View Trip Wrap & Share
+                      </Text>
+                    </TouchableOpacity>
                   </View>
 
                   {/* 2. Collaborative Itinerary Timeline */}
@@ -1468,6 +1509,15 @@ export default function DashboardScreen({ navigation }: Props) {
           onAddItem={handleAddItemPacking}
           onToggleItem={handleToggleItemPacking}
           onDeleteItem={handleDeleteItemPacking}
+        />
+
+        <TravelWrapModal
+          visible={isTravelWrapModalVisible}
+          onClose={() => setIsTravelWrapModalVisible(false)}
+          householdData={householdData}
+          memberProfiles={memberProfiles}
+          currentUserId={user?.uid || ""}
+          itinerary={itinerary}
         />
 
         {/* Sticky Note Edit Modal */}

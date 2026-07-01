@@ -24,6 +24,7 @@ export interface UserProfile {
   createdAt: string;
   pushToken?: string;
   status?: 'home' | 'out' | 'sleeping' | 'away';
+  photoUrl?: string;
 }
 
 export interface HouseholdDetailField {
@@ -50,6 +51,7 @@ export interface Household {
     bookingRef?: string;
     hotelPhone?: string;
     hotelAddress?: string;
+    distanceTraveled?: string;
   };
   info?: {
     wifiName?: string;
@@ -61,6 +63,8 @@ export interface Household {
     details?: HouseholdDetailField[];
     homeLocation?: { latitude: number; longitude: number };
   };
+  retentionPolicy?: '7_days_trip_end' | '15_days_trip_end';
+  expiresAt?: string; // ISO Date string of expiration
 }
 
 export interface ItineraryItem {

@@ -242,7 +242,12 @@ export default function ChatScreen({ route, navigation }: Props) {
         <View style={{ flexDirection: 'row', marginBottom: nextMessageFromSameSender ? 3 : 10, justifyContent: isMe ? 'flex-end' : 'flex-start', alignItems: 'flex-end' }}>
           {!isMe && (
             showAvatar ? (
-              <Avatar name={item.senderName} size={34} style={{ marginRight: 8, marginBottom: 2 }} />
+              <Avatar 
+                name={item.senderName} 
+                size={34} 
+                photoUrl={memberProfiles[item.senderId]?.photoUrl}
+                style={{ marginRight: 8, marginBottom: 2 }} 
+              />
             ) : (
               <View style={{ width: 34, marginRight: 8 }} />
             )

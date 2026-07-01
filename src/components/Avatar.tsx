@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, ViewProps } from 'react-native';
+import { View, Text, ViewProps, Image } from 'react-native';
 
 interface AvatarProps extends ViewProps {
   name: string;
   size?: number;
   color?: string;
   bgColor?: string;
+  photoUrl?: string;
 }
 
 export const Avatar: React.FC<AvatarProps> = ({ 
@@ -13,6 +14,7 @@ export const Avatar: React.FC<AvatarProps> = ({
   size = 32, 
   color = '#4F46E5', 
   bgColor = '#E0E7FF',
+  photoUrl,
   ...props 
 }) => {
   const initial = name ? name.charAt(0).toUpperCase() : '?';
@@ -27,10 +29,19 @@ export const Avatar: React.FC<AvatarProps> = ({
         borderRadius: size / 2, 
         backgroundColor: bgColor, 
         alignItems: 'center', 
-        justifyContent: 'center' 
+        justifyContent: 'center',
+        overflow: 'hidden'
       }, props.style]}
     >
-      <Text style={{ fontSize, fontWeight: 'bold', color }}>{initial}</Text>
+      {photoUrl ? (
+        <Image 
+          source={{ uri: photoUrl }} 
+          style={{ width: size, height: size }} 
+          resizeMode="cover"
+        />
+      ) : (
+        <Text style={{ fontSize, fontWeight: 'bold', color }}>{initial}</Text>
+      )}
     </View>
   );
 };
