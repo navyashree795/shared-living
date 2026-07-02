@@ -8,7 +8,9 @@ import {
   Alert,
   Dimensions,
   Image,
+  Share,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { MaterialIcons } from "@expo/vector-icons";
 import Svg, { Path, Circle, Defs, LinearGradient, Stop } from "react-native-svg";
 // @ts-ignore
@@ -228,21 +230,29 @@ export const TravelWrapModal = React.memo(({
     return dStr;
   }, [points]);
 
-  // 9. Native Sharing trigger
+  // 9. Native Sharing trigger (Shares the captured card screenshot directly as an image file)
   const handleShareCard = async () => {
     try {
+      if (!cardRef.current) {
+        Alert.alert("Error", "Card reference is not ready.");
+        return;
+      }
+      
+      // Capture the card visually as a PNG image
       const uri = await captureRef(cardRef, {
         format: "png",
         quality: 0.95,
       });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri);
-      } else {
-        Alert.alert("Sharing Unavailable", "Sharing is not supported on this device.");
-      }
+
+      // Share the actual PNG image file directly
+      await Sharing.shareAsync(uri, {
+        mimeType: "image/png",
+        dialogTitle: "Share Trip Wrap",
+        UTI: "public.png",
+      });
     } catch (error) {
-      console.error("ViewShot Capture Error:", error);
-      Alert.alert("Error", "Could not generate shareable card image.");
+      console.error("Share Error:", error);
+      Alert.alert("Error", "Could not share the wrap image.");
     }
   };
 
@@ -274,7 +284,7 @@ export const TravelWrapModal = React.memo(({
             
             <View style={styles.titleContainer}>
               <Text style={[styles.tripTitleText, { color: textMain }]} numberOfLines={1}>
-                {householdData?.name || "My Trip"}
+                {householdData?.tripDetails?.destination || householdData?.name || "My Trip"}
               </Text>
             </View>
           </View>
@@ -478,7 +488,7 @@ export const TravelWrapModal = React.memo(({
           <View style={[styles.footerPanel, { borderTopColor: isDark ? "rgba(255,255,255,0.06)" : "#E2E8F0" }]}>
             <View style={styles.footerRow}>
               <Text style={[styles.footerTripName, { color: textMain }]} numberOfLines={1}>
-                {householdData?.name || "Karnataka Adventure"}
+                {householdData?.tripDetails?.destination || householdData?.name || "Karnataka Adventure"}
               </Text>
               <View style={styles.footerStatsRow}>
                 <View style={styles.footerStatItem}>
@@ -564,17 +574,19 @@ export const TravelWrapModal = React.memo(({
             onPress={handleShareCard}
             style={[styles.actionBtn, styles.primaryBtn]}
           >
-            <MaterialIcons name="share" size={20} color="#FFF" />
+            <MaterialIcons name="share" size={18} color="#FFF" style={{ marginRight: 4 }} />
             <Text style={styles.primaryBtnText}>Share Wrap</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={onClose}
-            style={[styles.actionBtn, styles.secondaryBtn, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "#E2E8F0" }]}
-          >
-            <Text style={[styles.secondaryBtnText, { color: textMain }]}>View Trip Details</Text>
-          </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          onPress={onClose}
+          style={{ alignSelf: "center", marginTop: 20, padding: 8 }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "700", color: "#6366F1" }}>
+            View Trip Details
+          </Text>
+        </TouchableOpacity>
 
       </ScrollView>
     </SlideModal>

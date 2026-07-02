@@ -17,6 +17,7 @@ interface InfoEditModalProps {
   isEditMode: boolean;
   householdData: any;
   handleUpdateInfo: (updates: any) => void;
+  handleDeleteHousehold?: () => void;
   infoModalTab: "all" | "landlord" | "wifi" | "trash";
 }
 
@@ -26,6 +27,7 @@ export const HouseholdInfoModalContent = memo(({
   data,
   householdName,
   onSave,
+  onDelete,
   isOwner,
 }: any) => {
   const { isDark } = useTheme();
@@ -559,10 +561,33 @@ export const HouseholdInfoModalContent = memo(({
 
         <TouchableOpacity
           onPress={handleSave}
-          className="bg-indigo-600 rounded-2xl py-4 items-center shadow-lg shadow-indigo-300 mb-8"
+          className="bg-indigo-600 rounded-2xl py-4 items-center shadow-lg shadow-indigo-300 mb-4"
         >
           <Text className="text-white font-black text-lg">Save Changes</Text>
         </TouchableOpacity>
+
+        {isOwner && onDelete && (
+          <TouchableOpacity
+            onPress={onDelete}
+            style={{
+              backgroundColor: isDark ? "rgba(239, 68, 68, 0.15)" : "#FEF2F2",
+              borderRadius: 16,
+              paddingVertical: 14,
+              alignItems: "center",
+              borderWidth: 1.5,
+              borderColor: "#EF4444",
+              marginBottom: 16,
+              flexDirection: "row",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            <MaterialIcons name="delete-forever" size={20} color="#EF4444" />
+            <Text style={{ color: "#EF4444", fontWeight: "900", fontSize: 16 }}>
+              Delete Household
+            </Text>
+          </TouchableOpacity>
+        )}
       </>
     );
   }
@@ -764,6 +789,7 @@ export const InfoEditModal = React.memo(({
   isEditMode,
   householdData,
   handleUpdateInfo,
+  handleDeleteHousehold,
   infoModalTab,
 }: InfoEditModalProps) => {
   const isOwner = householdData?.createdBy === auth.currentUser?.uid;
@@ -780,6 +806,7 @@ export const InfoEditModal = React.memo(({
         data={householdData?.info}
         householdName={householdData?.name}
         onSave={handleUpdateInfo}
+        onDelete={handleDeleteHousehold}
         isOwner={isOwner}
       />
     </SlideModal>

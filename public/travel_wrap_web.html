@@ -126,48 +126,46 @@
     }
     .road-bg {
       position:absolute; inset:0;
-      background:linear-gradient(170deg,#080c24 0%,#0b1a3a 35%,#063b2a 70%,#042a1e 100%);
+      background:linear-gradient(180deg, #bae6fd 0%, #e0f2fe 50%, #fef9c3 100%);
     }
     .road-bg::before {
       content:''; position:absolute;
-      top:-40px; left:50%; transform:translateX(-50%);
-      width:260px; height:180px;
-      background:radial-gradient(ellipse,rgba(249,115,22,0.12) 0%,transparent 70%);
+      top:-50px; left:50%; transform:translateX(-50%);
+      width:300px; height:200px;
+      background:radial-gradient(ellipse,rgba(253,224,71,0.15) 0%,transparent 75%);
     }
     .road-bg::after {
-      content:''; position:absolute;
-      bottom:0; left:50%; transform:translateX(-50%);
-      width:300px; height:140px;
-      background:radial-gradient(ellipse,rgba(6,182,212,0.1) 0%,transparent 70%);
+      display: none;
     }
     .road-svg { position:absolute; inset:0; width:100%; height:100%; z-index:1; }
 
     /* Checkpoint badges */
     .cp {
       position:absolute; z-index:3;
-      background:rgba(255,255,255,0.1); backdrop-filter:blur(12px);
-      -webkit-backdrop-filter:blur(12px);
-      border:1px solid rgba(255,255,255,0.18); border-radius:20px;
+      background:rgba(255,255,255,0.88); backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+      border:1px solid rgba(15,23,42,0.08); border-radius:20px;
       padding:4px 11px 4px 7px;
       display:flex; align-items:center; gap:6px;
       white-space:nowrap; cursor:pointer;
+      box-shadow:0 4px 12px rgba(15,23,42,0.06);
       transition:all 0.2s;
     }
-    .cp:hover { background:rgba(255,255,255,0.16); transform:translateY(-2px); }
+    .cp:hover { background:rgba(255,255,255,0.95); transform:translateY(-2px); box-shadow:0 6px 16px rgba(15,23,42,0.09); }
     .cp::after {
       content:''; position:absolute;
       bottom:-5px; left:50%; transform:translateX(-50%);
-      border:5px solid transparent; border-top-color:rgba(255,255,255,0.18);
+      border:5px solid transparent; border-top-color:rgba(255,255,255,0.88);
     }
-    .cp-dot { width:7px; height:7px; border-radius:50%; background:#22d3ee; box-shadow:0 0 8px rgba(34,211,238,0.9); flex-shrink:0; }
-    .cp-dot.end { background:#f97316; box-shadow:0 0 8px rgba(249,115,22,0.9); }
-    .cp-label { font-size:10.5px; font-weight:700; color:#fff; }
-    .cp-day   { font-size:9px; font-weight:500; color:rgba(255,255,255,0.45); }
+    .cp-dot { width:7px; height:7px; border-radius:50%; background:#0284c7; box-shadow:0 0 6px rgba(2,132,199,0.5); flex-shrink:0; }
+    .cp-dot.end { background:#ea580c; box-shadow:0 0 6px rgba(234,88,12,0.5); }
+    .cp-label { font-size:10.5px; font-weight:700; color:#1e293b; }
+    .cp-day   { font-size:9px; font-weight:600; color:#64748b; }
 
     .more-note {
       position:absolute; bottom:12px; right:14px; z-index:3;
-      font-size:10px; font-weight:800; color:rgba(255,255,255,0.6);
-      text-align:right; line-height:1.4; text-shadow:0 1px 4px rgba(0,0,0,0.5);
+      font-size:10px; font-weight:800; color:#475569;
+      text-align:right; line-height:1.4; text-shadow:0 1px 2px rgba(255,255,255,0.6);
     }
 
     /* Footer */
@@ -211,7 +209,24 @@
       /* Dark filter for the white card header (logo has light text on transparent bg) */
       filter: brightness(0) saturate(100%) invert(22%) sepia(60%) saturate(600%) hue-rotate(213deg) brightness(90%);
     }
+
+    .spinner {
+      border: 4px solid rgba(99,102,241,0.1);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border-left-color: #6366f1;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
+  <!-- Firebase Compat App and Firestore SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
@@ -221,29 +236,23 @@
 </div>
 
 <script>
-// ════════════════════════════════════════════════════════════
-//  ✏️  EDIT THIS DATA OBJECT — THE ENTIRE CARD AUTO-UPDATES
-// ════════════════════════════════════════════════════════════
+// Fallback dummy data if accessed without parameters
 const TRIP_DATA = {
   tripName:      "Karnataka Adventure",
-  mainTraveler:  { initials: "SJ", name: "Sarah J.", city: "Bangalore" },
+  mainTraveler:  { initials: "SJ", name: "Sarah J.", city: "Bangalore", photoUrl: null },
   startDate:     "Jan 10",
   endDate:       "Jan 18, 2024",
   durationDays:  8,
   kmCovered:     "1,250 km",
   activities:    25,
-
-  // ── Add/remove crew members here ──────────────────────
   crew: [
-    { initials: "DM" },
-    { initials: "ER" },
-    { initials: "KP" },
-    { initials: "AN" },
-    { initials: "RV" },
+    { initials: "DM", photoUrl: null },
+    { initials: "ER", photoUrl: null },
+    { initials: "KP", photoUrl: null },
+    { initials: "AN", photoUrl: null },
+    { initials: "RV", photoUrl: null },
   ],
-  maxVisibleCrew: 3,   // how many avatars show before "+N" pill
-
-  // ── Add/remove stops here (max ~8 look great visually) ─
+  maxVisibleCrew: 3,
   stops: [
     { emoji: "📍", name: "Sakleshpur",          day: 1 },
     { emoji: "⛰️", name: "Mullayanagiri",       day: 3 },
@@ -251,11 +260,265 @@ const TRIP_DATA = {
     { emoji: "🛕", name: "Hampi",                day: 7 },
     { emoji: "✈️", name: "Kempegowda Airport",   day: 8, isEnd: true },
   ],
-
-  // Extra stops not shown on the map (auto-calculated from a total)
   totalStops: 19,
 };
-// ════════════════════════════════════════════════════════════
+
+// Initialize Firebase SDK
+const firebaseConfig = {
+  apiKey: "AIzaSyCnp_SZ0uT16bOSqeGP_bxPhQ2TPQR4GlM",
+  authDomain: "shared-living-app.firebaseapp.com",
+  projectId: "shared-living-app",
+  storageBucket: "shared-living-app.firebasestorage.app",
+  messagingSenderId: "362366255638",
+  appId: "1:362366255638:web:89e4a7c00f5aedbc60ab37"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Helper Functions
+const getQueryParam = (name) => {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get(name);
+};
+
+const getHouseholdId = () => {
+  const pathname = window.location.pathname;
+  if (pathname.includes('/wrap/')) {
+    const parts = pathname.split('/');
+    const idx = parts.indexOf('wrap');
+    if (idx !== -1 && parts[idx + 1]) {
+      return parts[idx + 1];
+    }
+  }
+  return null;
+};
+
+const parseDateString = (str) => {
+  if (!str) return null;
+  const cleanStr = str.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) {
+    return new Date(cleanStr);
+  }
+  const parts = cleanStr.split(/[-/]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    } else if (parts[2].length === 4) {
+      return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+    }
+  }
+  const d = new Date(cleanStr);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+const getActivityEmoji = (activityName) => {
+  const name = activityName.toLowerCase();
+  if (name.includes("mountain") || name.includes("hill") || name.includes("trek") || name.includes("peak") || name.includes("climb") || name.includes("mullayanagiri")) {
+    return "⛰️";
+  }
+  if (name.includes("beach") || name.includes("sea") || name.includes("ocean") || name.includes("surf")) {
+    return "🏖️";
+  }
+  if (name.includes("water") || name.includes("falls") || name.includes("lake") || name.includes("river") || name.includes("kayak") || name.includes("raft") || name.includes("zip")) {
+    return "🌊";
+  }
+  if (name.includes("coffee") || name.includes("cafe") || name.includes("breakfast") || name.includes("food") || name.includes("eat")) {
+    return "☕";
+  }
+  if (name.includes("camp") || name.includes("tent") || name.includes("forest") || name.includes("nature")) {
+    return "🌲";
+  }
+  if (name.includes("temple") || name.includes("shrine") || name.includes("church") || name.includes("yana") || name.includes("cave")) {
+    return "🛕";
+  }
+  return "📍";
+};
+
+const getInitials = (name) => {
+  if (!name) return "";
+  const parts = name.trim().split(" ");
+  if (parts.length > 1) {
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+};
+
+const formatName = (name) => {
+  if (!name) return "";
+  const parts = name.trim().split(" ");
+  if (parts.length > 1) {
+    return parts[0] + " " + parts[1].charAt(0) + ".";
+  }
+  return name;
+};
+
+const formatDateShort = (dateStr) => {
+  const d = parseDateString(dateStr);
+  if (!d) return dateStr || "";
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return months[d.getMonth()] + " " + d.getDate();
+};
+
+const formatDateYear = (dateStr) => {
+  const d = parseDateString(dateStr);
+  if (!d) return dateStr || "";
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return months[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear();
+};
+
+function showError(title, desc) {
+  const wrapCardEl = document.getElementById('wrapCard');
+  wrapCardEl.innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:300px; gap:12px; padding:20px; text-align:center;">
+      <svg style="width:48px; height:48px; fill:#ef4444;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+      <div style="color:#1e1b4b; font-size:18px; font-weight:800;">${title}</div>
+      <div style="color:#64748b; font-size:13px; font-weight:500; line-height:1.5;">${desc}</div>
+    </div>
+  `;
+  document.getElementById('actionBtns').innerHTML = '';
+}
+
+async function loadTripWrap(householdId, userId, milestoneIds) {
+  const wrapCardEl = document.getElementById('wrapCard');
+  try {
+    const householdSnap = await db.collection('households').doc(householdId).get();
+    if (!householdSnap.exists) {
+      showError("Trip Wrap Not Found", "The requested trip wrap could not be found or has expired.");
+      return;
+    }
+    const householdData = householdSnap.data();
+
+    const itinerarySnap = await db.collection('households').doc(householdId).collection('itinerary').get();
+    const itineraryItems = [];
+    itinerarySnap.forEach(doc => {
+      itineraryItems.push({ id: doc.id, ...doc.data() });
+    });
+
+    const approvedItinerary = itineraryItems
+      .filter(item => item.approved)
+      .sort((a, b) => {
+        const dateA = (a.date || "") + " " + (a.time || "");
+        const dateB = (b.date || "") + " " + (b.time || "");
+        return dateA.localeCompare(dateB);
+      });
+
+    let selectedStops = [];
+    if (milestoneIds && milestoneIds.length > 0) {
+      selectedStops = approvedItinerary.filter(item => milestoneIds.includes(item.id));
+    } else {
+      selectedStops = approvedItinerary.slice(0, 10);
+    }
+
+    const startDateStr = householdData.tripDetails ? householdData.tripDetails.startDate : null;
+    const mappedStops = selectedStops.map((item, idx) => {
+      let day = 1;
+      if (startDateStr && item.date) {
+        const start = parseDateString(startDateStr);
+        const current = parseDateString(item.date);
+        if (start && current) {
+          const diffTime = current.getTime() - start.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+          if (!isNaN(diffDays) && diffDays > 0) {
+            day = diffDays;
+          }
+        }
+      }
+      const isEnd = idx === selectedStops.length - 1;
+      return {
+        emoji: getActivityEmoji(item.activity || ""),
+        name: item.activity || "",
+        day: day,
+        isEnd: isEnd
+      };
+    });
+
+    let durationDays = 8;
+    if (householdData.tripDetails && householdData.tripDetails.startDate && householdData.tripDetails.endDate) {
+      const start = parseDateString(householdData.tripDetails.startDate);
+      const end = parseDateString(householdData.tripDetails.endDate);
+      if (start && end) {
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        if (!isNaN(diffDays)) {
+          durationDays = diffDays;
+        }
+      }
+    }
+
+    const allMembers = householdData.members || [];
+    let mainTravelerId = userId || householdData.createdBy;
+    if (!mainTravelerId && allMembers.length > 0) {
+      mainTravelerId = allMembers[0];
+    }
+
+    const profiles = {};
+    const fetchPromises = allMembers.map(async (memberUid) => {
+      try {
+        const userSnap = await db.collection('users').doc(memberUid).get();
+        if (userSnap.exists) {
+          profiles[memberUid] = userSnap.data();
+        }
+      } catch (err) {
+        console.warn("Failed to load user profile for", memberUid, err);
+      }
+    });
+    await Promise.all(fetchPromises);
+
+    const mainUser = profiles[mainTravelerId] || { username: "Traveler" };
+    const mainTraveler = {
+      initials: getInitials(mainUser.username || "Traveler"),
+      name: formatName(mainUser.username || "Traveler"),
+      city: householdData.tripDetails ? (householdData.tripDetails.destination || "Traveler") : "Traveler",
+      photoUrl: mainUser.photoUrl || null
+    };
+
+    const crew = allMembers
+      .filter(uid => uid !== mainTravelerId)
+      .map(uid => {
+        const u = profiles[uid];
+        if (!u) return null;
+        return {
+          initials: getInitials(u.username || "Crew"),
+          photoUrl: u.photoUrl || null
+        };
+      })
+      .filter(Boolean);
+
+    let formattedStartDate = "";
+    let formattedEndDate = "";
+    if (householdData.tripDetails) {
+      formattedStartDate = formatDateShort(householdData.tripDetails.startDate);
+      formattedEndDate = formatDateYear(householdData.tripDetails.endDate);
+    }
+
+    let kmCovered = "0 km";
+    if (householdData.tripDetails && householdData.tripDetails.distanceTraveled) {
+      kmCovered = parseFloat(householdData.tripDetails.distanceTraveled).toLocaleString() + " km";
+    } else {
+      kmCovered = (mappedStops.length * 45).toLocaleString() + " km";
+    }
+
+    const finalData = {
+      tripName: (householdData.tripDetails && householdData.tripDetails.destination) || householdData.name || "My Trip",
+      mainTraveler: mainTraveler,
+      startDate: formattedStartDate || "TBD",
+      endDate: formattedEndDate || "TBD",
+      durationDays: durationDays,
+      kmCovered: kmCovered,
+      activities: approvedItinerary.length,
+      crew: crew,
+      maxVisibleCrew: 3,
+      stops: mappedStops,
+      totalStops: approvedItinerary.length
+    };
+
+    renderCard(finalData);
+  } catch (error) {
+    console.error("Load Trip Wrap Error:", error);
+    showError("Connection Error", "An error occurred while fetching the trip data. Please try again later.");
+  }
+}
+
 
 // ── Helpers ──────────────────────────────────────────────────
 function svgHouseIcon() {
@@ -284,7 +547,12 @@ function svgCalIcon() {
 function buildCrewAvatars(crew, max) {
   const visible = crew.slice(0, max);
   const extra   = crew.length - max;
-  const avHtml  = visible.map(c => `<div class="crew-av">${c.initials}</div>`).join('');
+  const avHtml  = visible.map(c => {
+    if (c.photoUrl) {
+      return `<img class="crew-av" src="${c.photoUrl}" style="object-fit:cover; border:2px solid #fff;" alt="${c.initials}" />`;
+    }
+    return `<div class="crew-av">${c.initials}</div>`;
+  }).join('');
   const plusHtml = extra > 0 ? `<span class="crew-plus">+${extra}</span>` : '';
   return `
     <div class="crew-col">
@@ -320,60 +588,98 @@ function buildGauge(days) {
 // ── Build cinematic road SVG + checkpoint badges ──────────────
 function buildRoadPanel(stops, totalStops) {
   const W = 400, H = 300;
-  const roadTop = 65, roadBot = 275;
+  const roadTop = 145, roadBot = 275;
   const n = stops.length;
 
+  // Road geometry formula generating curves: Y=300 to Y=140
+  function getRoadPoint(y) {
+    const t = (300 - y) / (300 - 140);
+    // 3.2 periods of sine wave sway back and forth
+    const sway = Math.sin(t * Math.PI * 3.2);
+    // Perspective amplitude (shrinks but keeps a minimum curve near the top)
+    const amplitude = 48 * Math.pow(1 - t, 0.8) + 12; 
+    const x = 200 + sway * amplitude;
+    // Road width starts at 400px (full-width) at bottom to remove bottom green padding
+    const width = 10 + 390 * Math.pow(1 - t, 2.5);
+    return { x, y, width };
+  }
+
+  // Generate paths smoothly by sampling points along the Y axis
+  const leftPoints = [];
+  const rightPoints = [];
+  const centerPoints = [];
+  const steps = 40;
+  for (let i = 0; i <= steps; i++) {
+    const y = 300 - (i / steps) * (300 - 140);
+    const { x, width } = getRoadPoint(y);
+    leftPoints.push({ x: x - width / 2, y });
+    rightPoints.push({ x: x + width / 2, y });
+    centerPoints.push({ x, y });
+  }
+
+  const roadSurfaceD = `M ` + leftPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ') + 
+                       ` L ` + [...rightPoints].reverse().map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ') + ` Z`;
+  const leftEdgeD = `M ` + leftPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ');
+  const rightEdgeD = `M ` + rightPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ');
+  const centerDashesD = `M ` + centerPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ');
+
   // Node positions distributed linearly along the perspective road Y axis
-  // Stops[0] = bottom/start, stops[n-1] = top/destination
   const nodePositions = stops.map((_, i) => {
     // t=0 → bottom, t=1 → top
     const t   = i / Math.max(n - 1, 1);
     const y   = roadBot - t * (roadBot - roadTop);
-    // Perspective X convergence: wider at bottom, narrower at top
-    const xOff = (1 - t) * 8;
-    const x   = W / 2 + (i % 2 === 0 ? -xOff : xOff); // slight left/right sway
+    
+    // Get X from the exact curve formula
+    const { x } = getRoadPoint(y);
+    
     // Node radius shrinks with distance
-    const r   = 10 - t * 5;
+    const r   = 9 - t * 3.5;
     return { x, y, r, t, stop: stops[i] };
   });
 
   // SVG background + road
   const svgContent = `
-    <svg class="road-svg" viewBox="0 0 ${W} ${H}" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Mountains -->
-      <path d="M -20 200 L 60 110 L 130 200 Z"  fill="#063b2a" opacity="0.55"/>
-      <path d="M 80  200 L 180 80  L 280 200 Z"  fill="#063b2a" opacity="0.5"/>
-      <path d="M 220 200 L 310 95  L 410 200 Z"  fill="#063b2a" opacity="0.5"/>
-      <path d="M 300 200 L 370 130 L 440 200 Z"  fill="#042a1e" opacity="0.6"/>
-      <!-- Forest floor -->
-      <path d="M -20 300 Q 100 220, 210 265 T 420 270 L 420 300 Z" fill="#042a1e" opacity="0.8"/>
-      <path d="M -20 300 Q 80  240, 200 280 T 420 300 Z"           fill="#031f18" opacity="0.95"/>
-      <!-- Pines left -->
-      <polygon points="28,255 22,268 34,268"  fill="#042a1e"/>
-      <polygon points="28,260 20,275 36,275"  fill="#031f18"/>
-      <polygon points="46,260 41,271 51,271"  fill="#042a1e"/>
+    <svg class="road-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Mountains shifted up so the valley base is at Y=140 (Daylight blue-teal shades) -->
+      <path d="M -20 140 L 60 50 L 130 140 Z"  fill="#0284c7" opacity="0.2"/>
+      <path d="M 80  140 L 180 30  L 280 140 Z"  fill="#0284c7" opacity="0.18"/>
+      <path d="M 220 140 L 310 40  L 410 140 Z"  fill="#0284c7" opacity="0.22"/>
+      <path d="M 300 140 L 370 70 L 440 140 Z"  fill="#0369a1" opacity="0.25"/>
+      
+      <!-- Valley ground filling Y=140 to Y=300 (Daylight green grass) -->
+      <path d="M -20 140 L 420 140 L 420 300 L -20 300 Z" fill="#15803d" />
+      
+      <!-- Forest floor/Hills contours (Daylight greens) -->
+      <path d="M -20 200 Q 100 130, 210 160 T 420 180 L 420 300 L -20 300 Z" fill="#22c55e" opacity="0.55"/>
+      <path d="M -20 230 Q 100 180, 200 200 T 420 240 L 420 300 L -20 300 Z" fill="#4ade80" opacity="0.75"/>
+      <path d="M -20 265 Q 120 235, 220 250 T 420 265 L 420 300 L -20 300 Z" fill="#166534" opacity="0.9"/>
+      
+      <!-- Pines (Daylight dark green shadows) -->
+      <polygon points="28,255 22,268 34,268"  fill="#14532d"/>
+      <polygon points="28,260 20,275 36,275"  fill="#166534"/>
+      <polygon points="46,260 41,271 51,271"  fill="#14532d"/>
       <!-- Pines right -->
-      <polygon points="340,258 334,271 346,271" fill="#042a1e"/>
-      <polygon points="340,263 332,278 348,278" fill="#031f18"/>
-      <polygon points="358,262 352,274 364,274" fill="#042a1e"/>
+      <polygon points="340,258 334,271 346,271" fill="#14532d"/>
+      <polygon points="340,263 332,278 348,278" fill="#166534"/>
+      <polygon points="358,262 352,274 364,274" fill="#14532d"/>
 
-      <!-- Road surface -->
-      <path d="M 120 300 Q 240 180, 192 120 Q 170 90, 204 65 L 214 65 Q 182 90, 204 120 Q 260 180, 260 300 Z" fill="#0f172a"/>
+      <!-- Road surface (Daylight slate grey asphalt) -->
+      <path d="${roadSurfaceD}" fill="#475569"/>
       <!-- Road glow -->
-      <path d="M 120 300 Q 240 180, 192 120 Q 170 90, 204 65 L 214 65 Q 182 90, 204 120 Q 260 180, 260 300 Z" fill="url(#roadGlow)" opacity="0.3"/>
+      <path d="${roadSurfaceD}" fill="url(#roadGlow)" opacity="0.2"/>
       <!-- Road edges -->
-      <path d="M 120 300 Q 240 180, 192 120 Q 170 90, 204 65" stroke="#1e293b" stroke-width="1.5" stroke-linecap="round"/>
-      <path d="M 260 300 Q 260 180, 204 120 Q 182 90, 214 65" stroke="#1e293b" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="${leftEdgeD}" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="${rightEdgeD}" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/>
       <!-- Centre dashes -->
-      <path d="M 190 300 Q 250 180, 198 120 Q 176 90, 209 65" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" stroke-dasharray="10,12" stroke-linecap="round" fill="none"/>
+      <path d="${centerDashesD}" stroke="rgba(255,255,255,0.85)" stroke-width="1.5" stroke-dasharray="6,8" stroke-linecap="round" fill="none"/>
 
-      <!-- Dynamic Nodes -->
+      <!-- Dynamic Nodes (Vibrant Daylight Theme Blue/Orange) -->
       ${nodePositions.map(({ x, y, r, stop }) => {
         const isEnd   = stop.isEnd;
-        const cyanA   = `rgba(34,211,238,`;
-        const orangeA = `rgba(249,115,22,`;
-        const col     = isEnd ? '#f97316' : '#22d3ee';
-        const rc      = isEnd ? orangeA : cyanA;
+        const blueA   = `rgba(2,132,199,`;
+        const orangeA = `rgba(234,88,12,`;
+        const col     = isEnd ? '#ea580c' : '#0284c7';
+        const rc      = isEnd ? orangeA : blueA;
         return `
           <circle cx="${x}" cy="${y}" r="${r + 4}" fill="${rc}0.12)" stroke="${rc}0.4)" stroke-width="1"/>
           <circle cx="${x}" cy="${y}" r="${r}"      fill="${col}"       style="filter:drop-shadow(0 0 ${r}px ${col})"/>`;
@@ -381,9 +687,8 @@ function buildRoadPanel(stops, totalStops) {
 
       <defs>
         <linearGradient id="roadGlow" x1="0.5" y1="1" x2="0.5" y2="0">
-          <stop offset="0%"   stop-color="#22d3ee" stop-opacity="0"/>
-          <stop offset="60%"  stop-color="#22d3ee" stop-opacity="0.15"/>
-          <stop offset="100%" stop-color="#f97316" stop-opacity="0.25"/>
+          <stop offset="0%"   stop-color="#ffffff" stop-opacity="0"/>
+          <stop offset="100%" stop-color="#fef08a" stop-opacity="0.15"/>
         </linearGradient>
       </defs>
     </svg>`;
@@ -439,7 +744,9 @@ function renderCard(d) {
 
       <div class="main-traveler">
         <div class="av-ring">
-          <div class="av-inner">${d.mainTraveler.initials}</div>
+          ${d.mainTraveler.photoUrl 
+            ? `<img class="av-inner" src="${d.mainTraveler.photoUrl}" style="object-fit:cover;" alt="${d.mainTraveler.initials}" />` 
+            : `<div class="av-inner">${d.mainTraveler.initials}</div>`}
         </div>
         <span class="traveler-name">${d.mainTraveler.name}</span>
         <span class="traveler-city">${d.mainTraveler.city}</span>
@@ -469,14 +776,31 @@ function renderCard(d) {
   document.getElementById('wrapCard').innerHTML = html;
 
   // Buttons
+  const appScheme = `sharedliving://wrap/${window.currentHouseholdId || ""}`;
   document.getElementById('actionBtns').innerHTML = `
-    <button class="btn btn-primary">
-      ${svgShareIcon(16,16)} Share Wrap
-    </button>
-    <button class="btn btn-secondary">View Trip Details</button>`;
+    <a href="${appScheme}" class="btn btn-primary" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+      ${svgHouseIcon()} Open in App
+    </a>
+    <a href="https://play.google.com/store/apps/details?id=com.jeevan0714.sharedliving" class="btn btn-secondary" style="text-decoration:none;">
+      Download App
+    </a>`;
 }
 
-renderCard(TRIP_DATA);
+// Global variable to keep track of current household ID
+window.currentHouseholdId = null;
+
+// Parse householdId from pathname
+const householdId = getHouseholdId();
+const userId = getQueryParam('user');
+const milestoneIdsStr = getQueryParam('milestones');
+const milestoneIds = milestoneIdsStr ? milestoneIdsStr.split(',') : [];
+
+if (householdId) {
+  window.currentHouseholdId = householdId;
+  loadTripWrap(householdId, userId, milestoneIds);
+} else {
+  renderCard(TRIP_DATA);
+}
 </script>
 </body>
 </html>

@@ -338,6 +338,50 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleDeleteHousehold = () => {
+    if (!householdId) return;
+
+    Alert.alert(
+      'Delete Household',
+      `Are you absolutely sure you want to permanently delete the household "${householdData?.name || ''}"? This will remove all members and delete all associated data (chores, expenses, groceries, messages). This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently',
+          style: 'destructive',
+          onPress: async () => {
+            setLoadingDelete(true);
+            try {
+              const memberUids = householdData?.members || [];
+              const batch = writeBatch(db);
+              
+              // 1. Clear householdId for all members
+              memberUids.forEach((uid: string) => {
+                batch.update(doc(db, 'users', uid), {
+                  householdId: null
+                });
+              });
+              
+              // 2. Delete the household document
+              batch.delete(doc(db, 'households', householdId));
+              
+              await batch.commit();
+
+              // 3. Update local state
+              setHouseholdId(null);
+              Alert.alert('Household Deleted', `"${householdData?.name || ''}" has been successfully deleted.`);
+            } catch (e: any) {
+              console.error('Delete household error:', e);
+              Alert.alert('Error', e.message || 'Could not delete the household. Please try again.');
+            } finally {
+              setLoadingDelete(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const copyCode = async () => {
     await Clipboard.setStringAsync(householdData?.inviteCode || '');
     Alert.alert('Copied!', 'Invite code copied to clipboard');
@@ -559,21 +603,38 @@ export default function ProfileScreen() {
                   <MaterialIcons name="chevron-right" size={20} color={muted} />
                 </TouchableOpacity>
 
-                {/* Row 4: Leave Household */}
-                <TouchableOpacity
-                  onPress={handleLeaveHousehold}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: isDark ? '#3B1219' : '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}>
-                      <MaterialIcons name="exit-to-app" size={18} color="#EF4444" />
+                {/* Row 4: Leave or Delete Household */}
+                {householdData.createdBy === auth.currentUser?.uid ? (
+                  <TouchableOpacity
+                    onPress={handleDeleteHousehold}
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: isDark ? '#3B1219' : '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}>
+                        <MaterialIcons name="delete-forever" size={18} color="#EF4444" />
+                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#EF4444' }}>
+                        Delete Household
+                      </Text>
                     </View>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#EF4444' }}>
-                      Leave Household
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color="#EF4444" />
-                </TouchableOpacity>
+                    <MaterialIcons name="chevron-right" size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    onPress={handleLeaveHousehold}
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: isDark ? '#3B1219' : '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}>
+                        <MaterialIcons name="exit-to-app" size={18} color="#EF4444" />
+                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#EF4444' }}>
+                        Leave Household
+                      </Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                )}
 
               </View>
             </View>

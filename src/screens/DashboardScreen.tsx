@@ -29,6 +29,7 @@ import {
   deleteDoc,
   query,
   orderBy,
+  writeBatch,
 } from "firebase/firestore";
 import { scheduleChoreReminder, cancelChoreReminder, syncItineraryReminders } from "../utils/notificationUtils";
 import { logActivity, getActivityConfig } from "../utils/activityUtils";
@@ -509,6 +510,56 @@ export default function DashboardScreen({ navigation }: Props) {
       showToast("Could not update", "error");
     }
   }, [householdId, hid, isOwner, showToast]);
+
+  const handleDeleteHousehold = useCallback(async () => {
+    if (!householdId) return;
+    if (!isOwner) {
+      showToast("Only the household owner can delete the household", "error");
+      return;
+    }
+
+    Alert.alert(
+      "Delete Household",
+      "Are you absolutely sure you want to permanently delete this household? All members will be removed, and all data (expenses, chores, groceries, messages) will be lost forever. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Permanently",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const memberUids = householdData?.members || [];
+              const batch = writeBatch(db);
+              
+              // 1. Clear householdId for all members
+              memberUids.forEach((uid: string) => {
+                batch.update(doc(db, "users", uid), {
+                  householdId: null
+                });
+              });
+              
+              // 2. Delete the household document
+              batch.delete(doc(db, "households", householdId));
+              
+              await batch.commit();
+
+              // Close the modal
+              setIsInfoModalVisible(false);
+              setIsEditMode(false);
+              
+              // 3. Update local state
+              setHouseholdId(null);
+              showToast("Household permanently deleted", "success");
+            } catch (e: any) {
+              console.error("Error deleting household:", e);
+              showToast("Could not delete household", "error");
+            }
+          }
+        }
+      ]
+    );
+  }, [householdId, householdData, isOwner, setHouseholdId, showToast]);
+
 
 
   // Sticky Board listener
@@ -1454,6 +1505,7 @@ export default function DashboardScreen({ navigation }: Props) {
           isEditMode={isEditMode}
           householdData={householdData}
           handleUpdateInfo={handleUpdateInfo}
+          handleDeleteHousehold={handleDeleteHousehold}
           infoModalTab={infoModalTab}
         />
 

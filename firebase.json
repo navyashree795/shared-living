@@ -25,10 +25,25 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "headers": [
+      {
+        "source": "**/*.@(html)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=0, no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ],
     "rewrites": [
       {
         "source": "/invite/**",
         "destination": "/invite.html"
+      },
+      {
+        "source": "/wrap/**",
+        "destination": "/travel_wrap_web.html"
       }
     ]
   }

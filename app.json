@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "House Sync",
-    "slug": "shared-living-5wvwl04it0ofw7w85uhqu",
+    "slug": "house-sync",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -19,6 +19,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
+          "location",
           "location"
         ]
       }
@@ -41,7 +42,16 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_BACKGROUND_LOCATION"
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
@@ -49,7 +59,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "361ec070-905c-40e3-a8fe-a1f271449b2b"
+        "projectId": "d427e06e-0239-4d27-a813-d90be07189ea"
       }
     },
     "owner": "jeevan0714",
@@ -57,7 +67,7 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/361ec070-905c-40e3-a8fe-a1f271449b2b"
+      "url": "https://u.expo.dev/d427e06e-0239-4d27-a813-d90be07189ea"
     },
     "plugins": [
       "@react-native-community/datetimepicker",
