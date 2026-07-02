@@ -87,10 +87,10 @@ export default function DashboardScreen({ navigation }: Props) {
   const [isQuickExpenseVisible, setIsQuickExpenseVisible] = useState(false);
   const [isQuickChoreVisible, setIsQuickChoreVisible] = useState(false);
 
-  const [stickyNote, setStickyNote] = useState<{ text: string; updatedBy: string; updatedAt: any } | null>(null);
+  const [stickyNote, setStickyNote] = useState<{ text: string; updatedBy: string; updatedAt: any; expiresAt?: any; expiryType?: string } | null>(null);
   const [isStickyModalVisible, setIsStickyModalVisible] = useState(false);
   const [stickyText, setStickyText] = useState("");
-  const [isStatusModalVisible, setIsStatusModalVisible] = useState(false);
+  const [stickyExpiry, setStickyExpiry] = useState<"never" | "12h" | "24h" | "3d">("never");
 
   const infoModalTab = "all";
   const [isEditMode, setIsEditMode] = useState(false);
@@ -177,6 +177,20 @@ export default function DashboardScreen({ navigation }: Props) {
   const pendingGroceriesCount = useMemo(() => {
     return groceries.filter((g) => !g.done).length;
   }, [groceries]);
+
+  // Check if there is an active (unexpired) sticky note
+  const isStickyActive = useMemo(() => {
+    if (!stickyNote?.text) return false;
+    if (!stickyNote.expiresAt) return true;
+    try {
+      const expTime = typeof stickyNote.expiresAt.toDate === "function"
+        ? stickyNote.expiresAt.toDate().getTime()
+        : new Date(stickyNote.expiresAt).getTime();
+      return expTime > Date.now();
+    } catch {
+      return true;
+    }
+  }, [stickyNote]);
 
   // Calculate Net Balancing Standings (positive = roommates owe user, negative = user owes roommates)
   const netBalance = useMemo(() => {
@@ -530,9 +544,23 @@ export default function DashboardScreen({ navigation }: Props) {
   const handleSaveStickyNote = useCallback(async () => {
     if (!hid) return;
     try {
+      let expiresAt: Timestamp | null = null;
+      const textVal = stickyText.trim();
+      
+      if (textVal && stickyExpiry !== "never") {
+        const msToAdd = 
+          stickyExpiry === "12h" ? 12 * 60 * 60 * 1000 :
+          stickyExpiry === "24h" ? 24 * 60 * 60 * 1000 :
+          3 * 24 * 60 * 60 * 1000;
+        
+        expiresAt = Timestamp.fromDate(new Date(Date.now() + msToAdd));
+      }
+
       const docRef = doc(db, "households", hid, "announcements", "sticky");
       await setDoc(docRef, {
-        text: stickyText.trim(),
+        text: textVal,
+        expiryType: stickyExpiry,
+        expiresAt,
         updatedBy: userData?.username || "Roommate",
         updatedAt: serverTimestamp(),
       });
@@ -542,36 +570,14 @@ export default function DashboardScreen({ navigation }: Props) {
       console.error("Error saving sticky note:", e);
       showToast("Could not update note", "error");
     }
-  }, [hid, stickyText, userData?.username, showToast]);
+  }, [hid, stickyText, stickyExpiry, userData?.username, showToast]);
 
-  const handleUpdateStatus = useCallback(async (newStatus: "home" | "out" | "sleeping" | "away") => {
-    if (!user?.uid) return;
-    try {
-      const userDocRef = doc(db, "users", user.uid);
-      await updateDoc(userDocRef, { status: newStatus });
-      setIsStatusModalVisible(false);
-      const statusTextMap = {
-        home: "At Home",
-        out: "Out / Busy",
-        sleeping: "Sleeping",
-        away: "Away (Vacation)"
-      };
-      showToast(`Status updated to ${statusTextMap[newStatus]}`, "success");
-    } catch (e) {
-      console.error("Error updating status:", e);
-      showToast("Could not update status", "error");
-    }
-  }, [user?.uid, showToast]);
- 
-  // 1. Persist user info & home location to AsyncStorage for background context access
+  // 1. Persist user info to AsyncStorage for background context access
   useEffect(() => {
     if (user?.uid) {
       AsyncStorage.setItem("user_uid", user.uid).catch(err => console.warn("AsyncStorage save user_uid failed:", err));
     }
-    if (userData?.status) {
-      AsyncStorage.setItem("last_presence_status", userData.status).catch(err => console.warn("AsyncStorage save status failed:", err));
-    }
-  }, [user?.uid, userData?.status]);
+  }, [user?.uid]);
 
   useEffect(() => {
     if (householdData?.info?.homeLocation) {
@@ -579,65 +585,20 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [householdData?.info?.homeLocation]);
 
-  // 2. Location Tracking and Geofencing Setup
+  // 2. Foreground Location Tracking and Geofencing Setup
   useEffect(() => {
-    if (!user?.uid || !householdId || !householdData) return;
+    if (!user?.uid || !householdId || !householdData || householdData.type === 'travel') return;
 
-    const LOCATION_TASK_NAME = "background-location-task";
     let locationInterval: NodeJS.Timeout;
-    let isBackgroundActive = false;
 
     const setupLocationTracking = async () => {
       try {
-        // A. Foreground location permissions request & Auto-pin logic
         const { status: foreStatus } = await Location.requestForegroundPermissionsAsync();
-        if (foreStatus === "granted") {
-          const isOwner = householdData.createdBy === user.uid;
-          if (isOwner && !householdData.info?.homeLocation) {
-            const loc = await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Highest,
-            });
-            const homeLocation = {
-              latitude: loc.coords.latitude,
-              longitude: loc.coords.longitude,
-            };
-            const householdDocRef = doc(db, "households", householdId);
-            const currentInfo = householdData.info || {};
-            await updateDoc(householdDocRef, {
-              info: {
-                ...currentInfo,
-                homeLocation,
-              },
-            });
-            showToast("📍 Automatically pinned your location as the household home location!", "success");
-          }
-
-          // B. Request Background location permissions
-          const { status: backStatus } = await Location.requestBackgroundPermissionsAsync();
-          if (backStatus === "granted") {
-            const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
-            if (!hasStarted) {
-              await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-                accuracy: Location.Accuracy.Balanced,
-                timeInterval: 60000,
-                distanceInterval: 10,
-                foregroundService: {
-                  notificationTitle: "Presence Geofencing",
-                  notificationBody: "Tracking your location to update household presence status",
-                  notificationColor: "#6366F1",
-                },
-              });
-            }
-            isBackgroundActive = true;
-            console.log("[Location] Background tracking setup successfully completed.");
-          } else {
-            console.log("[Location] Background permission denied, running in foreground-only fallback mode.");
-          }
-        } else {
+        if (foreStatus !== "granted") {
           showToast("Location permission is required for home presence features.", "info");
+          return;
         }
 
-        // C. Foreground Geofencing check logic
         const checkGeofence = async () => {
           if (!householdData?.info?.homeLocation) return;
           try {
@@ -645,7 +606,7 @@ export default function DashboardScreen({ navigation }: Props) {
             if (status !== "granted") return;
 
             const loc = await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Highest,
+              accuracy: Location.Accuracy.Balanced,
             });
 
             const isInside = isInsideHomeRadius(
@@ -659,8 +620,8 @@ export default function DashboardScreen({ navigation }: Props) {
             const nextStatus = isInside ? "home" : "out";
             const currentStatus = userData?.status || "home";
             const shouldUpdate =
-              (nextStatus === "home" && (currentStatus === "out" || currentStatus === "away")) ||
-              (nextStatus === "out" && (currentStatus === "home" || currentStatus === "sleeping"));
+              (nextStatus === "home" && currentStatus === "out") ||
+              (nextStatus === "out" && currentStatus === "home");
 
             if (shouldUpdate) {
               const userDocRef = doc(db, "users", user.uid);
@@ -671,13 +632,11 @@ export default function DashboardScreen({ navigation }: Props) {
           }
         };
 
-        // Check foreground status immediately
+        // Check immediately when app opens / screen mounts
         await checkGeofence();
 
-        // If background tracking isn't running, set up periodic checks in foreground
-        if (!isBackgroundActive) {
-          locationInterval = setInterval(checkGeofence, 60000);
-        }
+        // Check periodically in the foreground every 45 seconds
+        locationInterval = setInterval(checkGeofence, 45000);
       } catch (e) {
         console.warn("Failed to configure location tracking:", e);
       }
@@ -873,6 +832,23 @@ export default function DashboardScreen({ navigation }: Props) {
           </View>
 
           <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+            <TouchableOpacity
+              onPress={() => {
+                setStickyText(stickyNote?.text || "");
+                setIsStickyModalVisible(true);
+              }}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 14,
+                backgroundColor: isDark ? "#1E1B4B" : "rgba(99, 102, 241, 0.08)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <MaterialIcons name="push-pin" size={20} color={isDark ? "#A78BFA" : "#4F46E5"} style={{ transform: [{ rotate: "45deg" }] }} />
+            </TouchableOpacity>
+
             <TouchableOpacity
               onPress={() => setIsMembersModalVisible(true)}
               style={{
@@ -1226,52 +1202,55 @@ export default function DashboardScreen({ navigation }: Props) {
               ) : (
                 <>
                   {/* Shared Sticky Notice Board */}
-                  <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setStickyText(stickyNote?.text || "");
-                        setIsStickyModalVisible(true);
-                      }}
-                      activeOpacity={0.9}
-                      style={{
-                        backgroundColor: isDark ? "rgba(245, 158, 11, 0.06)" : "#FFFDF0",
-                        borderRadius: 24,
-                        padding: 18,
-                        borderWidth: 1,
-                        borderColor: isDark ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.25)",
-                        shadowColor: "#F59E0B",
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: isDark ? 0.1 : 0.04,
-                        shadowRadius: 8,
-                        elevation: 2,
-                      }}
-                    >
-                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <MaterialIcons name="push-pin" size={16} color="#F59E0B" style={{ transform: [{ rotate: "45deg" }] }} />
-                          <Text style={{ fontSize: 10, fontWeight: "900", color: "#F59E0B", textTransform: "uppercase", letterSpacing: 1.5 }}>
-                            Sticky Notice Board
-                          </Text>
-                        </View>
-                        {stickyNote?.updatedBy && (
-                          <Text style={{ fontSize: 9, fontWeight: "700", color: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.35)", textTransform: "uppercase" }}>
-                            {stickyNote.updatedBy} {stickyNote.updatedAt ? `· ${formatStickyTime(stickyNote.updatedAt)}` : ""}
-                          </Text>
-                        )}
-                      </View>
-                      <Text 
-                        style={{ 
-                          fontSize: 14, 
-                          fontWeight: "700", 
-                          color: stickyNote?.text ? textMain : (isDark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.35)"),
-                          lineHeight: 20,
-                          fontStyle: stickyNote?.text ? "normal" : "italic"
+                  {isStickyActive ? (
+                    <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setStickyText(stickyNote?.text || "");
+                          setStickyExpiry((stickyNote as any)?.expiryType || "never");
+                          setIsStickyModalVisible(true);
+                        }}
+                        activeOpacity={0.9}
+                        style={{
+                          backgroundColor: isDark ? "rgba(245, 158, 11, 0.06)" : "#FFFDF0",
+                          borderRadius: 24,
+                          padding: 18,
+                          borderWidth: 1,
+                          borderColor: isDark ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.25)",
+                          shadowColor: "#F59E0B",
+                          shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: isDark ? 0.1 : 0.04,
+                          shadowRadius: 8,
+                          elevation: 2,
                         }}
                       >
-                        {stickyNote?.text || "No active announcements. Tap here to write a note! 📌"}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <MaterialIcons name="push-pin" size={16} color="#F59E0B" style={{ transform: [{ rotate: "45deg" }] }} />
+                            <Text style={{ fontSize: 10, fontWeight: "900", color: "#F59E0B", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                              Sticky Notice Board
+                            </Text>
+                          </View>
+                          {stickyNote?.updatedBy && (
+                            <Text style={{ fontSize: 9, fontWeight: "700", color: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.35)", textTransform: "uppercase" }}>
+                              {stickyNote.updatedBy} {stickyNote.updatedAt ? `· ${formatStickyTime(stickyNote.updatedAt)}` : ""}
+                            </Text>
+                          )}
+                        </View>
+                        <Text 
+                          style={{ 
+                            fontSize: 14, 
+                            fontWeight: "700", 
+                            color: textMain,
+                            lineHeight: 20,
+                            fontStyle: "normal"
+                          }}
+                        >
+                          {stickyNote?.text}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
 
                   {/* Daily Briefing Panel */}
                   <View style={{ paddingHorizontal: 20, marginBottom: 20, marginTop: 10 }}>
@@ -1546,6 +1525,37 @@ export default function DashboardScreen({ navigation }: Props) {
                 {stickyText.length}/200 characters
               </Text>
             </View>
+
+            <View className="mb-2">
+              <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">
+                Auto-Expiry Duration
+              </Text>
+              <View className="flex-row gap-2">
+                {[
+                  { id: "never", label: "No Expiry" },
+                  { id: "12h", label: "12 Hours" },
+                  { id: "24h", label: "24 Hours" },
+                  { id: "3d", label: "3 Days" },
+                ].map((opt) => {
+                  const isSelected = stickyExpiry === opt.id;
+                  return (
+                    <TouchableOpacity
+                      key={opt.id}
+                      onPress={() => setStickyExpiry(opt.id as any)}
+                      className={`flex-1 py-3 rounded-xl border items-center justify-center ${
+                        isSelected ? "bg-amber-500/15 border-amber-500" : "bg-surfaceRaised border-border/50"
+                      }`}
+                    >
+                      <Text className={`text-[10px] font-black uppercase tracking-wider ${
+                        isSelected ? "text-amber-500" : "text-textMuted"
+                      }`}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
             <TouchableOpacity
               onPress={handleSaveStickyNote}
               className="bg-warning py-3.5 rounded-xl items-center"
@@ -1557,38 +1567,6 @@ export default function DashboardScreen({ navigation }: Props) {
           </View>
         </SlideModal>
 
-        {/* Quick Status Modal */}
-        <SlideModal
-          visible={isStatusModalVisible}
-          onClose={() => setIsStatusModalVisible(false)}
-          title="Update My Status"
-        >
-          <View className="gap-3 pb-2 pt-2">
-            {[
-              { id: "home", label: "At Home", emoji: "🟢", desc: "You are in the flat and available" },
-              { id: "out", label: "Out / Busy", emoji: "🟡", desc: "You are outside or occupied" },
-              { id: "sleeping", label: "Sleeping", emoji: "💤", desc: "Do not disturb" },
-              { id: "away", label: "Away (Vacation)", emoji: "✈️", desc: "Away for a longer trip" }
-            ].map(item => {
-              const currentStatus = memberProfiles[user?.uid || ""]?.status || "home";
-              const isSelected = currentStatus === item.id;
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  onPress={() => handleUpdateStatus(item.id as any)}
-                  className={`flex-row items-center p-3 rounded-2xl border ${isSelected ? 'bg-indigo-600/10 border-indigo-600' : 'bg-surfaceRaised border-border/50'}`}
-                >
-                  <Text className="text-xl mr-4">{item.emoji}</Text>
-                  <View className="flex-1">
-                    <Text className={`font-black text-sm ${isSelected ? 'text-indigo-600' : 'text-textMain'}`}>{item.label}</Text>
-                    <Text className="text-[10px] text-textMuted font-medium mt-0.5">{item.desc}</Text>
-                  </View>
-                  {isSelected && <MaterialIcons name="check" size={18} color="#4F46E5" />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </SlideModal>
       </SafeAreaView>
     </LinearGradient>
   );

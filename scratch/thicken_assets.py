@@ -110,20 +110,52 @@ def main():
     monogram = boost_image_alpha(monogram)
     print(f"Monogram thickened, size: {monogram.size}")
     
-    # 2. Crop and extract Text
-    text_box = (225, 670, 850, 850)
-    print("Extracting text...")
-    text = extract_region(img, text_box)
+    # 2. Crop and extract Text (Crop ONLY "House Sync" title, excluding old tagline)
+    text_box = (225, 670, 850, 782)
+    print("Extracting brand title text...")
+    title_img = extract_region(img, text_box)
     
-    text_bbox = text.getbbox()
-    if text_bbox:
-        text = text.crop(text_bbox)
+    title_bbox = title_img.getbbox()
+    if title_bbox:
+        title_img = title_img.crop(title_bbox)
         
     # Apply thickening filter to make the logo text bolder
-    print("Thickening text...")
-    text = text.filter(ImageFilter.MaxFilter(3))
-    text = boost_image_alpha(text)
-    print(f"Text thickened, size: {text.size}")
+    print("Thickening brand title...")
+    title_img = title_img.filter(ImageFilter.MaxFilter(3))
+    title_img = boost_image_alpha(title_img)
+    
+    # Programmatically render the new tagline: "Shared living & travel made simpler"
+    from PIL import ImageDraw, ImageFont
+    spacing = 16
+    font_size = 23
+    tagline_text = "Shared living & travel made simpler"
+    
+    # Create canvas for title + tagline
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    font = ImageFont.truetype(font_path, font_size)
+    
+    # Measure tagline
+    dummy_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    tag_bbox = dummy_draw.textbbox((0, 0), tagline_text, font=font)
+    tag_w = tag_bbox[2] - tag_bbox[0]
+    tag_h = tag_bbox[3] - tag_bbox[1]
+    
+    text_w = max(title_img.width, tag_w + 20)
+    text_h = title_img.height + spacing + tag_h + 10
+    
+    text = Image.new("RGBA", (text_w, text_h), (0, 0, 0, 0))
+    # Paste title centered
+    title_x = (text_w - title_img.width) // 2
+    text.paste(title_img, (title_x, 0), title_img)
+    
+    # Draw new tagline centered
+    draw = ImageDraw.Draw(text)
+    tag_x = (text_w - tag_w) // 2
+    tag_y = title_img.height + spacing
+    
+    # Use light blue/gray color matching original logo
+    draw.text((tag_x, tag_y), tagline_text, font=font, fill=(173, 214, 244, 255))
+    print(f"New brand text graphic generated, size: {text.size}")
     
     # 3. Generate adaptive-icon.png
     print("Generating adaptive-icon.png...")

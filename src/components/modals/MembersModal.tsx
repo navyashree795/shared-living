@@ -32,7 +32,7 @@ export const MembersModal = React.memo(({
       if (!householdData?.id) return;
       const token = await createInvitation(householdData.id);
       const inviteUrl = `https://shared-living-app.web.app/invite/${token}`;
-      const message = `Join my household on Shared Living!\n\nUse this link to join directly:\n${inviteUrl}\n\nOr enter the invite code: ${householdData.inviteCode}`;
+      const message = `Join my household on House Sync!\n\nUse this link to join directly:\n${inviteUrl}\n\nOr enter the invite code: ${householdData.inviteCode}`;
       await Share.share({
         message,
         url: inviteUrl,
@@ -101,29 +101,21 @@ export const MembersModal = React.memo(({
                 {uid === currentUserId ? "You" : "Member"}
               </Text>
             </View>
+            
+            {/* Automated Status indicator */}
             {(() => {
               const status = member.status || "home";
-              let statusEmoji = "🟢";
-              let statusText = "At Home";
-              if (status === "out") {
-                statusEmoji = "🟡";
-                statusText = "Out";
-              } else if (status === "sleeping") {
-                statusEmoji = "💤";
-                statusText = "Sleeping";
-              } else if (status === "away") {
-                statusEmoji = "✈️";
-                statusText = "Away";
-              }
+              const isHome = status === "home";
               return (
-                <View className={`flex-row items-center gap-1 px-2.5 py-1 rounded-xl ${status === "home" || status === "sleeping" ? "bg-emerald-500/10" : "bg-slate-500/10"}`}>
-                  <Text style={{ fontSize: 10 }}>{statusEmoji}</Text>
+                <View className={`flex-row items-center gap-1 px-2.5 py-1 rounded-xl ${isHome ? "bg-emerald-500/10" : "bg-slate-500/10"}`}>
+                  <Text style={{ fontSize: 10 }}>{isHome ? "🟢" : "🔴"}</Text>
                   <Text className="text-[9px] font-black uppercase tracking-wider text-textMain">
-                    {statusText}
+                    {isHome ? "At Home" : "Out"}
                   </Text>
                 </View>
               );
             })()}
+
             {isOwner && uid !== currentUserId && (
               <TouchableOpacity
                 onPress={() => handleRemoveMember(uid)}

@@ -66,24 +66,6 @@ export default function ChatScreen({ route, navigation }: Props) {
         setMessages(fetchedMessages);
         setLoading(false);
         isFirstLoad.current = false;
-
-        // Mark unread messages as read (Batch optimization)
-        const currentUid = auth.currentUser?.uid;
-        if (currentUid) {
-          const unreadMsgs = fetchedMessages.filter(msg => 
-            msg.senderId !== currentUid && (!msg.readBy || !msg.readBy.includes(currentUid))
-          );
-
-          if (unreadMsgs.length > 0) {
-            const batch = writeBatch(db);
-            unreadMsgs.forEach(msg => {
-              batch.update(doc(db, 'households', hid, 'messages', msg.id), {
-                readBy: arrayUnion(currentUid)
-              });
-            });
-            batch.commit().catch(error => console.error("Error batch marking read:", error));
-          }
-        }
       },
       (error) => {
         console.error("Chat Subscription Error:", error);
@@ -94,6 +76,30 @@ export default function ChatScreen({ route, navigation }: Props) {
 
     return unsub;
   }, [householdId, navigation, insets.top]);
+
+  // Decoupled & debounced effect to mark incoming messages as read without blocking onSnapshot thread
+  useEffect(() => {
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid || messages.length === 0 || !householdId) return;
+
+    const unreadMsgs = messages.filter(msg => 
+      msg.senderId !== currentUid && (!msg.readBy || !msg.readBy.includes(currentUid))
+    );
+
+    if (unreadMsgs.length === 0) return;
+
+    const timer = setTimeout(() => {
+      const batch = writeBatch(db);
+      unreadMsgs.forEach(msg => {
+        batch.update(doc(db, 'households', hid, 'messages', msg.id), {
+          readBy: arrayUnion(currentUid)
+        });
+      });
+      batch.commit().catch(error => console.error("Error batch marking read:", error));
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [messages, hid, householdId]);
 
   const handleSend = async () => {
     const user = auth.currentUser;
