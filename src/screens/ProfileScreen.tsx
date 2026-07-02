@@ -345,17 +345,25 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['top']}>
-      {/* Custom Header with Back Button */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 }}>
+      {/* Custom Header with Back Button and Logout Button */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()}
+            style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: raised, alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, borderColor: bord }}
+          >
+            <MaterialIcons name="arrow-back" size={22} color={text} />
+          </TouchableOpacity>
+          <Text style={{ fontSize: 28, fontWeight: '900', color: text, letterSpacing: -0.5 }}>
+            Profile
+          </Text>
+        </View>
         <TouchableOpacity 
-          onPress={() => navigation.goBack()}
-          style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: raised, alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 1, borderColor: bord }}
+          onPress={handleSignOut}
+          style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? '#7F1D1D' : '#FECACA' }}
         >
-          <MaterialIcons name="arrow-back" size={22} color={text} />
+          <MaterialIcons name="logout" size={18} color="#EF4444" />
         </TouchableOpacity>
-        <Text style={{ fontSize: 28, fontWeight: '900', color: text, letterSpacing: -0.5 }}>
-          Profile
-        </Text>
       </View>
 
       <KeyboardAvoidingView
@@ -365,326 +373,288 @@ export default function ProfileScreen() {
       >
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingBottom: 40, paddingTop: 16 }} showsVerticalScrollIndicator={false}>
 
-        {/* Avatar + Name */}
-        <View style={{ alignItems: 'center', marginBottom: 32 }}>
-          <TouchableOpacity onPress={handlePickImage} disabled={uploading} activeOpacity={0.8}>
-            <View style={{ position: 'relative' }}>
-              <Avatar
-                name={profile?.username || user?.email || 'U'}
-                size={80}
-                bgColor={primary}
-                color="#fff"
-                photoUrl={profile?.photoUrl}
-                style={{ borderRadius: 28 }}
-              />
-              <View style={{ position: 'absolute', bottom: 0, right: -4, width: 28, height: 28, borderRadius: 14, backgroundColor: raised, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: bord }}>
-                {uploading ? (
-                  <ActivityIndicator size="small" color={primary} />
-                ) : (
-                  <MaterialIcons name="photo-camera" size={14} color={muted} />
-                )}
+          {/* Premium Profile Header Card */}
+          <View style={{ backgroundColor: surface, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: bord, alignItems: 'center', marginBottom: 24 }}>
+            <TouchableOpacity onPress={handlePickImage} disabled={uploading} activeOpacity={0.8}>
+              <View style={{ position: 'relative', marginBottom: 12 }}>
+                <Avatar
+                  name={profile?.username || user?.email || 'U'}
+                  size={84}
+                  bgColor={primary}
+                  color="#fff"
+                  photoUrl={profile?.photoUrl}
+                  style={{ borderRadius: 30 }}
+                />
+                <View style={{ position: 'absolute', bottom: -2, right: -4, width: 28, height: 28, borderRadius: 14, backgroundColor: raised, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: bord, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3 }}>
+                  {uploading ? (
+                    <ActivityIndicator size="small" color={primary} />
+                  ) : (
+                    <MaterialIcons name="photo-camera" size={14} color={muted} />
+                  )}
+                </View>
               </View>
-            </View>
-          </TouchableOpacity>
-          <Text style={{ fontSize: 22, fontWeight: '800', color: text }}>
-            {profile?.username ? profile.username.replace(/^@+/, '') : 'unknown'}
-          </Text>
-          <Text style={{ fontSize: 13, color: muted, marginTop: 4 }}>
-            {user?.email}
-          </Text>
-        </View>
-
-        {/* Edit Username */}
-        <View style={{ backgroundColor: surface, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: bord }}>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
-            Display Name
-          </Text>
-          {editing ? (
-            <>
-              <TextInput
-                value={editUsername}
-                onChangeText={setEditUsername}
-                autoCapitalize="none"
-                autoFocus
-                style={{ fontSize: 16, fontWeight: '700', color: text, borderBottomWidth: 1, borderColor: primary, paddingBottom: 8, marginBottom: 16 }}
-                placeholderTextColor={muted}
-              />
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity
-                  onPress={() => setEditing(false)}
-                  style={{ flex: 1, backgroundColor: raised, borderRadius: 14, paddingVertical: 12, alignItems: 'center' }}
-                >
-                  <Text style={{ color: muted, fontWeight: '700' }}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleSave}
-                  style={{ flex: 1, backgroundColor: primary, borderRadius: 14, paddingVertical: 12, alignItems: 'center' }}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>Save</Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : (
-            <TouchableOpacity
-              onPress={() => {
-                setEditUsername(profile?.username ? profile.username.replace(/^@+/, '') : '');
-                setEditing(true);
-              }}
-              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: '700', color: text }}>
-                {profile?.username ? profile.username.replace(/^@+/, '') : 'Set username'}
-              </Text>
-              <MaterialIcons name="edit" size={18} color={muted} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Household Section */}
-        {householdData && (
-          <View style={{ backgroundColor: surface, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: bord }}>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
-              Household
-            </Text>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: text, marginBottom: 16 }}>
-              {householdData.name}
-            </Text>
-            
-            <Text style={{ fontSize: 11, fontWeight: '700', color: muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-              Invite Code
-            </Text>
-            <TouchableOpacity
-              onPress={copyCode}
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: raised, borderRadius: 14, padding: 16, marginBottom: 12 }}
-            >
-              <Text style={{ fontSize: 22, fontWeight: '900', color: primary, letterSpacing: 6 }}>
-                {householdData.inviteCode}
-              </Text>
-              <MaterialIcons name="content-copy" size={20} color={muted} />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={async () => {
-                try {
-                  const token = await createInvitation(householdData.id || householdId || '');
-                  const inviteUrl = `https://shared-living-app.web.app/invite/${token}`;
-                  const message = `Join my household on Shared Living!\n\nUse this link to join directly:\n${inviteUrl}\n\nOr enter the invite code: ${householdData.inviteCode}`;
-                  await Share.share({
-                    message,
-                    url: inviteUrl,
-                  });
-                } catch (error: any) {
-                  Alert.alert("Error", error.message || "Could not generate invitation link.");
-                }
-              }}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: primary,
-                borderRadius: 14,
-                padding: 16,
-                marginBottom: 16,
-                gap: 8
-              }}
-            >
-              <MaterialIcons name="share" size={20} color="#fff" />
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
-                Share Invite Link
-              </Text>
-            </TouchableOpacity>
-
-            {/* Billing Cycle Setting */}
-            <Text style={{ fontSize: 11, fontWeight: '700', color: muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-              Billing Cycle Start Day
-            </Text>
-            {householdData.createdBy === auth.currentUser?.uid ? (
-              <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+            {editing ? (
+              <View style={{ width: '100%', alignItems: 'center' }}>
                 <TextInput
-                  value={billingCycleDay}
-                  onChangeText={setBillingCycleDay}
-                  keyboardType="numeric"
-                  maxLength={2}
-                  style={{
-                    flex: 1,
-                    backgroundColor: raised,
-                    borderRadius: 14,
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                    fontSize: 16,
-                    fontWeight: '700',
-                    color: text,
-                    borderWidth: 1,
-                    borderColor: bord
-                  }}
-                  placeholder="e.g. 10"
+                  value={editUsername}
+                  onChangeText={setEditUsername}
+                  autoCapitalize="none"
+                  autoFocus
+                  style={{ fontSize: 18, fontWeight: '800', color: text, borderBottomWidth: 1.5, borderColor: primary, paddingBottom: 4, width: '70%', textAlign: 'center', marginBottom: 12 }}
                   placeholderTextColor={muted}
                 />
-                <TouchableOpacity
-                  onPress={handleSaveBillingCycle}
-                  disabled={savingBillingCycle}
-                  style={{
-                    backgroundColor: primary,
-                    borderRadius: 14,
-                    paddingHorizontal: 20,
-                    paddingVertical: 12,
-                    justifyContent: 'center',
-                    alignItems: 'center'
-                  }}
-                >
-                  {savingBillingCycle ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={{ color: '#fff', fontWeight: '700' }}>Save</Text>
-                  )}
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8, width: '60%' }}>
+                  <TouchableOpacity
+                    onPress={() => setEditing(false)}
+                    style={{ flex: 1, backgroundColor: raised, borderRadius: 10, paddingVertical: 8, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: muted, fontWeight: '700', fontSize: 12 }}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleSave}
+                    style={{ flex: 1, backgroundColor: primary, borderRadius: 10, paddingVertical: 8, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>Save</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
-              <View style={{ backgroundColor: raised, borderRadius: 14, padding: 16, marginBottom: 16 }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: text }}>
-                  Starts on Day {householdData.billingCycleStartDay || 1} of each month
+              <TouchableOpacity
+                onPress={() => {
+                  setEditUsername(profile?.username ? profile.username.replace(/^@+/, '') : '');
+                  setEditing(true);
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+              >
+                <Text style={{ fontSize: 20, fontWeight: '900', color: text }}>
+                  @{profile?.username ? profile.username.replace(/^@+/, '') : 'set_username'}
                 </Text>
-                <Text style={{ fontSize: 11, color: muted, marginTop: 4 }}>
-                  Configured by household owner
-                </Text>
-              </View>
+                <MaterialIcons name="edit" size={16} color={muted} />
+              </TouchableOpacity>
             )}
-
-            {/* Archive section */}
-            <Text style={{ fontSize: 11, fontWeight: '700', color: muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-              Backup & Retention
+            <Text style={{ fontSize: 12, color: isDark ? '#94A3B8' : '#64748B', marginTop: 4, fontWeight: '600' }}>
+              {user?.email}
             </Text>
-            <TouchableOpacity
-              onPress={() => {
-                fetchArchiveData();
-                setIsArchiveModalVisible(true);
-              }}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                backgroundColor: isDark ? 'rgba(99, 102, 241, 0.1)' : 'rgba(99, 102, 241, 0.05)',
-                borderRadius: 14,
-                padding: 16,
-                borderWidth: 1,
-                borderColor: 'rgba(99, 102, 241, 0.2)'
-              }}
-            >
-              <View>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: text }}>
-                  View Archived Data
-                </Text>
-                <Text style={{ fontSize: 11, color: primary, marginTop: 2 }}>
-                  Months 4 & 5 backup logs
-                </Text>
-              </View>
-              <MaterialIcons name="archive" size={22} color={primary} />
-            </TouchableOpacity>
+          </View>
 
-            <TouchableOpacity
-              onPress={handleLeaveHousehold}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginTop: 16,
-                paddingTop: 16,
-                borderTopWidth: 1,
-                borderTopColor: bord
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: isDark ? '#3B1219' : '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}>
-                  <MaterialIcons name="exit-to-app" size={20} color="#EF4444" />
+          {/* Household Section */}
+          {householdData && (
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ fontSize: 10, fontWeight: '900', color: muted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, paddingLeft: 4 }}>
+                Household: {householdData.name}
+              </Text>
+              <View style={{ backgroundColor: surface, borderRadius: 20, borderWidth: 1, borderColor: bord, overflow: 'hidden' }}>
+                
+                {/* Row 1: Invite Code & Share */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: bord }}>
+                  <View>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#64748B' : '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Invite Code
+                    </Text>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: primary, letterSpacing: 2, marginTop: 2 }}>
+                      {householdData.inviteCode}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      onPress={copyCode}
+                      style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: raised, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: bord }}
+                    >
+                      <MaterialIcons name="content-copy" size={18} color={muted} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        try {
+                          const token = await createInvitation(householdData.id || householdId || '');
+                          const inviteUrl = `https://shared-living-app.web.app/invite/${token}`;
+                          const message = `Join my household on House Sync!\n\nUse this link to join directly:\n${inviteUrl}\n\nOr enter the invite code: ${householdData.inviteCode}`;
+                          await Share.share({ message, url: inviteUrl });
+                        } catch (error: any) {
+                          Alert.alert("Error", error.message || "Could not generate invitation link.");
+                        }
+                      }}
+                      style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: primary, alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <MaterialIcons name="share" size={18} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#EF4444' }}>
-                  Leave Household
-                </Text>
+
+                {/* Row 2: Billing Cycle Setting */}
+                <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: bord }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#64748B' : '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                    Billing Cycle Start Day
+                  </Text>
+                  {householdData.createdBy === auth.currentUser?.uid ? (
+                    <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                      <TextInput
+                        value={billingCycleDay}
+                        onChangeText={setBillingCycleDay}
+                        keyboardType="numeric"
+                        maxLength={2}
+                        style={{
+                          flex: 1,
+                          backgroundColor: raised,
+                          borderRadius: 12,
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          fontSize: 14,
+                          fontWeight: '700',
+                          color: text,
+                          borderWidth: 1,
+                          borderColor: bord
+                        }}
+                        placeholder="e.g. 10"
+                        placeholderTextColor={muted}
+                      />
+                      <TouchableOpacity
+                        onPress={handleSaveBillingCycle}
+                        disabled={savingBillingCycle}
+                        style={{
+                          backgroundColor: primary,
+                          borderRadius: 12,
+                          paddingHorizontal: 16,
+                          paddingVertical: 9,
+                          justifyContent: 'center',
+                          alignItems: 'center'
+                        }}
+                      >
+                        {savingBillingCycle ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>Save</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: text }}>
+                      Starts on Day {householdData.billingCycleStartDay || 1} (Configured by Owner)
+                    </Text>
+                  )}
+                </View>
+
+                {/* Row 3: Backup & Archives */}
+                <TouchableOpacity
+                  onPress={() => {
+                    fetchArchiveData();
+                    setIsArchiveModalVisible(true);
+                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: bord }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#EEF2FF', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="archive" size={18} color={primary} />
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: text }}>
+                        View Archived Data
+                      </Text>
+                      <Text style={{ fontSize: 10, color: isDark ? 'rgba(255,255,255,0.4)' : '#64748B', marginTop: 1 }}>
+                        Backup logs for Months 4 & 5
+                      </Text>
+                    </View>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={muted} />
+                </TouchableOpacity>
+
+                {/* Row 4: Leave Household */}
+                <TouchableOpacity
+                  onPress={handleLeaveHousehold}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: isDark ? '#3B1219' : '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="exit-to-app" size={18} color="#EF4444" />
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#EF4444' }}>
+                      Leave Household
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color="#EF4444" />
+                </TouchableOpacity>
+
               </View>
-              <MaterialIcons name="chevron-right" size={20} color="#EF4444" />
-            </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Preferences Section */}
+          <View style={{ marginBottom: 24 }}>
+            <Text style={{ fontSize: 10, fontWeight: '900', color: muted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, paddingLeft: 4 }}>
+              App Preferences
+            </Text>
+            <View style={{ backgroundColor: surface, borderRadius: 20, borderWidth: 1, borderColor: bord, overflow: 'hidden' }}>
+              
+              {/* Theme Toggle Row */}
+              <TouchableOpacity
+                onPress={toggleTheme}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: bord }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name={isDark ? 'dark-mode' : 'light-mode'} size={18} color={primary} />
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: text }}>
+                    {isDark ? 'Dark Theme' : 'Light Theme'}
+                  </Text>
+                </View>
+                <View style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: isDark ? primary : raised, justifyContent: 'center', paddingHorizontal: 2 }}>
+                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', alignSelf: isDark ? 'flex-end' : 'flex-start', elevation: 2 }} />
+                </View>
+              </TouchableOpacity>
+
+              {/* Privacy Policy Row */}
+              <TouchableOpacity
+                onPress={() => {
+                  WebBrowser.openBrowserAsync('https://jeevan0714.github.io/shared-living/privacy-policy.html');
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#EEF2FF', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="security" size={18} color={primary} />
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: text }}>
+                    Privacy Policy
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={muted} />
+              </TouchableOpacity>
+
+            </View>
           </View>
-        )}
 
-        {/* Appearance */}
-        <View style={{ backgroundColor: surface, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: bord }}>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
-            Appearance
-          </Text>
-          <TouchableOpacity
-            onPress={toggleTheme}
-            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialIcons name={isDark ? 'dark-mode' : 'light-mode'} size={20} color={primary} />
-              </View>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: text }}>
-                {isDark ? 'Dark Mode' : 'Light Mode'}
-              </Text>
+          {/* Danger Zone Section */}
+          <View style={{ marginBottom: 24 }}>
+            <Text style={{ fontSize: 10, fontWeight: '900', color: '#EF4444', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, paddingLeft: 4 }}>
+              Danger Zone
+            </Text>
+            <View style={{ backgroundColor: surface, borderRadius: 20, borderWidth: 1, borderColor: isDark ? '#5A1A24' : '#FECACA', overflow: 'hidden' }}>
+              <TouchableOpacity
+                onPress={handleDeleteAccount}
+                disabled={loadingDelete}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: isDark ? '#3B1219' : '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}>
+                    {loadingDelete ? (
+                      <ActivityIndicator size="small" color="#EF4444" />
+                    ) : (
+                      <MaterialIcons name="delete-forever" size={18} color="#EF4444" />
+                    )}
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#EF4444' }}>
+                    Delete Account Permanently
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color="#EF4444" />
+              </TouchableOpacity>
             </View>
-            <View style={{ width: 48, height: 28, borderRadius: 14, backgroundColor: isDark ? primary : raised, borderWidth: 1, borderColor: bord, justifyContent: 'center', paddingHorizontal: 2 }}>
-              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff', alignSelf: isDark ? 'flex-end' : 'flex-start', elevation: 2 }} />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Legal & Compliance */}
-        <View style={{ backgroundColor: surface, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: bord }}>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
-            Legal & Compliance
-          </Text>
-          <TouchableOpacity
-            onPress={() => {
-              WebBrowser.openBrowserAsync('https://jeevan0714.github.io/shared-living/privacy-policy.html');
-            }}
-            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#EEF2FF', alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialIcons name="security" size={20} color={primary} />
-              </View>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: text }}>
-                Privacy Policy
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color={muted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleDeleteAccount}
-            disabled={loadingDelete}
-            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: isDark ? '#3B1219' : '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}>
-                {loadingDelete ? (
-                  <ActivityIndicator size="small" color="#EF4444" />
-                ) : (
-                  <MaterialIcons name="delete-forever" size={20} color="#EF4444" />
-                )}
-              </View>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#EF4444' }}>
-                Delete Account
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#EF4444" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Sign Out */}
-        <TouchableOpacity
-          onPress={handleSignOut}
-          style={{ backgroundColor: isDark ? '#3B1219' : '#FEF2F2', borderRadius: 20, padding: 20, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: isDark ? '#7F1D1D' : '#FECACA', marginBottom: 40 }}
-        >
-          <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: isDark ? '#7F1D1D' : '#FEE2E2', alignItems: 'center', justifyContent: 'center' }}>
-            <MaterialIcons name="logout" size={20} color="#EF4444" />
           </View>
-          <Text style={{ fontSize: 15, fontWeight: '700', color: '#EF4444' }}>Sign Out</Text>
-        </TouchableOpacity>
 
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Backup & Archives SlideModal */}
       <SlideModal

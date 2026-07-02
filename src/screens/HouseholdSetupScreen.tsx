@@ -18,6 +18,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { validateInvitation, acceptInvitation } from '../utils/invitationApi';
 
+import * as Location from 'expo-location';
+
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdSetup'>;
 
 export default function HouseholdSetupScreen({ navigation, route }: Props) {
@@ -59,6 +61,39 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
   const handleCreateHousehold = async () => {
     if (!householdName.trim()) { Alert.alert("Error", "Please enter a household name."); return; }
     
+    let homeLocation: { latitude: number; longitude: number } | null = null;
+    
+    if (householdType === 'roommate') {
+      try {
+        setLoading(true);
+        const { status: foreStatus } = await Location.requestForegroundPermissionsAsync();
+        if (foreStatus !== 'granted') {
+          Alert.alert(
+            "Location Permission Required",
+            "This app requires location access to automatically mark roommates as 'At Home' or 'Out'. Please enable location services in settings to proceed."
+          );
+          setLoading(false);
+          return;
+        }
+        
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        homeLocation = {
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        };
+      } catch (err: any) {
+        console.error("Failed to pin home location during household creation:", err);
+        Alert.alert(
+          "Location Error",
+          "Could not verify your current location. Please make sure location services are enabled on your device and try again."
+        );
+        setLoading(false);
+        return;
+      }
+    }
+    
     if (householdType === 'travel') {
       if (!tripEndDate.trim()) {
         Alert.alert("Error", "Please enter the Trip End Date.");
@@ -94,6 +129,12 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
         createdAt: new Date().toISOString(), 
         type: householdType 
       };
+
+      if (householdType === 'roommate' && homeLocation) {
+        householdData.info = {
+          homeLocation
+        };
+      }
 
       if (householdType === 'travel') {
         const dateMatch = tripEndDate.trim().match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/)!;

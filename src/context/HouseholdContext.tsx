@@ -117,21 +117,46 @@ export const HouseholdProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    const q = query(
-      collection(db, "users"),
-      where(documentId(), "in", membersList)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const profiles: Record<string, UserProfile> = {};
-      snap.forEach((doc) => {
-        profiles[doc.id] = doc.data() as UserProfile;
+    // Chunk the membersList into arrays of max 30 items to prevent Firestore "in" query limits
+    const chunks: string[][] = [];
+    for (let i = 0; i < membersList.length; i += 30) {
+      chunks.push(membersList.slice(i, i + 30));
+    }
+
+    const unsubscribes: (() => void)[] = [];
+    const profilesMap: Record<number, Record<string, UserProfile>> = {};
+
+    chunks.forEach((chunk, index) => {
+      const q = query(
+        collection(db, "users"),
+        where(documentId(), "in", chunk)
+      );
+      
+      const unsub = onSnapshot(q, (snap) => {
+        const chunkProfiles: Record<string, UserProfile> = {};
+        snap.forEach((doc) => {
+          chunkProfiles[doc.id] = doc.data() as UserProfile;
+        });
+
+        profilesMap[index] = chunkProfiles;
+
+        // Merge all chunks to construct the final profiles state
+        const allProfiles: Record<string, UserProfile> = {};
+        Object.values(profilesMap).forEach((chunkMap) => {
+          Object.assign(allProfiles, chunkMap);
+        });
+
+        setMemberProfiles(allProfiles);
+      }, (err) => {
+        console.error(`Failed to sync member profiles for chunk ${index}:`, err);
       });
-      setMemberProfiles(profiles);
-    }, (err) => {
-      console.error("Failed to sync member profiles:", err);
+
+      unsubscribes.push(unsub);
     });
 
-    return unsub;
+    return () => {
+      unsubscribes.forEach((unsub) => unsub());
+    };
   }, [membersDeps]);
 
 
