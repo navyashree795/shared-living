@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,10 +8,16 @@ import {
   Dimensions,
   Linking,
   ScrollView,
+  Alert,
 } from 'react-native';
 import Svg, { Circle, Path, Polygon, Defs, LinearGradient, Stop as SvgStop } from 'react-native-svg';
+import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@expo/vector-icons';
+import * as Sharing from 'expo-sharing';
+import { captureRef } from 'react-native-view-shot';
 import SlideModal from '../SlideModal';
 import { ItineraryItem } from '../../types';
+import { useTheme } from '../../context/ThemeContext';
 
 export interface Traveler {
   initials: string;
@@ -82,25 +88,51 @@ const DEFAULT_TRIP_DATA: TripData = {
 interface TravelWrapCardProps {
   data?: TripData;
   householdId?: string | null;
+  onClose?: () => void;
 }
 
 export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({ 
   data = DEFAULT_TRIP_DATA,
-  householdId = ""
+  householdId = "",
+  onClose
 }) => {
+  const cardRef = useRef<View>(null);
   const [panelWidth, setPanelWidth] = useState(270);
   const [panelHeight, setPanelHeight] = useState(240);
   
-  const handleOpenApp = () => {
-    const appScheme = `sharedliving://wrap/${householdId || ""}`;
-    Linking.openURL(appScheme).catch(() => {
-      // Fallback if app isn't installed
-      handleDownloadApp();
-    });
-  };
-
-  const handleDownloadApp = () => {
-    Linking.openURL('https://play.google.com/store/apps/details?id=com.jeevan0714.sharedliving');
+  const { isDark } = useTheme();
+  const bgTheme = isDark ? "#0b0d19" : "#F8FAFC";
+  
+  const btnPrimaryBg = isDark ? "#ffffff" : "#6366f1";
+  const btnPrimaryText = isDark ? "#0b0d19" : "#ffffff";
+  
+  const btnSecondaryBg = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)";
+  const btnSecondaryBorder = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)";
+  const btnSecondaryText = isDark ? "#ffffff" : "#475569";
+  
+  const handleShare = async () => {
+    try {
+      if (!cardRef.current) return;
+      
+      const uri = await captureRef(cardRef, {
+        format: "png",
+        quality: 1.0,
+        result: "tmpfile"
+      });
+      
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: 'Share your Travel Wrap!',
+          UTI: 'public.png',
+        });
+      } else {
+        Alert.alert("Sharing is not available", "Sharing is not supported on this platform.");
+      }
+    } catch (error) {
+      console.log("Error capturing/sharing card:", error);
+      Alert.alert("Error sharing", "An error occurred while generating the image for sharing.");
+    }
   };
 
   // --- Sub-Component Builders ---
@@ -169,12 +201,12 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
 
   const renderRoadPanel = () => {
     const roadTop = 145;
-    const roadBot = 275;
+    const roadBot = 300;
     const n = data.stops.length;
 
     // Mathematical calculations parsing the HTML's custom vector road layout geometry
     const getRoadPoint = (y: number) => {
-      const t = (275 - y) / (275 - 145);
+      const t = (300 - y) / (300 - 145);
       const sway = Math.sin(t * Math.PI * 3.2);
       const amplitude = 48 * Math.pow(1 - t, 0.8) + 12;
       const x = 200 + sway * amplitude;
@@ -201,7 +233,8 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
 
     const nodePositions = data.stops.map((stop: Stop, i: number) => {
       const t = i / Math.max(n - 1, 1);
-      const y = roadBot - t * (roadBot - roadTop);
+      // Keep nodes within safe y-bounds (155 to 282) so they don't clip at top/bottom edges
+      const y = 282 - t * (282 - 155);
       const { x } = getRoadPoint(y);
       const r = 9 - t * 3.5;
       
@@ -307,17 +340,33 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
   };
 
   return (
-    <View style={styles.scrollContainer}>
-      <View style={styles.wrapCard}>
+    <View style={[styles.scrollContainer, { backgroundColor: bgTheme }]}>
+      {/* Card with gradient background — ref captures only this for sharing */}
+      <View ref={cardRef} style={styles.wrapCard}>
+        <ExpoLinearGradient
+          colors={['#F5F7FF', '#FFFFFF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
         
         {/* Header Branding Structure */}
         <View style={styles.cardHeader}>
           <View style={styles.brandContainer}>
+            {/* Transparent icon — shows house graphic clearly on any background */}
             <Image
-              source={require("../../../assets/logo_landscape.png")}
-              style={{ width: 120, height: 28 }}
+              source={require("../../../assets/adaptive-icon-modified.png")}
+              style={{ width: 44, height: 44, marginRight: 8 }}
               resizeMode="contain"
             />
+            <View>
+              <Text style={{ fontSize: 15, fontWeight: "900", color: "#1e1b4b", letterSpacing: -0.3 }}>
+                House Sync
+              </Text>
+              <Text style={{ fontSize: 9, fontWeight: "700", color: "#6366f1", letterSpacing: 0.6, textTransform: "uppercase" }}>
+                Shared Living – Made Simpler
+              </Text>
+            </View>
           </View>
           <TouchableOpacity style={styles.shareBtn} activeOpacity={0.7}>
             <Text style={{ fontSize: 14 }}>🔗</Text>
@@ -329,15 +378,23 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
           {renderCrewStack()}
 
           <View style={styles.mainTraveler}>
-            <View style={styles.avatarRing}>
-              {data.mainTraveler.photoUrl ? (
-                <Image source={{ uri: data.mainTraveler.photoUrl }} style={styles.mainAvatar} />
-              ) : (
-                <View style={[styles.mainAvatar, styles.mainAvatarFallback]}>
-                  <Text style={styles.mainAvatarText}>{data.mainTraveler.initials}</Text>
-                </View>
-              )}
-            </View>
+            {/* Gradient avatar ring — Instagram story feel */}
+            <ExpoLinearGradient
+              colors={['#6366f1', '#06b6d4']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatarRingGradient}
+            >
+              <View style={styles.avatarRingInner}>
+                {data.mainTraveler.photoUrl ? (
+                  <Image source={{ uri: data.mainTraveler.photoUrl }} style={styles.mainAvatar} />
+                ) : (
+                  <View style={[styles.mainAvatar, styles.mainAvatarFallback]}>
+                    <Text style={styles.mainAvatarText}>{data.mainTraveler.initials}</Text>
+                  </View>
+                )}
+              </View>
+            </ExpoLinearGradient>
             <Text style={styles.travelerName}>{data.mainTraveler.name}</Text>
             <Text style={styles.travelerCity}>{data.mainTraveler.city}</Text>
           </View>
@@ -350,11 +407,26 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
 
         {/* Metrics/Stats Footer Container */}
         <View style={styles.cardFooter}>
+          {/* Gradient divider line */}
+          <ExpoLinearGradient
+            colors={['#6366f1', '#06b6d4', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{ height: 2, borderRadius: 1, marginBottom: 10 }}
+          />
           <View style={styles.footerTopRow}>
-            <Text style={styles.tripTitle} numberOfLines={1}>{data.tripName}</Text>
+            <View>
+              <Text style={styles.tripTitle} numberOfLines={1}>{data.tripName}</Text>
+              {/* Indigo underline accent */}
+              <View style={{ width: 36, height: 2, borderRadius: 1, backgroundColor: '#6366f1', marginTop: 3 }} />
+            </View>
             <View style={styles.statsContainer}>
-              <View style={styles.statPill}><Text style={styles.statPillText}>📍 {data.kmCovered}</Text></View>
-              <View style={styles.statPill}><Text style={styles.statPillText}>📄 {data.activities} Acts</Text></View>
+              <View style={[styles.statPill, { backgroundColor: '#EEF2FF' }]}>
+                <Text style={[styles.statPillText, { color: '#6366f1' }]}>📍 {data.kmCovered}</Text>
+              </View>
+              <View style={[styles.statPill, { backgroundColor: '#ECFEFF' }]}>
+                <Text style={[styles.statPillText, { color: '#0891b2' }]}>⚡ {data.activities} Acts</Text>
+              </View>
             </View>
           </View>
           <Text style={styles.footerDate}>📅 {data.startDate} – {data.endDate}</Text>
@@ -363,12 +435,20 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
 
       {/* Action Navigation Interface Links */}
       <View style={styles.actionWrapper}>
-        <TouchableOpacity style={styles.btnPrimary} onPress={handleOpenApp} activeOpacity={0.8}>
-          <Text style={styles.btnPrimaryText}>🏠 Open in App</Text>
+        {/* Gradient share CTA */}
+        <TouchableOpacity style={styles.btnPrimaryWrapper} onPress={handleShare} activeOpacity={0.85}>
+          <ExpoLinearGradient
+            colors={['#6366f1', '#06b6d4']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.btnPrimaryGradient}
+          >
+            <Text style={styles.btnPrimaryText}>🔗 Share Travel Wrap</Text>
+          </ExpoLinearGradient>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.btnSecondary} onPress={handleDownloadApp} activeOpacity={0.8}>
-          <Text style={styles.btnSecondaryText}>Download App</Text>
+        <TouchableOpacity style={[styles.btnSecondary, { backgroundColor: btnSecondaryBg, borderColor: btnSecondaryBorder }]} onPress={onClose} activeOpacity={0.8}>
+          <Text style={[styles.btnSecondaryText, { color: btnSecondaryText }]}>Back to Trip</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -392,6 +472,16 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
   currentUserId,
   itinerary,
 }) => {
+  const { isDark } = useTheme();
+  const textMain = isDark ? "#F1F5F9" : "#1E1B4B";
+  const textMuted = isDark ? "#94A3B8" : "#475569";
+  const bgTheme = isDark ? "#0b0d19" : "#F8FAFC";
+  
+  const cardBorder = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)";
+  const rowBorder = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)";
+  const emptyBg = isDark ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)";
+  const rowBgChecked = isDark ? "rgba(99, 102, 241, 0.08)" : "rgba(99, 102, 241, 0.04)";
+
   // 1. Filter approved itinerary items and sort chronologically
   const approvedItinerary = itinerary
     .filter((item) => item.approved)
@@ -401,7 +491,34 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
       return dateA.localeCompare(dateB);
     });
 
-  const selectedMilestones = approvedItinerary.slice(0, 10);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (visible && approvedItinerary.length > 0) {
+      // Default to checking the first 5 items to show a winding road-trip trail representation
+      setSelectedIds(approvedItinerary.slice(0, 5).map((item) => item.id));
+    }
+  }, [visible]);
+
+  const handleToggleMilestone = (id: string) => {
+    if (selectedIds.includes(id)) {
+      if (selectedIds.length <= 1) {
+        Alert.alert("Required", "Please keep at least 1 milestone selected.");
+        return;
+      }
+      setSelectedIds(selectedIds.filter((x) => x !== id));
+    } else {
+      if (selectedIds.length >= 10) {
+        Alert.alert("Limit Reached", "You can highlight up to 10 milestone spots on the map.");
+        return;
+      }
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
+  const selectedMilestones = approvedItinerary.filter((item) =>
+    selectedIds.includes(item.id)
+  );
 
   const parseDateString = (str: string) => {
     if (!str) return null;
@@ -534,8 +651,68 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
 
   return (
     <SlideModal visible={visible} onClose={onClose} title="Shareable Trip Wrap">
-      <View style={{ flex: 1, backgroundColor: '#0b0d19' }}>
-        <TravelWrapCard data={tripData} householdId={householdData?.id || ""} />
+      <View style={{ flex: 1, backgroundColor: bgTheme, paddingBottom: 24 }}>
+        <TravelWrapCard data={tripData} householdId={householdData?.id || ""} onClose={onClose} />
+
+        {/* Milestone customization checklist */}
+        <View style={styles.interactiveArea}>
+          <Text style={[styles.selectorTitle, { color: textMain }]}>
+            Customize Card Milestones
+          </Text>
+          <Text style={[styles.selectorSubtitle, { color: textMuted }]}>
+            Select up to 10 activities to plot on your road-trip path:
+          </Text>
+
+          {approvedItinerary.length === 0 ? (
+            <View style={[styles.emptyStateBox, { backgroundColor: emptyBg }]}>
+              <Text style={[styles.emptyStateText, { color: textMuted }]}>
+                No approved itinerary activities found. Add some to your timeline first!
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.checklistCard, { borderColor: cardBorder }]}>
+              {approvedItinerary.map((item) => {
+                const isChecked = selectedIds.includes(item.id);
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    onPress={() => handleToggleMilestone(item.id)}
+                    style={[
+                      styles.checkRow,
+                      { 
+                        borderColor: rowBorder,
+                        backgroundColor: isChecked ? rowBgChecked : 'transparent'
+                      },
+                    ]}
+                  >
+                    <View style={styles.checkLeft}>
+                      <MaterialIcons
+                        name={isChecked ? "check-box" : "check-box-outline-blank"}
+                        size={20}
+                        color={isChecked ? "#6366F1" : "#94A3B8"}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.checkActivityText, { color: textMain }]} numberOfLines={1}>
+                          {item.activity}
+                        </Text>
+                        <Text style={[styles.checkDateText, { color: textMuted }]}>
+                          {item.date} at {item.time}
+                        </Text>
+                      </View>
+                    </View>
+                    {isChecked && (
+                      <View style={styles.numberBadge}>
+                        <Text style={styles.numberBadgeText}>
+                          {selectedIds.indexOf(item.id) + 1}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
       </View>
     </SlideModal>
   );
@@ -554,11 +731,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 36,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.12)',
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 6,
+    overflow: 'hidden',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -659,6 +839,16 @@ const styles = StyleSheet.create({
   mainTraveler: {
     flex: 1,
     alignItems: 'center',
+  },
+  avatarRingGradient: {
+    padding: 2.5,
+    borderRadius: 37,
+    marginBottom: 4,
+  },
+  avatarRingInner: {
+    borderRadius: 34,
+    padding: 2,
+    backgroundColor: '#ffffff',
   },
   avatarRing: {
     padding: 3,
@@ -777,9 +967,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   cardFooter: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(99,102,241,0.08)',
-    paddingTop: 12,
+    paddingTop: 4,
   },
   footerTopRow: {
     flexDirection: 'row',
@@ -820,6 +1008,22 @@ const styles = StyleSheet.create({
     marginTop: 16,
     justifyContent: 'space-between',
   },
+  btnPrimaryWrapper: {
+    flex: 1,
+    borderRadius: 16,
+    marginRight: 8,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  btnPrimaryGradient: {
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   btnPrimary: {
     flex: 1,
     backgroundColor: '#ffffff',
@@ -828,14 +1032,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
-    shadowColor: '#fff',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 2,
   },
   btnPrimaryText: {
-    color: '#0b0d19',
+    color: '#ffffff',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -854,5 +1053,69 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '800',
+  },
+  interactiveArea: {
+    paddingHorizontal: 4,
+    marginTop: 24,
+  },
+  selectorTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    marginBottom: 2,
+  },
+  selectorSubtitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 12,
+  },
+  emptyStateBox: {
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+  },
+  emptyStateText: {
+    fontSize: 12,
+    textAlign: "center",
+    fontWeight: "700",
+  },
+  checklistCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  checkRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    borderBottomWidth: 1,
+  },
+  checkLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  checkActivityText: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  checkDateText: {
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  numberBadge: {
+    backgroundColor: "#6366F1",
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  numberBadgeText: {
+    color: "#FFF",
+    fontSize: 9,
+    fontWeight: "900",
   },
 });
