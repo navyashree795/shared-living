@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,10 +9,42 @@ import {
   Linking,
   ScrollView,
 } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
-import { TripData, CrewMember, Stop } from './types';
+import Svg, { Circle, Path, Polygon, Defs, LinearGradient, Stop as SvgStop } from 'react-native-svg';
 import SlideModal from '../SlideModal';
 import { ItineraryItem } from '../../types';
+
+export interface Traveler {
+  initials: string;
+  name: string;
+  city: string;
+  photoUrl: string | null;
+}
+
+export interface CrewMember {
+  initials: string;
+  photoUrl: string | null;
+}
+
+export interface Stop {
+  emoji: string;
+  name: string;
+  day: number;
+  isEnd?: boolean;
+}
+
+export interface TripData {
+  tripName: string;
+  mainTraveler: Traveler;
+  startDate: string;
+  endDate: string;
+  durationDays: number;
+  kmCovered: string;
+  activities: number;
+  crew: CrewMember[];
+  maxVisibleCrew: number;
+  stops: Stop[];
+  totalStops: number;
+}
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_MAX_WIDTH = 440;
@@ -56,6 +88,8 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
   data = DEFAULT_TRIP_DATA,
   householdId = ""
 }) => {
+  const [panelWidth, setPanelWidth] = useState(270);
+  const [panelHeight, setPanelHeight] = useState(240);
   
   const handleOpenApp = () => {
     const appScheme = `sharedliving://wrap/${householdId || ""}`;
@@ -140,48 +174,86 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
 
     // Mathematical calculations parsing the HTML's custom vector road layout geometry
     const getRoadPoint = (y: number) => {
-      const t = (300 - y) / (300 - 140);
+      const t = (275 - y) / (275 - 145);
       const sway = Math.sin(t * Math.PI * 3.2);
       const amplitude = 48 * Math.pow(1 - t, 0.8) + 12;
-      const x = (PANEL_W / 2) + sway * (amplitude * (PANEL_W / 400));
-      const width = (10 + 390 * Math.pow(1 - t, 2.5)) * (PANEL_W / 400);
+      const x = 200 + sway * amplitude;
+      const width = 10 + 290 * Math.pow(1 - t, 2.5);
       return { x, y, width };
     };
 
-    const leftPoints: string[] = [];
-    const rightPoints: string[] = [];
-    const centerPoints: string[] = [];
+    const leftPoints: { x: number; y: number }[] = [];
+    const rightPoints: { x: number; y: number }[] = [];
+    const centerPoints: { x: number; y: number }[] = [];
     const steps = 40;
 
     for (let i = 0; i <= steps; i++) {
-      const y = 300 - (i / steps) * (300 - 140);
+      const y = roadBot - (i / steps) * (roadBot - roadTop);
       const { x, width } = getRoadPoint(y);
-      leftPoints.push(`${x.toFixed(1)},${y.toFixed(1)}`);
-      rightPoints.push(`${x.toFixed(1)},${y.toFixed(1)}`);
-      centerPoints.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      leftPoints.push({ x: x - width / 2, y });
+      rightPoints.push({ x: x + width / 2, y });
+      centerPoints.push({ x, y });
     }
 
-    const roadSurfacePath = `M ${leftPoints.join(' L ')} L ${[...rightPoints].reverse().join(' L ')} Z`;
-    const centerDashesPath = `M ${centerPoints.join(' L ')}`;
+    const roadSurfacePath = `M ` + leftPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ') + 
+                         ` L ` + [...rightPoints].reverse().map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ') + ` Z`;
+    const centerDashesPath = `M ` + centerPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ');
 
     const nodePositions = data.stops.map((stop: Stop, i: number) => {
       const t = i / Math.max(n - 1, 1);
       const y = roadBot - t * (roadBot - roadTop);
       const { x } = getRoadPoint(y);
       const r = 9 - t * 3.5;
-      return { x, y, r, stop };
+      
+      const physicalY = (y / 300) * panelHeight;
+      return { x, y, r, stop, physicalY };
     });
 
     return (
-      <View style={[styles.roadPanel, { width: PANEL_W }]}>
-        <View style={styles.roadBgGradient} />
-        
-        <Svg width={PANEL_W} height={PANEL_H} style={StyleSheet.absoluteFill}>
-          {/* Scenic Valley Shapes */}
-          <Path d={`M -20 140 L ${PANEL_W * 0.15} 50 L ${PANEL_W * 0.32} 140 Z`} fill="#0284c7" opacity={0.2} />
-          <Path d={`M ${PANEL_W * 0.2} 140 L ${PANEL_W * 0.45} 30 L ${PANEL_W * 0.7} 140 Z`} fill="#0284c7" opacity={0.18} />
-          <Path d={`M -20 140 L ${PANEL_W + 20} 140 L ${PANEL_W + 20} 300 L -20 300 Z`} fill="#15803d" />
+      <View 
+        style={styles.roadPanel}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          setPanelWidth(width);
+          setPanelHeight(height);
+        }}
+      >
+        <Svg width="100%" height="100%" viewBox="0 0 400 300" preserveAspectRatio="none" style={StyleSheet.absoluteFill}>
+          <Defs>
+            <LinearGradient id="skyGradient" x1="0" y1="0" x2="0" y2="1">
+              <SvgStop offset="0%" stopColor="#bae6fd" />
+              <SvgStop offset="50%" stopColor="#e0f2fe" />
+              <SvgStop offset="100%" stopColor="#fef9c3" />
+            </LinearGradient>
+          </Defs>
+
+          {/* Sky Background */}
+          <Path d="M 0 0 H 400 V 300 H 0 Z" fill="url(#skyGradient)" />
+
+          {/* Mountains shifted up so the valley base is at Y=140 */}
+          <Path d="M -20 140 L 60 50 L 130 140 Z" fill="#0284c7" opacity={0.2} />
+          <Path d="M 80 140 L 180 30 L 280 140 Z" fill="#0284c7" opacity={0.18} />
+          <Path d="M 220 140 L 310 40 L 410 140 Z" fill="#0284c7" opacity={0.22} />
+          <Path d="M 300 140 L 370 70 L 440 140 Z" fill="#0369a1" opacity={0.25} />
           
+          {/* Valley ground filling Y=140 to Y=300 (Daylight green grass) */}
+          <Path d="M -20 140 L 420 140 L 420 300 L -20 300 Z" fill="#15803d" />
+          
+          {/* Forest floor/Hills contours (Daylight greens) */}
+          <Path d="M -20 200 Q 100 130, 210 160 T 420 180 L 420 300 L -20 300 Z" fill="#22c55e" opacity={0.55} />
+          <Path d="M -20 230 Q 100 180, 200 200 T 420 240 L 420 300 L -20 300 Z" fill="#4ade80" opacity={0.75} />
+          <Path d="M -20 265 Q 120 235, 220 250 T 420 265 L 420 300 L -20 300 Z" fill="#166534" opacity="0.9" />
+          
+          {/* Pines (Daylight dark green shadows) */}
+          <Polygon points="28,255 22,268 34,268" fill="#14532d" />
+          <Polygon points="28,260 20,275 36,275" fill="#166534" />
+          <Polygon points="46,260 41,271 51,271" fill="#14532d" />
+          
+          {/* Pines right */}
+          <Polygon points="340,258 334,271 346,271" fill="#14532d" />
+          <Polygon points="340,263 332,278 348,278" fill="#166534" />
+          <Polygon points="358,262 352,274 364,274" fill="#14532d" />
+
           {/* Main Curved Asphalt Surface */}
           <Path d={roadSurfacePath} fill="#475569" />
           
@@ -208,11 +280,11 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
         </Svg>
 
         {/* Dynamic Alternating Badge Text Elements */}
-        {nodePositions.map((node: { x: number; y: number; r: number; stop: Stop }, i: number) => {
+        {nodePositions.map((node: { x: number; y: number; r: number; stop: Stop; physicalY: number }, i: number) => {
           const isLeft = i % 2 !== 0;
           const badgeStyle = isLeft 
-            ? { top: node.y - 14, left: 10 } 
-            : { top: node.y - 14, right: 10 };
+            ? { top: node.physicalY - 14, left: 10 } 
+            : { top: node.physicalY - 14, right: 10 };
 
           return (
             <View key={i} style={[styles.checkpointBadge, badgeStyle]}>
@@ -235,19 +307,17 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-      <View style={[styles.wrapCard, { width: CARD_WIDTH }]}>
+    <View style={styles.scrollContainer}>
+      <View style={styles.wrapCard}>
         
         {/* Header Branding Structure */}
         <View style={styles.cardHeader}>
           <View style={styles.brandContainer}>
-            <View style={styles.brandIconLogo}>
-              <Text style={styles.logoText}>HS</Text>
-            </View>
-            <View>
-              <Text style={styles.brandName}>House Sync</Text>
-              <Text style={styles.brandTagline}>TRAVEL WRAP</Text>
-            </View>
+            <Image
+              source={require("../../../assets/logo_landscape.png")}
+              style={{ width: 120, height: 28 }}
+              resizeMode="contain"
+            />
           </View>
           <TouchableOpacity style={styles.shareBtn} activeOpacity={0.7}>
             <Text style={{ fontSize: 14 }}>🔗</Text>
@@ -290,7 +360,18 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
           <Text style={styles.footerDate}>📅 {data.startDate} – {data.endDate}</Text>
         </View>
       </View>
-    </ScrollView>
+
+      {/* Action Navigation Interface Links */}
+      <View style={styles.actionWrapper}>
+        <TouchableOpacity style={styles.btnPrimary} onPress={handleOpenApp} activeOpacity={0.8}>
+          <Text style={styles.btnPrimaryText}>🏠 Open in App</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.btnSecondary} onPress={handleDownloadApp} activeOpacity={0.8}>
+          <Text style={styles.btnSecondaryText}>Download App</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 };
 
@@ -463,19 +544,21 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
 // --- Strict StyleSheet Properties Layout ---
 const styles = StyleSheet.create({
   scrollContainer: {
-    paddingVertical: 40,
+    width: '100%',
+    paddingVertical: 10,
     alignItems: 'center',
     backgroundColor: '#0b0d19',
   },
   wrapCard: {
+    width: '100%',
     backgroundColor: '#ffffff',
     borderRadius: 36,
     padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.4,
-    shadowRadius: 40,
-    elevation: 15,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -636,7 +719,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   roadPanel: {
-    height: 300,
+    width: '100%',
+    height: 240,
     borderRadius: 24,
     overflow: 'hidden',
     position: 'relative',
@@ -731,6 +815,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   actionWrapper: {
+    width: '100%',
     flexDirection: 'row',
     marginTop: 16,
     justifyContent: 'space-between',
