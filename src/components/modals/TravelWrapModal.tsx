@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { MaterialIcons } from "@expo/vector-icons";
-import Svg, { Path, Circle, Defs, LinearGradient, Stop } from "react-native-svg";
+import Svg, { Path, Circle, Defs, LinearGradient, Stop, Polygon } from "react-native-svg";
 // @ts-ignore
 import ViewShot, { captureRef } from "react-native-view-shot";
 // @ts-ignore
@@ -183,52 +183,64 @@ export const TravelWrapModal = React.memo(({
     ? `${parseFloat(distanceInput).toLocaleString()} km Covered`
     : `${(selectedMilestones.length * 45).toLocaleString()} km Covered (Est.)`;
 
-  // 8. Dynamic SVG Path & Points Construction
+  // 8. Winding road curve calculation (3D perspective)
+  const getRoadPoint = (y: number) => {
+    // Top of road is y=145, bottom is y=275 inside 400x300 viewBox scale
+    const t = (275 - y) / (275 - 145);
+    const sway = Math.sin(t * Math.PI * 3.2);
+    const amplitude = 48 * Math.pow(1 - t, 0.8) + 12;
+    const x = 200 + sway * amplitude;
+    const width = 10 + 290 * Math.pow(1 - t, 2.5); // scaled to 290 width inside 400 SVG
+    return { x, y, width };
+  };
+
   const points = React.useMemo(() => {
     const N = selectedMilestones.length;
     const pts = [];
+    const roadTop = 145;
+    const roadBot = 275;
+    
     if (N === 1) {
-      pts.push({ x: 155, y: 220, side: "right" as const });
+      const y = (roadTop + roadBot) / 2;
+      const { x } = getRoadPoint(y);
+      pts.push({ x, y, isLeft: false });
     } else if (N > 1) {
-      const topPad = 50;
-      const bottomPad = 50;
-      const availH = 440 - topPad - bottomPad;
-      const dy = availH / (N - 1);
+      const dy = (roadBot - roadTop) / (N - 1);
       for (let i = 0; i < N; i++) {
-        const isLeft = i % 2 === 0;
-        pts.push({
-          x: isLeft ? 65 : 245,
-          y: topPad + i * dy,
-          side: isLeft ? ("right" as const) : ("left" as const),
-        });
+        const y = roadBot - i * dy;
+        const { x } = getRoadPoint(y);
+        const isLeft = i % 2 !== 0; // alternates left/right
+        pts.push({ x, y, isLeft });
       }
     }
     return pts;
   }, [selectedMilestones]);
 
-  const pathD = React.useMemo(() => {
-    let dStr = "";
-    if (points.length > 1) {
-      dStr = `M ${points[0].x},${points[0].y}`;
-      const dy = points[1].y - points[0].y;
-      for (let i = 1; i < points.length; i++) {
-        const pPrev = points[i - 1];
-        const pCurr = points[i];
-        const isLeftToRight = pPrev.x < pCurr.x;
-        
-        // Control points matching original curves mathematically but scaled vertically by dy
-        const cp1x = isLeftToRight ? 130 : 180;
-        const cp2x = isLeftToRight ? 180 : 135;
-        
-        // Symmetrical vertical tangents
-        const cp1y = pPrev.y + dy * 0.25;
-        const cp2y = pCurr.y - dy * 0.25;
-        
-        dStr += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${pCurr.x},${pCurr.y}`;
-      }
+  const roadPaths = React.useMemo(() => {
+    const leftPoints: { x: number; y: number }[] = [];
+    const rightPoints: { x: number; y: number }[] = [];
+    const centerPoints: { x: number; y: number }[] = [];
+    const steps = 40;
+    const roadTop = 145;
+    const roadBot = 275;
+    
+    for (let i = 0; i <= steps; i++) {
+      const y = roadBot - (i / steps) * (roadBot - roadTop);
+      const { x, width } = getRoadPoint(y);
+      leftPoints.push({ x: x - width / 2, y });
+      rightPoints.push({ x: x + width / 2, y });
+      centerPoints.push({ x, y });
     }
-    return dStr;
-  }, [points]);
+    
+    const roadSurfaceD = `M ` + leftPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ') + 
+                         ` L ` + [...rightPoints].reverse().map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ') + ` Z`;
+                         
+    const leftEdgeD = `M ` + leftPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ');
+    const rightEdgeD = `M ` + rightPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ');
+    const centerDashesD = `M ` + centerPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ');
+    
+    return { roadSurfaceD, leftEdgeD, rightEdgeD, centerDashesD };
+  }, [selectedMilestones]);
 
   // 9. Native Sharing trigger (Shares the captured card screenshot directly as an image file)
   const handleShareCard = async () => {
@@ -259,7 +271,7 @@ export const TravelWrapModal = React.memo(({
   // Styling palette
   const textMain = isDark ? "#F1F5F9" : "#1E1B4B";
   const textMuted = isDark ? "#94A3B8" : "#475569";
-  const cardBg = isDark ? "#111428" : "#E5ECE6";
+  const cardBg = isDark ? "#111428" : "#FFFFFF";
   const shadowColor = isDark ? "rgba(0,0,0,0.5)" : "rgba(99,102,241,0.06)";
 
   return (
@@ -282,40 +294,59 @@ export const TravelWrapModal = React.memo(({
               />
             </View>
             
-            <View style={styles.titleContainer}>
-              <Text style={[styles.tripTitleText, { color: textMain }]} numberOfLines={1}>
-                {householdData?.tripDetails?.destination || householdData?.name || "My Trip"}
-              </Text>
-            </View>
+            <TouchableOpacity
+              onPress={handleShareCard}
+              style={[
+                styles.shareBtnCircle,
+                { backgroundColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#F1F5F9" }
+              ]}
+            >
+              <MaterialIcons name="share" size={18} color={isDark ? "#FFFFFF" : "#1A1D3B"} />
+            </TouchableOpacity>
           </View>
 
           {/* Top Profile & Metrics Row */}
           <View style={styles.profileMetricRow}>
-            {/* Left: Trip Crew Vertical List */}
+            {/* Left: Overlapping Horizontal Crew Avatars */}
             <View style={styles.crewCol}>
-              <View style={{ gap: 6 }}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
                 {displayCrew.map((member: any, idx: number) => (
-                  <View key={member.uid || idx} style={styles.crewItem}>
+                  <View
+                    key={member.uid || idx}
+                    style={{
+                      marginLeft: idx > 0 ? -8 : 0,
+                      borderWidth: 2,
+                      borderColor: "#FFFFFF",
+                      borderRadius: 14,
+                    }}
+                  >
                     <Avatar
                       name={member.username}
-                      size={24}
-                      bgColor="#6366F1"
-                      color="#FFFFFF"
+                      size={26}
+                      bgColor="#E2E8F0"
+                      color="#334155"
                       photoUrl={member.photoUrl}
                     />
-                    <Text style={[styles.crewName, { color: textMain }]} numberOfLines={1}>
-                      {formatName(member.username)}
-                    </Text>
                   </View>
                 ))}
+                {crewProfiles.length > 3 && (
+                  <View
+                    style={{
+                      marginLeft: 4,
+                      backgroundColor: "#06B6D4",
+                      paddingHorizontal: 6,
+                      paddingVertical: 3,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text style={{ color: "#FFF", fontSize: 8, fontWeight: "900" }}>
+                      +{remainingCrewCount}
+                    </Text>
+                  </View>
+                )}
               </View>
-              {crewProfiles.length > 3 && (
-                <View style={styles.remainingPill}>
-                  <Text style={styles.remainingText}>+{remainingCrewCount}</Text>
-                </View>
-              )}
               <View style={styles.crewBadge}>
-                <MaterialIcons name="people" size={12} color="#6366F1" />
+                <MaterialIcons name="people" size={10} color="#6366F1" style={{ marginRight: 3 }} />
                 <Text style={styles.crewBadgeText}>Trip Crew ({allMembers.length})</Text>
               </View>
             </View>
@@ -360,7 +391,7 @@ export const TravelWrapModal = React.memo(({
                     strokeWidth={4.5}
                     fill="none"
                     strokeDasharray={2 * Math.PI * 24}
-                    strokeDashoffset={2 * Math.PI * 24 * 0.25} // 75% ring completion
+                    strokeDashoffset={2 * Math.PI * 24 * (1 - Math.min(durationDays / 14, 1))}
                     strokeLinecap="round"
                     transform="rotate(-90 30 30)"
                   />
@@ -379,42 +410,63 @@ export const TravelWrapModal = React.memo(({
 
           {/* Central Scenic Route panel */}
           <View style={[styles.mapCardOuter, { backgroundColor: isDark ? "#111428" : "#E5ECE6" }]}>
-            {/* 2D Landscape background illustration */}
-            <Image 
-              source={require("../../../assets/travel_card_bg.jpg")} 
-              style={StyleSheet.absoluteFillObject}
-              resizeMode="cover"
-            />
-            {isDark && (
-              <View 
-                style={[
-                  StyleSheet.absoluteFillObject, 
-                  { backgroundColor: "rgba(15, 23, 42, 0.45)", zIndex: 1 } 
-                ]} 
-              />
-            )}
-
             {/* Vector Illustration Background Layers */}
-            <Svg style={StyleSheet.absoluteFillObject} width="100%" height="100%">
+            <Svg style={StyleSheet.absoluteFillObject} width="100%" height="100%" viewBox="0 0 400 300" preserveAspectRatio="none">
+              <Defs>
+                <LinearGradient id="skyGradient" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor="#bae6fd" />
+                  <Stop offset="50%" stopColor="#e0f2fe" />
+                  <Stop offset="100%" stopColor="#fef9c3" />
+                </LinearGradient>
+                <LinearGradient id="roadGlow" x1="0.5" y1="1" x2="0.5" y2="0">
+                  <Stop offset="0%" stopColor="#ffffff" stopOpacity={0} />
+                  <Stop offset="100%" stopColor="#fef08a" stopOpacity={0.15} />
+                </LinearGradient>
+              </Defs>
 
-              {/* Dynamic Winding Road */}
+              {/* Sky Background */}
+              <Path d="M 0 0 H 400 V 300 H 0 Z" fill="url(#skyGradient)" />
+
+              {/* Mountains shifted up so the valley base is at Y=140 */}
+              <Path d="M -20 140 L 60 50 L 130 140 Z" fill="#0284c7" opacity={0.2} />
+              <Path d="M 80 140 L 180 30 L 280 140 Z" fill="#0284c7" opacity={0.18} />
+              <Path d="M 220 140 L 310 40 L 410 140 Z" fill="#0284c7" opacity={0.22} />
+              <Path d="M 300 140 L 370 70 L 440 140 Z" fill="#0369a1" opacity={0.25} />
+              
+              {/* Valley ground filling Y=140 to Y=300 (Daylight green grass) */}
+              <Path d="M -20 140 L 420 140 L 420 300 L -20 300 Z" fill="#15803d" />
+              
+              {/* Forest floor/Hills contours (Daylight greens) */}
+              <Path d="M -20 200 Q 100 130, 210 160 T 420 180 L 420 300 L -20 300 Z" fill="#22c55e" opacity={0.55} />
+              <Path d="M -20 230 Q 100 180, 200 200 T 420 240 L 420 300 L -20 300 Z" fill="#4ade80" opacity="0.75" />
+              <Path d="M -20 265 Q 120 235, 220 250 T 420 265 L 420 300 L -20 300 Z" fill="#166534" opacity="0.9" />
+              
+              {/* Pines (Daylight dark green shadows) */}
+              <Polygon points="28,255 22,268 34,268" fill="#14532d" />
+              <Polygon points="28,260 20,275 36,275" fill="#166534" />
+              <Polygon points="46,260 41,271 51,271" fill="#14532d" />
+              {/* Pines right */}
+              <Polygon points="340,258 334,271 346,271" fill="#14532d" />
+              <Polygon points="340,263 332,278 348,278" fill="#166534" />
+              <Polygon points="358,262 352,274 364,274" fill="#14532d" />
+
+              {/* Dynamic Winding Road Surface */}
               {selectedMilestones.length > 1 && (
                 <>
-                  {/* Outer Road Bed */}
+                  {/* Road Surface */}
+                  <Path d={roadPaths.roadSurfaceD} fill="#475569" />
+                  <Path d={roadPaths.roadSurfaceD} fill="url(#roadGlow)" opacity={0.2} />
+                  {/* Edges */}
+                  <Path d={roadPaths.leftEdgeD} stroke="#64748b" strokeWidth={1.5} strokeLinecap="round" />
+                  <Path d={roadPaths.rightEdgeD} stroke="#64748b" strokeWidth={1.5} strokeLinecap="round" />
+                  {/* Center Dashes */}
                   <Path
-                    d={pathD}
-                    fill="none"
-                    stroke={isDark ? "#334155" : "#EADBB6"}
-                    strokeWidth={6}
-                    strokeLinecap="round"
-                  />
-                  {/* Inner Road Bed */}
-                  <Path
-                    d={pathD}
-                    fill="none"
-                    stroke={isDark ? "#1E293B" : "#DFCE9F"}
+                    d={roadPaths.centerDashesD}
+                    stroke="rgba(255,255,255,0.85)"
                     strokeWidth={1.5}
+                    strokeDasharray="6,8"
                     strokeLinecap="round"
+                    fill="none"
                   />
                 </>
               )}
@@ -424,52 +476,64 @@ export const TravelWrapModal = React.memo(({
                 const coord = points[index];
                 if (!coord) return null;
                 const isLast = index === selectedMilestones.length - 1;
+                const col = isLast ? "#ea580c" : "#0284c7";
+                const rc = isLast ? "rgba(234,88,12," : "rgba(2,132,199,";
+                const r = 9 - (index / Math.max(selectedMilestones.length - 1, 1)) * 3.5;
+                
                 return (
                   <React.Fragment key={item.id}>
-                    {/* Outer Circle */}
+                    {/* Glow Ring */}
                     <Circle
                       cx={coord.x}
                       cy={coord.y}
-                      r={7}
-                      fill={isLast ? "#2E3B84" : "#4D69FF"}
-                      stroke="#FFFFFF"
-                      strokeWidth={2}
+                      r={r + 4}
+                      fill={`${rc}0.12)`}
+                      stroke={`${rc}0.4)`}
+                      strokeWidth={1}
                     />
-                    {/* Inner Dot */}
+                    {/* Inner Circle */}
                     <Circle
                       cx={coord.x}
                       cy={coord.y}
-                      r={2}
-                      fill="#FFFFFF"
+                      r={r}
+                      fill={col}
                     />
                   </React.Fragment>
                 );
               })}
             </Svg>
 
-            {/* Render Milestone Text labels absolutely positioned on top (Tooltip above node style) */}
+            {/* Render Milestone Text labels absolutely positioned on top (Tooltip style) */}
             {selectedMilestones.map((item, index) => {
               const coord = points[index];
               if (!coord) return null;
+
+              const physicalY = (coord.y / 300) * 440;
+              const isLeft = coord.isLeft;
+              
+              const posStyle = isLeft
+                ? { top: physicalY - 14, left: 10 }
+                : { top: physicalY - 14, right: 10 };
+
+              const isLast = index === selectedMilestones.length - 1;
 
               return (
                 <View
                   key={item.id}
                   style={[
                     styles.absoluteLabelContainer,
-                    { 
-                      top: coord.y - 34, 
-                      left: coord.x - 100 
-                    },
+                    posStyle,
                   ]}
                 >
                   <View style={styles.milestoneLabelBox}>
+                    <View style={[styles.cpDot, isLast && styles.cpDotEnd]} />
                     <Text style={styles.milestoneNameText} numberOfLines={1}>
-                      {getActivityEmoji(item.activity)} {index + 1}. {item.activity}
+                      {getActivityEmoji(item.activity)} {item.activity}
+                    </Text>
+                    <Text style={styles.cpDayText}>
+                      Day {points[index].y ? Math.round((275 - points[index].y) / ((275 - 145) / Math.max(selectedMilestones.length - 1, 1))) + 1 : 1}
                     </Text>
                   </View>
-                  {/* Triangle Pointer */}
-                  <View style={styles.trianglePointer} />
                 </View>
               );
             })}
@@ -641,6 +705,18 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textAlign: "right",
   },
+  shareBtnCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   profileMetricRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -648,42 +724,22 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   crewCol: {
-    width: 90,
+    width: 100,
     alignItems: "flex-start",
-  },
-  crewItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  crewName: {
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  remainingPill: {
-    backgroundColor: "#38BDF8",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginTop: 4,
-    alignSelf: "flex-start",
-  },
-  remainingText: {
-    color: "#FFF",
-    fontSize: 8,
-    fontWeight: "900",
+    flexDirection: "column",
+    gap: 6,
   },
   crewBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    marginTop: 6,
+    marginTop: 4,
   },
   crewBadgeText: {
-    fontSize: 8,
+    fontSize: 9,
     color: "#6366F1",
     fontWeight: "900",
     textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   centerProfile: {
     flex: 1,
@@ -734,7 +790,7 @@ const styles = StyleSheet.create({
   },
   gaugeUnit: {
     fontSize: 7,
-    color: "#6366F1",
+    color: "#06B6D4",
     fontWeight: "900",
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -762,51 +818,55 @@ const styles = StyleSheet.create({
   },
   absoluteLabelContainer: {
     position: "absolute",
-    width: 200,
-    alignItems: "center",
+    zIndex: 10,
   },
   milestoneLabelBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 3,
+    backgroundColor: "rgba(255, 255, 255, 0.88)",
+    paddingLeft: 7,
+    paddingRight: 11,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.08)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+    gap: 6,
   },
-  trianglePointer: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 4,
-    borderRightWidth: 4,
-    borderTopWidth: 4,
-    borderLeftColor: "transparent",
-    borderRightColor: "transparent",
-    borderTopColor: "#FFFFFF",
-    alignSelf: "center",
-    marginTop: -1,
+  cpDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "#0284c7",
+  },
+  cpDotEnd: {
+    backgroundColor: "#ea580c",
   },
   milestoneNameText: {
-    fontSize: 11,
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#1e293b",
+  },
+  cpDayText: {
+    fontSize: 9,
     fontWeight: "600",
-    color: "#000000",
-    flexShrink: 1,
+    color: "#64748b",
   },
   remainingStopsNote: {
     position: "absolute",
     bottom: 16,
-    right: 16,
-    alignItems: "flex-end",
+    left: 16,
+    alignItems: "flex-start",
   },
   remainingStopsText: {
     color: "#FFFFFF",
     fontSize: 10,
     fontWeight: "900",
-    textAlign: "right",
+    textAlign: "left",
     textShadowColor: "rgba(0, 0, 0, 0.4)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,

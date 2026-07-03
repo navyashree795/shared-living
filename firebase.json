@@ -40,10 +40,6 @@
       {
         "source": "/invite/**",
         "destination": "/invite.html"
-      },
-      {
-        "source": "/wrap/**",
-        "destination": "/travel_wrap_web.html"
       }
     ]
   }
