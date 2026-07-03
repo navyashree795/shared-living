@@ -409,46 +409,15 @@ export const TravelWrapModal = React.memo(({
           </View>
 
           {/* Central Scenic Route panel */}
-          <View style={[styles.mapCardOuter, { backgroundColor: isDark ? "#111428" : "#E5ECE6" }]}>
+          <View style={[styles.mapCardOuter, { backgroundColor: isDark ? "#1E293B" : "#F8FAFC" }]}>
             {/* Vector Illustration Background Layers */}
             <Svg style={StyleSheet.absoluteFillObject} width="100%" height="100%" viewBox="0 0 400 300" preserveAspectRatio="none">
               <Defs>
-                <LinearGradient id="skyGradient" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0%" stopColor="#bae6fd" />
-                  <Stop offset="50%" stopColor="#e0f2fe" />
-                  <Stop offset="100%" stopColor="#fef9c3" />
-                </LinearGradient>
                 <LinearGradient id="roadGlow" x1="0.5" y1="1" x2="0.5" y2="0">
                   <Stop offset="0%" stopColor="#ffffff" stopOpacity={0} />
                   <Stop offset="100%" stopColor="#fef08a" stopOpacity={0.15} />
                 </LinearGradient>
               </Defs>
-
-              {/* Sky Background */}
-              <Path d="M 0 0 H 400 V 300 H 0 Z" fill="url(#skyGradient)" />
-
-              {/* Mountains shifted up so the valley base is at Y=140 */}
-              <Path d="M -20 140 L 60 50 L 130 140 Z" fill="#0284c7" opacity={0.2} />
-              <Path d="M 80 140 L 180 30 L 280 140 Z" fill="#0284c7" opacity={0.18} />
-              <Path d="M 220 140 L 310 40 L 410 140 Z" fill="#0284c7" opacity={0.22} />
-              <Path d="M 300 140 L 370 70 L 440 140 Z" fill="#0369a1" opacity={0.25} />
-              
-              {/* Valley ground filling Y=140 to Y=300 (Daylight green grass) */}
-              <Path d="M -20 140 L 420 140 L 420 300 L -20 300 Z" fill="#15803d" />
-              
-              {/* Forest floor/Hills contours (Daylight greens) */}
-              <Path d="M -20 200 Q 100 130, 210 160 T 420 180 L 420 300 L -20 300 Z" fill="#22c55e" opacity={0.55} />
-              <Path d="M -20 230 Q 100 180, 200 200 T 420 240 L 420 300 L -20 300 Z" fill="#4ade80" opacity="0.75" />
-              <Path d="M -20 265 Q 120 235, 220 250 T 420 265 L 420 300 L -20 300 Z" fill="#166534" opacity="0.9" />
-              
-              {/* Pines (Daylight dark green shadows) */}
-              <Polygon points="28,255 22,268 34,268" fill="#14532d" />
-              <Polygon points="28,260 20,275 36,275" fill="#166534" />
-              <Polygon points="46,260 41,271 51,271" fill="#14532d" />
-              {/* Pines right */}
-              <Polygon points="340,258 334,271 346,271" fill="#14532d" />
-              <Polygon points="340,263 332,278 348,278" fill="#166534" />
-              <Polygon points="358,262 352,274 364,274" fill="#14532d" />
 
               {/* Dynamic Winding Road Surface */}
               {selectedMilestones.length > 1 && (
