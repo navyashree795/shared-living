@@ -32,7 +32,7 @@ export function QuickActions({
       subtitle: "Grocery",
       icon: "shopping-cart" as const,
       color: "#10B981",
-      gradient: isDark ? (["rgba(16, 185, 129, 0.12)", "rgba(16, 185, 129, 0.02)"] as const) : (["#E6FDF5", "#FFFFFF"] as const),
+      gradient: isDark ? (["#0B1B17", "#0B0D19"] as const) : (["#E6FDF5", "#FFFFFF"] as const),
       onPress: onQuickBuy,
     },
     {
@@ -41,7 +41,7 @@ export function QuickActions({
       subtitle: "Balances",
       icon: "handshake" as const,
       color: "#F59E0B",
-      gradient: isDark ? (["rgba(245, 158, 11, 0.12)", "rgba(245, 158, 11, 0.02)"] as const) : (["#FEF8E7", "#FFFFFF"] as const),
+      gradient: isDark ? (["#1C160B", "#0B0D19"] as const) : (["#FEF8E7", "#FFFFFF"] as const),
       onPress: onSettleUp,
     },
     {
@@ -50,7 +50,7 @@ export function QuickActions({
       subtitle: "Split Equal",
       icon: "account-balance-wallet" as const,
       color: "#6366F1",
-      gradient: isDark ? (["rgba(99, 102, 241, 0.12)", "rgba(99, 102, 241, 0.02)"] as const) : (["#EEF2FF", "#FFFFFF"] as const),
+      gradient: isDark ? (["#11142F", "#0B0D19"] as const) : (["#EEF2FF", "#FFFFFF"] as const),
       onPress: onQuickExpense,
     },
     {
@@ -59,7 +59,7 @@ export function QuickActions({
       subtitle: "Due Today",
       icon: "cleaning-services" as const,
       color: "#EC4899",
-      gradient: isDark ? (["rgba(236, 72, 153, 0.12)", "rgba(236, 72, 153, 0.02)"] as const) : (["#FDF2F8", "#FFFFFF"] as const),
+      gradient: isDark ? (["#1F0E18", "#0B0D19"] as const) : (["#FDF2F8", "#FFFFFF"] as const),
       onPress: onQuickChore,
     },
   ];

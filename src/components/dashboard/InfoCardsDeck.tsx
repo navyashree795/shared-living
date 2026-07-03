@@ -103,8 +103,7 @@ export const InfoCardsDeck = React.memo(({
                   width: 80,
                   height: 80,
                   borderRadius: 40,
-                  backgroundColor: theme.primary,
-                  opacity: isDark ? 0.08 : 0.04,
+                  backgroundColor: theme.primary + (isDark ? "14" : "0A"),
                   pointerEvents: "none",
                 }}
               />
