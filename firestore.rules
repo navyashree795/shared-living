@@ -8,9 +8,9 @@ service cloud.firestore {
         request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
     }
 
-    // User Profiles: Anyone can read profiles to show crew avatars/names on shared web wraps, only owner can write
+    // User Profiles: Any authenticated user can view, but only the owner can modify
     match /users/{userId} {
-      allow read: if true;
+      allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
@@ -21,30 +21,20 @@ service cloud.firestore {
       allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
 
-    // Households: Anyone can read household headers to show trip details on shared web wraps
+    // Households: Members and joining users can view, updates are restricted, and creator can delete
     match /households/{householdId} {
       allow create: if request.auth != null;
-      allow read: if true;
+      allow read: if request.auth != null;
       allow update: if request.auth != null && (
         request.auth.uid == resource.data.createdBy ||
         (request.auth.uid in resource.data.members && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members']))
       );
       allow delete: if request.auth != null && request.auth.uid == resource.data.createdBy;
 
-      // Allow public read for itinerary milestones, but write requires membership
-      match /itinerary/{itineraryId} {
-        allow read: if true;
-        allow write: if isMember(householdId);
+      // All subcollections (expenses, chores, groceries, messages, itinerary, packing_list, activities, etc.) require membership
+      match /{allSubcollections=**} {
+        allow read, write: if isMember(householdId);
       }
-
-      // Other subcollections still require membership
-      match /expenses/{id} { allow read, write: if isMember(householdId); }
-      match /chores/{id} { allow read, write: if isMember(householdId); }
-      match /groceries/{id} { allow read, write: if isMember(householdId); }
-      match /messages/{id} { allow read, write: if isMember(householdId); }
-      match /packing_list/{id} { allow read, write: if isMember(householdId); }
-      match /announcements/{id} { allow read, write: if isMember(householdId); }
-      match /activities/{id} { allow read, write: if isMember(householdId); }
     }
 
     // Crash reports: Write-only for authenticated users, read-disabled on the client
