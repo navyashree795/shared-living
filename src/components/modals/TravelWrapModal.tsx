@@ -1,26 +1,298 @@
-import React, { useState, useEffect, useRef } from "react";
+import React from 'react';
 import {
+  StyleSheet,
   View,
   Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  Alert,
-  Dimensions,
   Image,
-  Share,
-} from "react-native";
-import * as Clipboard from "expo-clipboard";
-import { MaterialIcons } from "@expo/vector-icons";
-import Svg, { Path, Circle, Defs, LinearGradient, Stop, Polygon } from "react-native-svg";
-// @ts-ignore
-import ViewShot, { captureRef } from "react-native-view-shot";
-// @ts-ignore
-import * as Sharing from "expo-sharing";
-import SlideModal from "../SlideModal";
-import { Avatar } from "../Avatar";
-import { useTheme } from "../../context/ThemeContext";
-import { ItineraryItem } from "../../types";
+  TouchableOpacity,
+  Dimensions,
+  Linking,
+  ScrollView,
+} from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
+import { TripData } from './types';
+import SlideModal from '../SlideModal';
+import { ItineraryItem } from '../../types';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_MAX_WIDTH = 440;
+const CARD_WIDTH = Math.min(SCREEN_WIDTH - 40, CARD_MAX_WIDTH);
+const PANEL_W = CARD_WIDTH - 40;
+const PANEL_H = 300;
+
+// Default dummy dataset matching the structure of your dynamic data layer
+const DEFAULT_TRIP_DATA: TripData = {
+  tripName: "Karnataka Adventure",
+  mainTraveler: { initials: "SJ", name: "Sarah J.", city: "Bangalore", photoUrl: null },
+  startDate: "Jan 10",
+  endDate: "Jan 18, 2026",
+  durationDays: 8,
+  kmCovered: "1,250 km",
+  activities: 25,
+  crew: [
+    { initials: "DM", photoUrl: null },
+    { initials: "ER", photoUrl: null },
+    { initials: "KP", photoUrl: null },
+    { initials: "AN", photoUrl: null },
+    { initials: "RV", photoUrl: null },
+  ],
+  maxVisibleCrew: 3,
+  stops: [
+    { emoji: "📍", name: "Sakleshpur", day: 1 },
+    { emoji: "⛰️", name: "Mullayanagiri", day: 3 },
+    { emoji: "🌊", name: "Jog Falls", day: 5 },
+    { emoji: "🛕", name: "Hampi", day: 7 },
+    { emoji: "✈️", name: "Kempegowda Airport", day: 8, isEnd: true },
+  ],
+  totalStops: 19,
+};
+
+interface TravelWrapCardProps {
+  data?: TripData;
+  householdId?: string | null;
+}
+
+export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({ 
+  data = DEFAULT_TRIP_DATA,
+  householdId = ""
+}) => {
+  
+  const handleOpenApp = () => {
+    const appScheme = `sharedliving://wrap/${householdId || ""}`;
+    Linking.openURL(appScheme).catch(() => {
+      // Fallback if app isn't installed
+      handleDownloadApp();
+    });
+  };
+
+  const handleDownloadApp = () => {
+    Linking.openURL('https://play.google.com/store/apps/details?id=com.jeevan0714.sharedliving');
+  };
+
+  // --- Sub-Component Builders ---
+  const renderCrewStack = () => {
+    const visibleCrew = data.crew.slice(0, data.maxVisibleCrew);
+    const extra = data.crew.length - data.maxVisibleCrew;
+
+    return (
+      <View style={styles.crewCol}>
+        <View style={styles.avatarStack}>
+          {visibleCrew.map((member, idx) => (
+            <View 
+              key={idx} 
+              style={[styles.crewAv, { marginLeft: idx === 0 ? 0 : -8, zIndex: idx }]}
+            >
+              {member.photoUrl ? (
+                <Image source={{ uri: member.photoUrl }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.crewAvText}>{member.initials}</Text>
+              )}
+            </View>
+          ))}
+          {extra > 0 && (
+            <View style={styles.crewPlus}>
+              <Text style={styles.crewPlusText}>+{extra}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.labelSubText}>👥 Trip Crew ({data.crew.length})</Text>
+      </View>
+    );
+  };
+
+  const renderDurationGauge = () => {
+    const pct = Math.min(data.durationDays / 14, 1);
+    const radius = 27;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (circumference * pct);
+
+    return (
+      <View style={styles.durationCol}>
+        <View style={styles.gaugeWrap}>
+          <Svg width="60" height="60" viewBox="0 0 60 60" style={{ transform: [{ rotate: '-90deg' }] }}>
+            <Circle cx="30" cy="30" r={radius} fill="none" stroke="#f1f5f9" strokeWidth="4.5" />
+            <Circle 
+              cx="30" 
+              cy="30" 
+              r={radius} 
+              fill="none" 
+              stroke="#06b6d4" 
+              strokeWidth="4.5" 
+              strokeDasharray={`${circumference} ${circumference}`}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+            />
+          </Svg>
+          <View style={styles.gaugeTextContainer}>
+            <Text style={styles.gaugeNum}>{data.durationDays}</Text>
+            <Text style={styles.gaugeUnit}>Days</Text>
+          </View>
+        </View>
+        <Text style={styles.labelSubText}>🕒 Duration</Text>
+      </View>
+    );
+  };
+
+  const renderRoadPanel = () => {
+    const roadTop = 145;
+    const roadBot = 275;
+    const n = data.stops.length;
+
+    // Mathematical calculations parsing the HTML's custom vector road layout geometry
+    const getRoadPoint = (y: number) => {
+      const t = (300 - y) / (300 - 140);
+      const sway = Math.sin(t * Math.PI * 3.2);
+      const amplitude = 48 * Math.pow(1 - t, 0.8) + 12;
+      const x = (PANEL_W / 2) + sway * (amplitude * (PANEL_W / 400));
+      const width = (10 + 390 * Math.pow(1 - t, 2.5)) * (PANEL_W / 400);
+      return { x, y, width };
+    };
+
+    const leftPoints: string[] = [];
+    const rightPoints: string[] = [];
+    const centerPoints: string[] = [];
+    const steps = 40;
+
+    for (let i = 0; i <= steps; i++) {
+      const y = 300 - (i / steps) * (300 - 140);
+      const { x, width } = getRoadPoint(y);
+      leftPoints.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      rightPoints.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      centerPoints.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+    }
+
+    const roadSurfacePath = `M ${leftPoints.join(' L ')} L ${[...rightPoints].reverse().join(' L ')} Z`;
+    const centerDashesPath = `M ${centerPoints.join(' L ')}`;
+
+    const nodePositions = data.stops.map((stop, i) => {
+      const t = i / Math.max(n - 1, 1);
+      const y = roadBot - t * (roadBot - roadTop);
+      const { x } = getRoadPoint(y);
+      const r = 9 - t * 3.5;
+      return { x, y, r, stop };
+    });
+
+    return (
+      <View style={[styles.roadPanel, { width: PANEL_W }]}>
+        <View style={styles.roadBgGradient} />
+        
+        <Svg width={PANEL_W} height={PANEL_H} style={StyleSheet.absoluteFill}>
+          {/* Scenic Valley Shapes */}
+          <Path d={`M -20 140 L ${PANEL_W * 0.15} 50 L ${PANEL_W * 0.32} 140 Z`} fill="#0284c7" opacity={0.2} />
+          <Path d={`M ${PANEL_W * 0.2} 140 L ${PANEL_W * 0.45} 30 L ${PANEL_W * 0.7} 140 Z`} fill="#0284c7" opacity={0.18} />
+          <Path d={`M -20 140 L ${PANEL_W + 20} 140 L ${PANEL_W + 20} 300 L -20 300 Z`} fill="#15803d" />
+          
+          {/* Main Curved Asphalt Surface */}
+          <Path d={roadSurfacePath} fill="#475569" />
+          
+          {/* Dashboard Dotted Center Line Tracking */}
+          <Path d={centerDashesPath} stroke="rgba(255,255,255,0.85)" strokeWidth="1.5" strokeDasharray="6,8" fill="none" />
+
+          {/* Perspective Map Stop Coordinates */}
+          {nodePositions.map((node, idx) => (
+            <React.Fragment key={idx}>
+              <Circle 
+                cx={node.x} 
+                cy={node.y} 
+                r={node.r + 4} 
+                fill={node.stop.isEnd ? "rgba(234,88,12,0.12)" : "rgba(2,132,199,0.12)"} 
+              />
+              <Circle 
+                cx={node.x} 
+                cy={node.y} 
+                r={node.r} 
+                fill={node.stop.isEnd ? '#ea580c' : '#0284c7'} 
+              />
+            </React.Fragment>
+          ))}
+        </Svg>
+
+        {/* Dynamic Alternating Badge Text Elements */}
+        {nodePositions.map((node, i) => {
+          const isLeft = i % 2 !== 0;
+          const badgeStyle = isLeft 
+            ? { top: node.y - 14, left: 10 } 
+            : { top: node.y - 14, right: 10 };
+
+          return (
+            <View key={i} style={[styles.checkpointBadge, badgeStyle]}>
+              <View style={[styles.badgeDot, node.stop.isEnd && styles.badgeDotEnd]} />
+              <Text style={styles.badgeText}>{node.stop.emoji} {node.stop.name}</Text>
+              <Text style={styles.badgeDay}>Day {node.stop.day}</Text>
+            </View>
+          );
+        })}
+
+        {data.totalStops - n > 0 && (
+          <View style={styles.moreFootnote}>
+            <Text style={styles.moreFootnoteText}>
+              …and {data.totalStops - n} more{'\n'}stops explored!
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <View style={[styles.wrapCard, { width: CARD_WIDTH }]}>
+        
+        {/* Header Branding Structure */}
+        <View style={styles.cardHeader}>
+          <View style={styles.brandContainer}>
+            <View style={styles.brandIconLogo}>
+              <Text style={styles.logoText}>HS</Text>
+            </View>
+            <View>
+              <Text style={styles.brandName}>House Sync</Text>
+              <Text style={styles.brandTagline}>TRAVEL WRAP</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.shareBtn} activeOpacity={0.7}>
+            <Text style={{ fontSize: 14 }}>🔗</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Main Traveler Core Profile Frame */}
+        <View style={styles.profileRow}>
+          {renderCrewStack()}
+
+          <View style={styles.mainTraveler}>
+            <View style={styles.avatarRing}>
+              {data.mainTraveler.photoUrl ? (
+                <Image source={{ uri: data.mainTraveler.photoUrl }} style={styles.mainAvatar} />
+              ) : (
+                <View style={[styles.mainAvatar, styles.mainAvatarFallback]}>
+                  <Text style={styles.mainAvatarText}>{data.mainTraveler.initials}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.travelerName}>{data.mainTraveler.name}</Text>
+            <Text style={styles.travelerCity}>{data.mainTraveler.city}</Text>
+          </View>
+
+          {renderDurationGauge()}
+        </View>
+
+        {/* 3D Curved Perspective Map Rendering */}
+        {renderRoadPanel()}
+
+        {/* Metrics/Stats Footer Container */}
+        <View style={styles.cardFooter}>
+          <View style={styles.footerTopRow}>
+            <Text style={styles.tripTitle} numberOfLines={1}>{data.tripName}</Text>
+            <View style={styles.statsContainer}>
+              <View style={styles.statPill}><Text style={styles.statPillText}>📍 {data.kmCovered}</Text></View>
+              <View style={styles.statPill}><Text style={styles.statPillText}>📄 {data.activities} Acts</Text></View>
+            </View>
+          </View>
+          <Text style={styles.footerDate}>📅 {data.startDate} – {data.endDate}</Text>
+        </View>
+      </View>
+    </ScrollView>
+  );
+};
 
 interface TravelWrapModalProps {
   visible: boolean;
@@ -31,64 +303,14 @@ interface TravelWrapModalProps {
   itinerary: ItineraryItem[];
 }
 
-const parseDateString = (str: string) => {
-  if (!str) return null;
-  const cleanStr = str.trim();
-  // Check if it's YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) {
-    return new Date(cleanStr);
-  }
-  // Check if it's DD-MM-YYYY or DD/MM/YYYY
-  const parts = cleanStr.split(/[-/]/);
-  if (parts.length === 3) {
-    if (parts[0].length === 4) {
-      // YYYY-MM-DD
-      return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-    } else if (parts[2].length === 4) {
-      // DD-MM-YYYY
-      return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-    }
-  }
-  const d = new Date(cleanStr);
-  return isNaN(d.getTime()) ? null : d;
-};
-
-const getActivityEmoji = (activityName: string) => {
-  const name = activityName.toLowerCase();
-  if (name.includes("mountain") || name.includes("hill") || name.includes("trek") || name.includes("peak") || name.includes("climb") || name.includes("mullayanagiri")) {
-    return "⛰️";
-  }
-  if (name.includes("beach") || name.includes("sea") || name.includes("ocean") || name.includes("surf")) {
-    return "🏖️";
-  }
-  if (name.includes("water") || name.includes("falls") || name.includes("lake") || name.includes("river") || name.includes("kayak") || name.includes("raft") || name.includes("zip")) {
-    return "🌊";
-  }
-  if (name.includes("coffee") || name.includes("cafe") || name.includes("breakfast") || name.includes("food") || name.includes("eat")) {
-    return "☕";
-  }
-  if (name.includes("camp") || name.includes("tent") || name.includes("forest") || name.includes("nature")) {
-    return "🌲";
-  }
-  if (name.includes("temple") || name.includes("shrine") || name.includes("church") || name.includes("yana") || name.includes("cave")) {
-    return "🛕";
-  }
-  return "📍";
-};
-
-
-
-export const TravelWrapModal = React.memo(({
+export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
   visible,
   onClose,
   householdData,
   memberProfiles,
   currentUserId,
   itinerary,
-}: TravelWrapModalProps) => {
-  const { isDark } = useTheme();
-  const cardRef = useRef<View>(null);
-
+}) => {
   // 1. Filter approved itinerary items and sort chronologically
   const approvedItinerary = itinerary
     .filter((item) => item.approved)
@@ -98,40 +320,27 @@ export const TravelWrapModal = React.memo(({
       return dateA.localeCompare(dateB);
     });
 
-  // 2. Local state for selected milestone IDs (max 10)
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectedMilestones = approvedItinerary.slice(0, 10);
 
-  useEffect(() => {
-    if (visible && approvedItinerary.length > 0) {
-      // Default to checking the first 10 items
-      setSelectedIds(approvedItinerary.slice(0, 10).map((item) => item.id));
+  const parseDateString = (str: string) => {
+    if (!str) return null;
+    const cleanStr = str.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) {
+      return new Date(cleanStr);
     }
-  }, [visible, itinerary]);
-
-  const handleToggleMilestone = (id: string) => {
-    if (selectedIds.includes(id)) {
-      // Allow deselecting, but keep at least 1 milestone selected to display a route
-      if (selectedIds.length <= 1) {
-        Alert.alert("Required", "Please keep at least 1 milestone selected.");
-        return;
+    const parts = cleanStr.split(/[-/]/);
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      } else if (parts[2].length === 4) {
+        return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
       }
-      setSelectedIds(selectedIds.filter((x) => x !== id));
-    } else {
-      if (selectedIds.length >= 10) {
-        Alert.alert("Limit Reached", "You can highlight up to 10 milestone spots on the map.");
-        return;
-      }
-      setSelectedIds([...selectedIds, id]);
     }
+    const d = new Date(cleanStr);
+    return isNaN(d.getTime()) ? null : d;
   };
 
-  // 3. Extract selected items in chronological order
-  const selectedMilestones = approvedItinerary.filter((item) =>
-    selectedIds.includes(item.id)
-  );
-
-  // 4. Calculate Trip Duration
-  let durationDays = 8; // default fallback
+  let durationDays = 8;
   if (householdData?.tripDetails?.startDate && householdData?.tripDetails?.endDate) {
     const start = parseDateString(householdData.tripDetails.startDate);
     const end = parseDateString(householdData.tripDetails.endDate);
@@ -156,7 +365,6 @@ export const TravelWrapModal = React.memo(({
     }
   }
 
-  // 5. Trip Crew profiles
   const allMembers = householdData?.members || [];
   const currentUserProfile = memberProfiles[currentUserId] || { username: "Traveler" };
   const crewProfiles = allMembers
@@ -164,10 +372,20 @@ export const TravelWrapModal = React.memo(({
     .map((uid: string) => memberProfiles[uid])
     .filter(Boolean);
 
-  const displayCrew = crewProfiles.slice(0, 3);
-  const remainingCrewCount = crewProfiles.length - 3;
+  const formatInitials = (name: string) => {
+    if (!name) return "T";
+    const parts = name.trim().split(" ");
+    if (parts.length > 1) {
+      return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
 
-  // 6. Format Username (e.g. "David Miller" -> "David M.")
+  const crew = crewProfiles.map((member: any) => ({
+    initials: formatInitials(member.username || member.email || ""),
+    photoUrl: member.photoUrl || null,
+  }));
+
   const formatName = (name: string) => {
     if (!name) return "";
     const parts = name.trim().split(" ");
@@ -177,808 +395,379 @@ export const TravelWrapModal = React.memo(({
     return name;
   };
 
-  // 7. Distance covered (User inputted or calculated fallback)
   const distanceInput = householdData?.tripDetails?.distanceTraveled;
   const distanceCoveredText = distanceInput
-    ? `${parseFloat(distanceInput).toLocaleString()} km Covered`
-    : `${(selectedMilestones.length * 45).toLocaleString()} km Covered (Est.)`;
+    ? `${parseFloat(distanceInput).toLocaleString()} km`
+    : `${(selectedMilestones.length * 45).toLocaleString()} km`;
 
-  // 8. Winding road curve calculation (3D perspective)
-  const getRoadPoint = (y: number) => {
-    // Top of road is y=145, bottom is y=275 inside 400x300 viewBox scale
-    const t = (275 - y) / (275 - 145);
-    const sway = Math.sin(t * Math.PI * 3.2);
-    const amplitude = 48 * Math.pow(1 - t, 0.8) + 12;
-    const x = 200 + sway * amplitude;
-    const width = 10 + 290 * Math.pow(1 - t, 2.5); // scaled to 290 width inside 400 SVG
-    return { x, y, width };
+  const getActivityEmoji = (activityName: string) => {
+    const name = activityName.toLowerCase();
+    if (name.includes("mountain") || name.includes("hill") || name.includes("trek") || name.includes("peak") || name.includes("climb") || name.includes("mullayanagiri")) {
+      return "⛰️";
+    }
+    if (name.includes("beach") || name.includes("sea") || name.includes("ocean") || name.includes("surf")) {
+      return "🏖️";
+    }
+    if (name.includes("water") || name.includes("falls") || name.includes("lake") || name.includes("river") || name.includes("kayak") || name.includes("raft") || name.includes("zip")) {
+      return "🌊";
+    }
+    if (name.includes("coffee") || name.includes("cafe") || name.includes("breakfast") || name.includes("food") || name.includes("eat")) {
+      return "☕";
+    }
+    if (name.includes("camp") || name.includes("tent") || name.includes("forest") || name.includes("nature")) {
+      return "🌲";
+    }
+    if (name.includes("temple") || name.includes("shrine") || name.includes("church") || name.includes("yana") || name.includes("cave")) {
+      return "🛕";
+    }
+    return "📍";
   };
 
-  const points = React.useMemo(() => {
-    const N = selectedMilestones.length;
-    const pts = [];
-    const roadTop = 145;
-    const roadBot = 275;
-    
-    if (N === 1) {
-      const y = (roadTop + roadBot) / 2;
-      const { x } = getRoadPoint(y);
-      pts.push({ x, y, isLeft: false });
-    } else if (N > 1) {
-      const dy = (roadBot - roadTop) / (N - 1);
-      for (let i = 0; i < N; i++) {
-        const y = roadBot - i * dy;
-        const { x } = getRoadPoint(y);
-        const isLeft = i % 2 !== 0; // alternates left/right
-        pts.push({ x, y, isLeft });
-      }
-    }
-    return pts;
-  }, [selectedMilestones]);
+  const stops = selectedMilestones.map((item, idx) => ({
+    emoji: getActivityEmoji(item.activity),
+    name: item.activity,
+    day: parseDateString(item.date) && parseDateString(householdData?.tripDetails?.startDate) 
+      ? Math.ceil((parseDateString(item.date)!.getTime() - parseDateString(householdData.tripDetails.startDate)!.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      : idx + 1,
+    isEnd: idx === selectedMilestones.length - 1,
+  }));
 
-  const roadPaths = React.useMemo(() => {
-    const leftPoints: { x: number; y: number }[] = [];
-    const rightPoints: { x: number; y: number }[] = [];
-    const centerPoints: { x: number; y: number }[] = [];
-    const steps = 40;
-    const roadTop = 145;
-    const roadBot = 275;
-    
-    for (let i = 0; i <= steps; i++) {
-      const y = roadBot - (i / steps) * (roadBot - roadTop);
-      const { x, width } = getRoadPoint(y);
-      leftPoints.push({ x: x - width / 2, y });
-      rightPoints.push({ x: x + width / 2, y });
-      centerPoints.push({ x, y });
-    }
-    
-    const roadSurfaceD = `M ` + leftPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ') + 
-                         ` L ` + [...rightPoints].reverse().map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ') + ` Z`;
-                         
-    const leftEdgeD = `M ` + leftPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ');
-    const rightEdgeD = `M ` + rightPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ');
-    const centerDashesD = `M ` + centerPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ');
-    
-    return { roadSurfaceD, leftEdgeD, rightEdgeD, centerDashesD };
-  }, [selectedMilestones]);
-
-  // 9. Native Sharing trigger (Shares the captured card screenshot directly as an image file)
-  const handleShareCard = async () => {
-    try {
-      if (!cardRef.current) {
-        Alert.alert("Error", "Card reference is not ready.");
-        return;
-      }
-      
-      // Capture the card visually as a PNG image
-      const uri = await captureRef(cardRef, {
-        format: "png",
-        quality: 0.95,
-      });
-
-      // Share the actual PNG image file directly
-      await Sharing.shareAsync(uri, {
-        mimeType: "image/png",
-        dialogTitle: "Share Trip Wrap",
-        UTI: "public.png",
-      });
-    } catch (error) {
-      console.error("Share Error:", error);
-      Alert.alert("Error", "Could not share the wrap image.");
-    }
+  const tripData: TripData = {
+    tripName: householdData?.tripDetails?.destination || householdData?.name || "My Trip",
+    mainTraveler: {
+      initials: formatInitials(currentUserProfile.username || currentUserProfile.email || "Traveler"),
+      name: formatName(currentUserProfile.username || "Traveler"),
+      city: householdData?.tripDetails?.destination || "Traveler",
+      photoUrl: currentUserProfile.photoUrl || null,
+    },
+    startDate: householdData?.tripDetails?.startDate || "TBD",
+    endDate: householdData?.tripDetails?.endDate || "TBD",
+    durationDays,
+    kmCovered: distanceCoveredText,
+    activities: itinerary.length,
+    crew,
+    maxVisibleCrew: 3,
+    stops,
+    totalStops: approvedItinerary.length,
   };
-
-  // Styling palette
-  const textMain = isDark ? "#F1F5F9" : "#1E1B4B";
-  const textMuted = isDark ? "#94A3B8" : "#475569";
-  const cardBg = isDark ? "#111428" : "#FFFFFF";
-  const shadowColor = isDark ? "rgba(0,0,0,0.5)" : "rgba(99,102,241,0.06)";
 
   return (
     <SlideModal visible={visible} onClose={onClose} title="Shareable Trip Wrap">
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
-        
-        {/* CARD CONTAINER (The captured element) */}
-        <ViewShot
-          ref={cardRef}
-          options={{ format: "png", quality: 0.95 }}
-          style={[styles.cardContainer, { backgroundColor: cardBg }]}
-        >
-          {/* Header Block */}
-          <View style={styles.headerBlock}>
-            <View>
-              <Image
-                source={require("../../../assets/logo_landscape.png")}
-                style={{ width: 110, height: 26, tintColor: isDark ? "#FFFFFF" : "#1A1D3B" }}
-                resizeMode="contain"
-              />
-            </View>
-            
-            <TouchableOpacity
-              onPress={handleShareCard}
-              style={[
-                styles.shareBtnCircle,
-                { backgroundColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#F1F5F9" }
-              ]}
-            >
-              <MaterialIcons name="share" size={18} color={isDark ? "#FFFFFF" : "#1A1D3B"} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Top Profile & Metrics Row */}
-          <View style={styles.profileMetricRow}>
-            {/* Left: Overlapping Horizontal Crew Avatars */}
-            <View style={styles.crewCol}>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                {displayCrew.map((member: any, idx: number) => (
-                  <View
-                    key={member.uid || idx}
-                    style={{
-                      marginLeft: idx > 0 ? -8 : 0,
-                      borderWidth: 2,
-                      borderColor: "#FFFFFF",
-                      borderRadius: 14,
-                    }}
-                  >
-                    <Avatar
-                      name={member.username}
-                      size={26}
-                      bgColor="#E2E8F0"
-                      color="#334155"
-                      photoUrl={member.photoUrl}
-                    />
-                  </View>
-                ))}
-                {crewProfiles.length > 3 && (
-                  <View
-                    style={{
-                      marginLeft: 4,
-                      backgroundColor: "#06B6D4",
-                      paddingHorizontal: 6,
-                      paddingVertical: 3,
-                      borderRadius: 8,
-                    }}
-                  >
-                    <Text style={{ color: "#FFF", fontSize: 8, fontWeight: "900" }}>
-                      +{remainingCrewCount}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.crewBadge}>
-                <MaterialIcons name="people" size={10} color="#6366F1" style={{ marginRight: 3 }} />
-                <Text style={styles.crewBadgeText}>Trip Crew ({allMembers.length})</Text>
-              </View>
-            </View>
-
-            {/* Center: Main User Profile */}
-            <View style={styles.centerProfile}>
-              <View style={styles.centerAvatarContainer}>
-                <Avatar
-                  name={currentUserProfile.username}
-                  size={64}
-                  bgColor="#E0E7FF"
-                  color="#4F46E5"
-                  photoUrl={currentUserProfile.photoUrl}
-                  style={styles.centerAvatar}
-                />
-              </View>
-              <Text style={[styles.profileName, { color: textMain }]}>
-                {formatName(currentUserProfile.username)}
-              </Text>
-              <Text style={styles.profileLocation}>
-                {householdData?.tripDetails?.destination || "Traveler"}
-              </Text>
-            </View>
-
-            {/* Right: Trip Duration Progress Circle */}
-            <View style={styles.durationCol}>
-              <View style={styles.gaugeContainer}>
-                <Svg width={60} height={60} viewBox="0 0 60 60">
-                  <Circle
-                    cx={30}
-                    cy={30}
-                    r={24}
-                    stroke={isDark ? "rgba(255,255,255,0.06)" : "#E2E8F0"}
-                    strokeWidth={4.5}
-                    fill="none"
-                  />
-                  <Circle
-                    cx={30}
-                    cy={30}
-                    r={24}
-                    stroke="#6366F1"
-                    strokeWidth={4.5}
-                    fill="none"
-                    strokeDasharray={2 * Math.PI * 24}
-                    strokeDashoffset={2 * Math.PI * 24 * (1 - Math.min(durationDays / 14, 1))}
-                    strokeLinecap="round"
-                    transform="rotate(-90 30 30)"
-                  />
-                </Svg>
-                <View style={styles.gaugeTextOverlay}>
-                  <Text style={[styles.gaugeNum, { color: textMain }]}>{durationDays}</Text>
-                  <Text style={styles.gaugeUnit}>Days</Text>
-                </View>
-              </View>
-              <View style={styles.durationBadge}>
-                <MaterialIcons name="schedule" size={10} color="#475569" />
-                <Text style={styles.durationBadgeText}>DURATION</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Central Scenic Route panel */}
-          <View style={[styles.mapCardOuter, { backgroundColor: isDark ? "#1E293B" : "#F8FAFC" }]}>
-            {/* Vector Illustration Background Layers */}
-            <Svg style={StyleSheet.absoluteFillObject} width="100%" height="100%" viewBox="0 0 400 300" preserveAspectRatio="none">
-              <Defs>
-                <LinearGradient id="roadGlow" x1="0.5" y1="1" x2="0.5" y2="0">
-                  <Stop offset="0%" stopColor="#ffffff" stopOpacity={0} />
-                  <Stop offset="100%" stopColor="#fef08a" stopOpacity={0.15} />
-                </LinearGradient>
-              </Defs>
-
-              {/* Dynamic Winding Road Surface */}
-              {selectedMilestones.length > 1 && (
-                <>
-                  {/* Road Surface */}
-                  <Path d={roadPaths.roadSurfaceD} fill="#475569" />
-                  <Path d={roadPaths.roadSurfaceD} fill="url(#roadGlow)" opacity={0.2} />
-                  {/* Edges */}
-                  <Path d={roadPaths.leftEdgeD} stroke="#64748b" strokeWidth={1.5} strokeLinecap="round" />
-                  <Path d={roadPaths.rightEdgeD} stroke="#64748b" strokeWidth={1.5} strokeLinecap="round" />
-                  {/* Center Dashes */}
-                  <Path
-                    d={roadPaths.centerDashesD}
-                    stroke="rgba(255,255,255,0.85)"
-                    strokeWidth={1.5}
-                    strokeDasharray="6,8"
-                    strokeLinecap="round"
-                    fill="none"
-                  />
-                </>
-              )}
-
-              {/* Render Milestone Nodes (circular markers on the road) */}
-              {selectedMilestones.map((item, index) => {
-                const coord = points[index];
-                if (!coord) return null;
-                const isLast = index === selectedMilestones.length - 1;
-                const col = isLast ? "#ea580c" : "#0284c7";
-                const rc = isLast ? "rgba(234,88,12," : "rgba(2,132,199,";
-                const r = 9 - (index / Math.max(selectedMilestones.length - 1, 1)) * 3.5;
-                
-                return (
-                  <React.Fragment key={item.id}>
-                    {/* Glow Ring */}
-                    <Circle
-                      cx={coord.x}
-                      cy={coord.y}
-                      r={r + 4}
-                      fill={`${rc}0.12)`}
-                      stroke={`${rc}0.4)`}
-                      strokeWidth={1}
-                    />
-                    {/* Inner Circle */}
-                    <Circle
-                      cx={coord.x}
-                      cy={coord.y}
-                      r={r}
-                      fill={col}
-                    />
-                  </React.Fragment>
-                );
-              })}
-            </Svg>
-
-            {/* Render Milestone Text labels absolutely positioned on top (Tooltip style) */}
-            {selectedMilestones.map((item, index) => {
-              const coord = points[index];
-              if (!coord) return null;
-
-              const physicalY = (coord.y / 300) * 440;
-              const isLeft = coord.isLeft;
-              
-              const posStyle = isLeft
-                ? { top: physicalY - 14, left: 10 }
-                : { top: physicalY - 14, right: 10 };
-
-              const isLast = index === selectedMilestones.length - 1;
-
-              return (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.absoluteLabelContainer,
-                    posStyle,
-                  ]}
-                >
-                  <View style={styles.milestoneLabelBox}>
-                    <View style={[styles.cpDot, isLast && styles.cpDotEnd]} />
-                    <Text style={styles.milestoneNameText} numberOfLines={1}>
-                      {getActivityEmoji(item.activity)} {item.activity}
-                    </Text>
-                    <Text style={styles.cpDayText}>
-                      Day {points[index].y ? Math.round((275 - points[index].y) / ((275 - 145) / Math.max(selectedMilestones.length - 1, 1))) + 1 : 1}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
-
-            {/* Milestone Footer Footnote */}
-            {approvedItinerary.length > selectedMilestones.length && (
-              <View style={styles.remainingStopsNote}>
-                <Text style={styles.remainingStopsText}>
-                  ...and {approvedItinerary.length - selectedMilestones.length} more{"\n"}stops explored!
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Footer Details Info panel */}
-          <View style={[styles.footerPanel, { borderTopColor: isDark ? "rgba(255,255,255,0.06)" : "#E2E8F0" }]}>
-            <View style={styles.footerRow}>
-              <Text style={[styles.footerTripName, { color: textMain }]} numberOfLines={1}>
-                {householdData?.tripDetails?.destination || householdData?.name || "Karnataka Adventure"}
-              </Text>
-              <View style={styles.footerStatsRow}>
-                <View style={styles.footerStatItem}>
-                  <MaterialIcons name="navigation" size={12} color="#6366F1" />
-                  <Text style={styles.footerStatText}>{distanceCoveredText}</Text>
-                </View>
-                <View style={styles.footerStatItem}>
-                  <MaterialIcons name="format-list-bulleted" size={12} color="#6366F1" />
-                  <Text style={styles.footerStatText}>{approvedItinerary.length} Activities</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.footerDateRow}>
-              <MaterialIcons name="date-range" size={12} color={textMuted} />
-              <Text style={styles.footerDateText}>
-                {householdData?.tripDetails?.startDate || "TBD"} — {householdData?.tripDetails?.endDate || "TBD"}
-              </Text>
-            </View>
-          </View>
-        </ViewShot>
-
-        {/* INTERACTIVE MILESTONE SELECTOR */}
-        <View style={styles.interactiveArea}>
-          <Text style={[styles.selectorTitle, { color: textMain }]}>
-            Customize Card Milestones
-          </Text>
-          <Text style={styles.selectorSubtitle}>
-            Select up to 10 activities to plot on your road-trip path:
-          </Text>
-
-          {approvedItinerary.length === 0 ? (
-            <View style={styles.emptyStateBox}>
-              <Text style={styles.emptyStateText}>
-                No approved itinerary activities found. Add some to your timeline first!
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.checklistCard}>
-              {approvedItinerary.map((item) => {
-                const isChecked = selectedIds.includes(item.id);
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    onPress={() => handleToggleMilestone(item.id)}
-                    style={[
-                      styles.checkRow,
-                      { borderColor: isDark ? "rgba(255,255,255,0.05)" : "#E2E8F0" },
-                    ]}
-                  >
-                    <View style={styles.checkLeft}>
-                      <MaterialIcons
-                        name={isChecked ? "check-box" : "check-box-outline-blank"}
-                        size={20}
-                        color={isChecked ? "#6366F1" : "#94A3B8"}
-                      />
-                      <View>
-                        <Text style={[styles.checkActivityText, { color: textMain }]} numberOfLines={1}>
-                          {item.activity}
-                        </Text>
-                        <Text style={styles.checkDateText}>
-                          {item.date} at {item.time}
-                        </Text>
-                      </View>
-                    </View>
-                    {isChecked && (
-                      <View style={styles.numberBadge}>
-                        <Text style={styles.numberBadgeText}>
-                          {selectedIds.indexOf(item.id) + 1}
-                        </Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-        </View>
-
-        {/* MODAL ACTION BUTTONS */}
-        <View style={styles.actionsRow}>
-          <TouchableOpacity
-            onPress={handleShareCard}
-            style={[styles.actionBtn, styles.primaryBtn]}
-          >
-            <MaterialIcons name="share" size={18} color="#FFF" style={{ marginRight: 4 }} />
-            <Text style={styles.primaryBtnText}>Share Wrap</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          onPress={onClose}
-          style={{ alignSelf: "center", marginTop: 20, padding: 8 }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "700", color: "#6366F1" }}>
-            View Trip Details
-          </Text>
-        </TouchableOpacity>
-
-      </ScrollView>
+      <View style={{ flex: 1, backgroundColor: '#0b0d19' }}>
+        <TravelWrapCard data={tripData} householdId={householdData?.id || ""} />
+      </View>
     </SlideModal>
   );
-});
+};
 
-TravelWrapModal.displayName = "TravelWrapModal";
-
+// --- Strict StyleSheet Properties Layout ---
 const styles = StyleSheet.create({
-  cardContainer: {
-    width: 340,
-    alignSelf: "center",
-    borderRadius: 32,
-    padding: 16,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 8,
-    marginTop: 8,
-    marginBottom: 20,
-    overflow: "hidden",
+  scrollContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    backgroundColor: '#0b0d19',
   },
-  headerBlock: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
+  wrapCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 36,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.4,
+    shadowRadius: 40,
+    elevation: 15,
   },
-  logoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  brandContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  brandIconLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#6366f1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
   },
   logoText: {
-    fontSize: 13,
-    fontWeight: "900",
-    letterSpacing: 0.2,
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 12,
   },
-  tagline: {
+  brandName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1e1b4b',
+  },
+  brandTagline: {
     fontSize: 8,
-    color: "#6366F1",
-    fontWeight: "800",
-    marginTop: 1,
-    textTransform: "uppercase",
+    fontWeight: '700',
+    color: '#64748b',
     letterSpacing: 0.5,
   },
-  titleContainer: {
-    maxWidth: 160,
-  },
-  tripTitleText: {
-    fontSize: 13,
-    fontWeight: "900",
-    textAlign: "right",
-  },
-  shareBtnCircle: {
+  shareBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  crewCol: {
+    width: 85,
+    alignItems: 'flex-start',
+  },
+  avatarStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  crewAv: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#fff',
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarImage: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  crewAvText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  crewPlus: {
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#06b6d4',
+    marginLeft: 2,
+  },
+  crewPlusText: {
+    color: '#fff',
+    fontSize: 8,
+    fontWeight: '800',
+  },
+  labelSubText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#6366f1',
+    textTransform: 'uppercase',
+  },
+  mainTraveler: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  avatarRing: {
+    padding: 3,
+    borderRadius: 35,
+    borderWidth: 2,
+    borderColor: '#6366f1',
+    marginBottom: 4,
+  },
+  mainAvatar: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+  },
+  mainAvatarFallback: {
+    backgroundColor: '#e0e7ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mainAvatarText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#3730a3',
+  },
+  travelerName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1e1b4b',
+  },
+  travelerCity: {
+    fontSize: 9,
+    color: '#6366f1',
+    fontWeight: '700',
+  },
+  durationCol: {
+    width: 85,
+    alignItems: 'center',
+  },
+  gaugeWrap: {
+    position: 'relative',
+    width: 60,
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gaugeTextContainer: {
+    position: 'absolute',
+    alignItems: 'center',
+  },
+  gaugeNum: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1e1b4b',
+  },
+  gaugeUnit: {
+    fontSize: 7,
+    color: '#06b6d4',
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  roadPanel: {
+    height: 300,
+    borderRadius: 24,
+    overflow: 'hidden',
+    position: 'relative',
+    marginVertical: 15,
+  },
+  roadBgGradient: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#e0f2fe',
+  },
+  checkpointBadge: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 20,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
-  profileMetricRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
+  badgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#0284c7',
+    marginRight: 6,
   },
-  crewCol: {
-    width: 100,
-    alignItems: "flex-start",
-    flexDirection: "column",
-    gap: 6,
+  badgeDotEnd: {
+    backgroundColor: '#ea580c',
   },
-  crewBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginRight: 4,
   },
-  crewBadgeText: {
-    fontSize: 9,
-    color: "#6366F1",
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  centerProfile: {
-    flex: 1,
-    alignItems: "center",
-  },
-  centerAvatarContainer: {
-    padding: 3,
-    borderRadius: 36,
-    borderWidth: 2,
-    borderColor: "#6366F1",
-    marginBottom: 4,
-  },
-  centerAvatar: {
-    borderRadius: 32,
-  },
-  profileName: {
-    fontSize: 12,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-  profileLocation: {
-    fontSize: 9,
-    color: "#6366F1",
-    fontWeight: "800",
-    textAlign: "center",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  durationCol: {
-    width: 90,
-    alignItems: "center",
-  },
-  gaugeContainer: {
-    width: 60,
-    height: 60,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  gaugeTextOverlay: {
-    position: "absolute",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  gaugeNum: {
-    fontSize: 13,
-    fontWeight: "900",
-    lineHeight: 14,
-  },
-  gaugeUnit: {
-    fontSize: 7,
-    color: "#06B6D4",
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  durationBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    marginTop: 6,
-  },
-  durationBadgeText: {
+  badgeDay: {
     fontSize: 8,
-    color: "#475569",
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    color: '#64748b',
+    fontWeight: '600',
   },
-  mapCardOuter: {
-    width: "100%",
-    height: 440,
-    borderRadius: 24,
-    overflow: "hidden",
-    position: "relative",
-    backgroundColor: "#1E293B",
+  moreFootnote: {
+    position: 'absolute',
+    bottom: 12,
+    right: 14,
   },
-  absoluteLabelContainer: {
-    position: "absolute",
-    zIndex: 10,
-  },
-  milestoneLabelBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.88)",
-    paddingLeft: 7,
-    paddingRight: 11,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.08)",
-    shadowColor: "#0f172a",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
-    gap: 6,
-  },
-  cpDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: "#0284c7",
-  },
-  cpDotEnd: {
-    backgroundColor: "#ea580c",
-  },
-  milestoneNameText: {
-    fontSize: 10.5,
-    fontWeight: "700",
-    color: "#1e293b",
-  },
-  cpDayText: {
+  moreFootnoteText: {
     fontSize: 9,
-    fontWeight: "600",
-    color: "#64748b",
+    fontWeight: '800',
+    color: '#475569',
+    textAlign: 'right',
   },
-  remainingStopsNote: {
-    position: "absolute",
-    bottom: 16,
-    left: 16,
-    alignItems: "flex-start",
-  },
-  remainingStopsText: {
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: "900",
-    textAlign: "left",
-    textShadowColor: "rgba(0, 0, 0, 0.4)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  footerPanel: {
+  cardFooter: {
     borderTopWidth: 1,
+    borderTopColor: 'rgba(99,102,241,0.08)',
     paddingTop: 12,
-    marginTop: 12,
   },
-  footerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  footerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
   },
-  footerTripName: {
-    fontSize: 13,
-    fontWeight: "900",
+  tripTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1e1b4b',
     flex: 1,
-    marginRight: 8,
+    marginRight: 10,
   },
-  footerStatsRow: {
-    flexDirection: "row",
-    gap: 10,
+  statsContainer: {
+    flexDirection: 'row',
   },
-  footerStatItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+  statPill: {
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    marginLeft: 6,
   },
-  footerStatText: {
+  statPillText: {
     fontSize: 10,
-    fontWeight: "800",
-    color: "#6366F1",
+    fontWeight: '700',
+    color: '#64748b',
   },
-  footerDateRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 4,
+  footerDate: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
   },
-  footerDateText: {
-    fontSize: 10,
-    color: "#475569",
-    fontWeight: "700",
+  actionWrapper: {
+    flexDirection: 'row',
+    marginTop: 16,
+    justifyContent: 'space-between',
   },
-  interactiveArea: {
-    paddingHorizontal: 16,
-    marginTop: 8,
-  },
-  selectorTitle: {
-    fontSize: 16,
-    fontWeight: "900",
-    marginBottom: 2,
-  },
-  selectorSubtitle: {
-    fontSize: 12,
-    color: "#475569",
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  emptyStateBox: {
-    backgroundColor: "rgba(0,0,0,0.02)",
+  btnPrimary: {
+    flex: 1,
+    backgroundColor: '#ffffff',
     borderRadius: 16,
-    padding: 16,
-    alignItems: "center",
-  },
-  emptyStateText: {
-    fontSize: 12,
-    color: "#475569",
-    textAlign: "center",
-    fontWeight: "700",
-  },
-  checklistCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.04)",
-    overflow: "hidden",
-  },
-  checkRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 12,
-    borderBottomWidth: 1,
-  },
-  checkLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-  },
-  checkActivityText: {
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  checkDateText: {
-    fontSize: 10,
-    color: "#475569",
-    fontWeight: "700",
-    marginTop: 2,
-  },
-  numberBadge: {
-    backgroundColor: "#6366F1",
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  numberBadgeText: {
-    color: "#FFF",
-    fontSize: 9,
-    fontWeight: "900",
-  },
-  actionsRow: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    gap: 12,
-    marginTop: 20,
-  },
-  actionBtn: {
-    flex: 1,
     paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  btnPrimaryText: {
+    color: '#0b0d19',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  btnSecondary: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryBtn: {
-    backgroundColor: "#6366F1",
-    flexDirection: "row",
-    gap: 6,
-  },
-  primaryBtnText: {
-    color: "#FFF",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  secondaryBtn: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    backgroundColor: "transparent",
+    borderColor: 'rgba(255,255,255,0.1)',
+    marginLeft: 8,
   },
-  secondaryBtnText: {
+  btnSecondaryText: {
+    color: '#ffffff',
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: '800',
   },
 });
