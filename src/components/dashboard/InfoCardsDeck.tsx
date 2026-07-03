@@ -89,7 +89,7 @@ export const InfoCardsDeck = React.memo(({
                 shadowOffset: { width: 0, height: 6 },
                 shadowOpacity: isDark ? 0.25 : 0.06,
                 shadowRadius: 10,
-                elevation: 3,
+                elevation: isDark ? 0 : 3,
                 position: "relative",
                 overflow: "hidden",
               }}

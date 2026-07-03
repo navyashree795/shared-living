@@ -108,7 +108,7 @@ export function QuickActions({
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: isDark ? 0.05 : 0.03,
               shadowRadius: 10,
-              elevation: 2,
+              elevation: isDark ? 0 : 2,
             }}
           >
             <LinearGradient
