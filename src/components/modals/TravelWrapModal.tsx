@@ -10,7 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { TripData } from './types';
+import { TripData, CrewMember, Stop } from './types';
 import SlideModal from '../SlideModal';
 import { ItineraryItem } from '../../types';
 
@@ -77,7 +77,7 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
     return (
       <View style={styles.crewCol}>
         <View style={styles.avatarStack}>
-          {visibleCrew.map((member, idx) => (
+          {visibleCrew.map((member: CrewMember, idx: number) => (
             <View 
               key={idx} 
               style={[styles.crewAv, { marginLeft: idx === 0 ? 0 : -8, zIndex: idx }]}
@@ -164,7 +164,7 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
     const roadSurfacePath = `M ${leftPoints.join(' L ')} L ${[...rightPoints].reverse().join(' L ')} Z`;
     const centerDashesPath = `M ${centerPoints.join(' L ')}`;
 
-    const nodePositions = data.stops.map((stop, i) => {
+    const nodePositions = data.stops.map((stop: Stop, i: number) => {
       const t = i / Math.max(n - 1, 1);
       const y = roadBot - t * (roadBot - roadTop);
       const { x } = getRoadPoint(y);
@@ -189,7 +189,7 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
           <Path d={centerDashesPath} stroke="rgba(255,255,255,0.85)" strokeWidth="1.5" strokeDasharray="6,8" fill="none" />
 
           {/* Perspective Map Stop Coordinates */}
-          {nodePositions.map((node, idx) => (
+          {nodePositions.map((node: { x: number; y: number; r: number; stop: Stop }, idx: number) => (
             <React.Fragment key={idx}>
               <Circle 
                 cx={node.x} 
@@ -208,7 +208,7 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
         </Svg>
 
         {/* Dynamic Alternating Badge Text Elements */}
-        {nodePositions.map((node, i) => {
+        {nodePositions.map((node: { x: number; y: number; r: number; stop: Stop }, i: number) => {
           const isLeft = i % 2 !== 0;
           const badgeStyle = isLeft 
             ? { top: node.y - 14, left: 10 } 
