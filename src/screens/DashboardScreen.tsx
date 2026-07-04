@@ -388,6 +388,8 @@ export default function DashboardScreen({ navigation }: Props) {
             fieldsToUpdate.expiresAt = expirationDate.toISOString();
           }
         }
+      } catch (e) {
+        console.warn("Parse time failed:", e);
       }
 
       await updateDoc(doc(db, "households", hid), fieldsToUpdate);
