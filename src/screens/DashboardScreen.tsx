@@ -374,18 +374,20 @@ export default function DashboardScreen({ navigation }: Props) {
     try {
       const fieldsToUpdate: any = { tripDetails: updates };
       
-      if (householdData?.type === 'travel' && householdData?.retentionPolicy && updates.endDate) {
-        const dateMatch = updates.endDate.trim().match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/);
-        if (dateMatch) {
-          const year = parseInt(dateMatch[1], 10);
-          const month = parseInt(dateMatch[2], 10) - 1;
-          const day = parseInt(dateMatch[3], 10);
-          const parsedDate = new Date(year, month, day, 23, 59, 59, 999);
-          
-          if (!isNaN(parsedDate.getTime())) {
-            const daysToAdd = householdData.retentionPolicy === '15_days_trip_end' ? 15 : 7;
-            const expirationDate = new Date(parsedDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
-            fieldsToUpdate.expiresAt = expirationDate.toISOString();
+      try {
+        if (householdData?.type === 'travel' && householdData?.retentionPolicy && updates.endDate) {
+          const dateMatch = updates.endDate.trim().match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/);
+          if (dateMatch) {
+            const year = parseInt(dateMatch[1], 10);
+            const month = parseInt(dateMatch[2], 10) - 1;
+            const day = parseInt(dateMatch[3], 10);
+            const parsedDate = new Date(year, month, day, 23, 59, 59, 999);
+            
+            if (!isNaN(parsedDate.getTime())) {
+              const daysToAdd = householdData.retentionPolicy === '15_days_trip_end' ? 15 : 7;
+              const expirationDate = new Date(parsedDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+              fieldsToUpdate.expiresAt = expirationDate.toISOString();
+            }
           }
         }
       } catch (e) {
