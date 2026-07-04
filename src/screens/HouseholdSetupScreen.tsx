@@ -207,7 +207,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
     try {
       const match = urlStr.match(/\/invite\/([a-zA-Z0-9_\-]+)/);
       if (match) return match[1];
-      const isGuid = /^[a-zA-Z0-9_\-]{36}$/.test(urlStr.trim());
+      const isGuid = /^[a-zA-Z0-9_\-]{32,36}$/.test(urlStr.trim());
       if (isGuid) return urlStr.trim();
       return null;
     } catch (e) {

@@ -140,7 +140,6 @@ function ThemedApp() {
   const { user, loading: userLoading } = useUser();
   const { householdId, setHouseholdId } = useHousehold();
   const { showToast } = useToast();
-  const url = Linking.useURL();
 
   const extractToken = (urlStr: string): string | null => {
     try {
@@ -197,6 +196,7 @@ function ThemedApp() {
 
   useEffect(() => {
     const handleUrl = async (rawUrl: string) => {
+      console.log("Deep link URL detected:", rawUrl);
       const token = extractToken(rawUrl);
       if (token) {
         await AsyncStorage.setItem("pending_invite_token", token);
@@ -211,10 +211,24 @@ function ThemedApp() {
       }
     };
 
-    if (url) {
-      handleUrl(url);
-    }
-  }, [url, user, userLoading]);
+    // 1. Listen for deep links while the app is active (foreground/background transitions)
+    const subscription = Linking.addEventListener('url', (event) => {
+      if (event.url) {
+        handleUrl(event.url);
+      }
+    });
+
+    // 2. Check if the app was launched from a link (cold start)
+    Linking.getInitialURL().then((initialUrl) => {
+      if (initialUrl) {
+        handleUrl(initialUrl);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user, userLoading]);
 
   useEffect(() => {
     const checkPending = async () => {

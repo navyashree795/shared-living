@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.jeevan0714.sharedliving",
+      "sha256_cert_fingerprints": [
+        "10:3B:5A:44:B6:3B:5A:F1:C7:CE:F0:4B:92:AA:7A:5A:5C:7F:EF:FF:B3:19:D4:CE:CD:45:90:5E:2B:A3:D2:C0"
+      ]
+    }
+  }
+]

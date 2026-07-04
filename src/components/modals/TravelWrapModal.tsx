@@ -356,15 +356,15 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
             {/* Transparent icon — shows house graphic clearly on any background */}
             <Image
               source={require("../../../assets/adaptive-icon-modified.png")}
-              style={{ width: 44, height: 44, marginRight: 8 }}
+              style={{ width: 64, height: 64, marginRight: -2 }}
               resizeMode="contain"
             />
             <View>
               <Text style={{ fontSize: 15, fontWeight: "900", color: "#1e1b4b", letterSpacing: -0.3 }}>
                 House Sync
               </Text>
-              <Text style={{ fontSize: 9, fontWeight: "700", color: "#6366f1", letterSpacing: 0.6, textTransform: "uppercase" }}>
-                Shared Living – Made Simpler
+              <Text style={{ fontSize: 8, fontWeight: "800", color: "#6366f1", letterSpacing: 0.4, textTransform: "uppercase" }}>
+                Shared Living & Travel Made Easier
               </Text>
             </View>
           </View>
@@ -922,7 +922,9 @@ const styles = StyleSheet.create({
   },
   checkpointBadge: {
     position: 'absolute',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.45)',
     borderRadius: 20,
     paddingVertical: 4,
     paddingHorizontal: 10,

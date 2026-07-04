@@ -210,6 +210,18 @@
       <div class="spinner"></div>
       Connecting to app...
     </div>
+
+    <!-- Divider -->
+    <div style="margin: 24px 0 16px; border-top: 1px solid var(--border);"></div>
+
+    <!-- Manual copy section -->
+    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 16px; padding: 16px; text-align: left;">
+      <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 1px; display: block; margin-bottom: 8px;">Development / Testing Invite Code</span>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+        <code id="token-code" style="font-size: 12px; color: var(--text); background: rgba(0,0,0,0.2); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); font-family: monospace; overflow-x: auto; white-space: nowrap; flex-grow: 1; max-width: 250px;">-</code>
+        <button id="copy-btn" style="background: var(--accent); color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer; transition: all 0.2s ease;">Copy</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -217,13 +229,34 @@
     const pathname = window.location.pathname;
     const token = pathname.substring(pathname.lastIndexOf('/') + 1);
 
+    // Update token text on page
+    const tokenCode = document.getElementById('token-code');
+    const copyBtn = document.getElementById('copy-btn');
+    if (tokenCode) tokenCode.innerText = token;
+
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(token).then(() => {
+          copyBtn.innerText = "Copied!";
+          copyBtn.style.background = "#10B981";
+          setTimeout(() => {
+            copyBtn.innerText = "Copy";
+            copyBtn.style.background = "var(--accent)";
+          }, 1500);
+        }).catch(err => {
+          console.error("Failed to copy token:", err);
+        });
+      });
+    }
+
     // Detect user agent for smart redirect
     const userAgent = navigator.userAgent || navigator.vendor || window.opera;
     const isAndroid = /android/i.test(userAgent);
     const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
 
     // Dynamic app schemes
-    let appScheme = `sharedliving://invite/${token}`;
+    const rawScheme = `sharedliving://invite/${token}`;
+    let appScheme = rawScheme;
     if (isAndroid) {
       appScheme = `intent://invite/${token}#Intent;scheme=sharedliving;package=com.jeevan0714.sharedliving;end;`;
     }
@@ -233,7 +266,7 @@
     const statusText = document.getElementById('status');
 
     // Configure the buttons
-    openBtn.href = appScheme;
+    openBtn.href = isAndroid ? appScheme : rawScheme;
 
     let storeUrl = "https://play.google.com/store/apps/details?id=com.jeevan0714.sharedliving"; // Default Play Store
     if (isIOS) {
@@ -244,19 +277,23 @@
 
     // Auto-launch the app directly
     function attemptRedirect() {
+      // Try direct custom protocol redirect first (works in many in-app browsers/WebViews)
+      window.location.href = rawScheme;
+
+      // For Android Chrome compatibility, fall back to Intent link after a tiny delay
       if (isAndroid) {
-        window.location.href = appScheme;
-      } else {
-        window.location.href = `sharedliving://invite/${token}`;
+        setTimeout(() => {
+          window.location.href = appScheme;
+        }, 300);
       }
       
       // If the app is not installed, the page will not blur or hide.
-      // After 2 seconds, update the status message and suggest download.
+      // After 2.5 seconds, update the status message and suggest download.
       setTimeout(() => {
         if (!document.hidden) {
-          statusText.innerHTML = "App not opening? Click 'Download App' to install it.";
+          statusText.innerHTML = "App not opening? Click 'Open in App' or install it via 'Download App'.";
         }
-      }, 2000);
+      }, 2500);
     }
 
     // Run redirect immediately on load
