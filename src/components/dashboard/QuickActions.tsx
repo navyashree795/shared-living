@@ -1,6 +1,17 @@
+/*
+ * FILE: src/components/dashboard/QuickActions.tsx
+ * PURPOSE: Horizontally scrolling quick action shortcut card buttons.
+ *          Provides fast drawers access to log expenses, record bills, purchase items, and schedule tasks.
+ * WHERE USED: Dashboard screen quick actions deck tray.
+ */
+
+// Import React module reference
 import React from "react";
+// Import layout components, scrolls, and touch triggers
 import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+// Import vector icons
 import { MaterialIcons } from "@expo/vector-icons";
+// Import linear gradients library
 import { LinearGradient } from "expo-linear-gradient";
 
 interface QuickActionsProps {
@@ -20,12 +31,15 @@ export function QuickActions({
   isDark,
   isTravel = false,
 }: QuickActionsProps) {
+  // Theme color styling variables mapping
   const textMain = isDark ? "#F1F5F9" : "#1E1B4B";
   const textMuted = isDark ? "#94A3B8" : "#64748B";
   const glassBorder = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(99, 102, 241, 0.08)";
   const glassBg = isDark ? "rgba(255, 255, 255, 0.04)" : "#FFFFFF";
 
+  // List of all shortcut items configurations
   const actions = [
+    // 1. Quick Buy Grocery shortcut
     {
       id: "quick-buy",
       title: "Quick Buy",
@@ -35,6 +49,7 @@ export function QuickActions({
       gradient: isDark ? (["#0B1B17", "#0B0D19"] as const) : (["#E6FDF5", "#FFFFFF"] as const),
       onPress: onQuickBuy,
     },
+    // 2. Settle Up Balances shortcut
     {
       id: "settle-up",
       title: "Settle Up",
@@ -44,6 +59,7 @@ export function QuickActions({
       gradient: isDark ? (["#1C160B", "#0B0D19"] as const) : (["#FEF8E7", "#FFFFFF"] as const),
       onPress: onSettleUp,
     },
+    // 3. Quick Bill Split Equal shortcut
     {
       id: "quick-expense",
       title: "Quick Bill",
@@ -53,6 +69,7 @@ export function QuickActions({
       gradient: isDark ? (["#11142F", "#0B0D19"] as const) : (["#EEF2FF", "#FFFFFF"] as const),
       onPress: onQuickExpense,
     },
+    // 4. Log Chore shortcut
     {
       id: "quick-chore",
       title: "Log Chore",
@@ -64,6 +81,7 @@ export function QuickActions({
     },
   ];
 
+  // Filter out grocery list additions and tasks logger shortcuts for Travel home settings
   const filteredActions = actions.filter((act) => {
     if (isTravel && (act.id === "quick-buy" || act.id === "quick-chore")) {
       return false;
@@ -72,7 +90,9 @@ export function QuickActions({
   });
 
   return (
+    // Wrap shortcuts in styled outer view
     <View style={{ marginBottom: 24 }}>
+      {/* Title section */}
       <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
         <Text
           style={{
@@ -86,6 +106,8 @@ export function QuickActions({
           🚀 Quick Shortcuts
         </Text>
       </View>
+      
+      {/* Horizontally scrolling list of shortcut button cards */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -111,10 +133,12 @@ export function QuickActions({
               elevation: isDark ? 0 : 2,
             }}
           >
+            {/* Draw linear gradient inside buttons */}
             <LinearGradient
               colors={item.gradient}
               style={{ flex: 1, padding: 14, justifyContent: "space-between" }}
             >
+              {/* Shortcut Category Icon Wrapper */}
               <View
                 style={{
                   width: 36,
@@ -127,6 +151,7 @@ export function QuickActions({
               >
                 <MaterialIcons name={item.icon} size={18} color={item.color} />
               </View>
+              {/* Shortcut Title Labels */}
               <View>
                 <Text
                   style={{

@@ -1,7 +1,19 @@
+/*
+ * FILE: src/components/dashboard/HeroGreeting.tsx
+ * PURPOSE: Interactive greeting hero banner rendering custom linear gradient themes based on financial debt states
+ *          (owed vs owe vs settled) and displaying quick actions for the next due chore.
+ * WHERE USED: Dashboard screen hero header component.
+ */
+
+// Import React module reference
 import React from "react";
+// Import layout components, texts, and touch buttons
 import { View, Text, TouchableOpacity } from "react-native";
+// Import linear gradients library
 import { LinearGradient } from "expo-linear-gradient";
+// Import vector icons
 import { MaterialIcons } from "@expo/vector-icons";
+// Import Firebase auth client SDK links
 import { auth } from "../../firebaseConfig";
 
 interface HeroGreetingProps {
@@ -17,6 +29,7 @@ interface HeroGreetingProps {
   isTravel?: boolean;
 }
 
+// Render HeroGreeting memoized to optimize re-renders
 export const HeroGreeting = React.memo(({
   greeting,
   username,
@@ -29,9 +42,10 @@ export const HeroGreeting = React.memo(({
   getMemberName,
   isTravel = false,
 }: HeroGreetingProps) => {
+  // Grab current authenticated user unique ID
   const currentUid = auth.currentUser?.uid;
   
-  // Dynamic styling based on net balance
+  // ─── THEME CONFIGURATION BASED ON NET DEBTS STANDINGS ──────────────────────
   let cardColors: readonly [string, string, ...string[]];
   let glassBorder: string;
   let shadowColor: string;
@@ -40,8 +54,8 @@ export const HeroGreeting = React.memo(({
   let balanceColor: string;
   let statusMsg: string;
 
+  // 1. Roommates owe user money (Net Positive) - Green/Emerald theme
   if (netBalance > 0.01) {
-    // Roommates owe user money (Net Positive) - Green/Emerald theme
     cardColors = isDark
       ? (["#064E3B", "#022C22"] as const)
       : (["#D1FAE5", "#F0FDF4"] as const);
@@ -51,8 +65,8 @@ export const HeroGreeting = React.memo(({
     balanceIcon = "trending-up";
     balanceColor = "#10B981";
     statusMsg = `Roommates owe you a total of ₹${Math.round(netBalance)}.`;
+  // 2. User owes roommates money (Net Negative) - Rose/Red theme
   } else if (netBalance < -0.01) {
-    // User owes roommates money (Net Negative) - Rose/Red theme
     cardColors = isDark
       ? (["#4C0519", "#310411"] as const)
       : (["#FFE4E6", "#FFF1F2"] as const);
@@ -62,8 +76,8 @@ export const HeroGreeting = React.memo(({
     balanceIcon = "trending-down";
     balanceColor = "#F43F5E";
     statusMsg = `You owe roommates a total of ₹${Math.round(Math.abs(netBalance))}.`;
+  // 3. Settled up (Neutral) - Indigo/Theme color
   } else {
-    // Settled up (Neutral) - Indigo/Theme color
     cardColors = isDark
       ? (["#1E1B4B", "#0F1320"] as const)
       : (["#E8EAFF", "#FFFFFF"] as const);
@@ -78,13 +92,17 @@ export const HeroGreeting = React.memo(({
         : `⚠️ You have ${agendaItemsLength} action item${agendaItemsLength > 1 ? "s" : ""} today.`;
   }
 
+  // Text color values
   const textMain = isDark ? "#F1F5F9" : "#1A1D3B";
   const textMuted = isDark ? "#94A3B8" : "#64748B";
 
+  // Check if user is assigned to next chore in queue
   const isMyChore = nextChore && nextChore.assignedToUid === currentUid;
 
   return (
+    // Wrap banner card in styled outer view
     <View style={{ paddingHorizontal: 20, marginTop: 12, marginBottom: 20 }}>
+      {/* Draw colored linear gradient background */}
       <LinearGradient
         colors={cardColors}
         start={{ x: 0, y: 0 }}
@@ -101,7 +119,7 @@ export const HeroGreeting = React.memo(({
           elevation: 4,
         }}
       >
-        {/* Top Header Row */}
+        {/* Banner header row displaying greetings status */}
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <View>
             <Text style={{ fontSize: 11, fontWeight: "900", color: isDark ? "#A78BFA" : "#4F46E5", textTransform: "uppercase", letterSpacing: 1.5 }}>
@@ -112,7 +130,7 @@ export const HeroGreeting = React.memo(({
             </Text>
           </View>
           
-          {/* Net Balance Status Chip */}
+          {/* Net balance indicators badge */}
           <View
             style={{
               flexDirection: "row",
@@ -133,15 +151,15 @@ export const HeroGreeting = React.memo(({
           </View>
         </View>
         
-        {/* Separator */}
+        {/* Horizontal divider layout line */}
         <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "#EEF2FF", marginVertical: 16 }} />
         
-        {/* Balance Status Message */}
+        {/* Debt summaries status text */}
         <Text style={{ fontSize: 13, color: isDark ? "#94A3B8" : "#4F46E5", fontWeight: "700", marginBottom: nextChore && !isTravel ? 16 : 0 }}>
           {statusMsg}
         </Text>
 
-        {/* Actionable Chore Card */}
+        {/* Actionable quick chore card widget */}
         {nextChore && !isTravel && (
           <View
             style={{
@@ -156,6 +174,7 @@ export const HeroGreeting = React.memo(({
               marginTop: 4,
             }}
           >
+            {/* Chore details */}
             <View style={{ flex: 1, marginRight: 12 }}>
               <Text
                 style={{
@@ -177,6 +196,7 @@ export const HeroGreeting = React.memo(({
               </Text>
             </View>
 
+            {/* Quick Action complete/nudge trigger buttons */}
             {isMyChore ? (
               <TouchableOpacity
                 onPress={() => onMarkChoreDone(nextChore)}
@@ -221,4 +241,5 @@ export const HeroGreeting = React.memo(({
   );
 });
 
+// Explicitly assign display name for React DevTools mapping
 HeroGreeting.displayName = "HeroGreeting";

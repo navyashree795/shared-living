@@ -1,38 +1,64 @@
+/*
+ * FILE: src/screens/ExpenseScreen.tsx
+ * PURPOSE: Manages shared household finance balances, expense logs entries, recurring billing draft events,
+ *          and peer-to-peer debt settlements.
+ * WHERE USED: Loaded as a main screen route option navigated from the Home/Dashboard or tabs.
+ */
+
+// Import React hooks for managing state parameters, side-effect triggers, memoizations, and element references
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+// Import layout layouts, inputs, scroll views, loaders, dimensions checks, and web linking APIs
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  Alert, ScrollView, Animated, Dimensions, ActivityIndicator, Linking
+  Alert, ScrollView, Dimensions, ActivityIndicator
 } from 'react-native';
+// Import linear gradients for statistics cards
 import { LinearGradient } from 'expo-linear-gradient';
+// Import Safe Area views to manage screen notch overlays
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, Feather } from '@expo/vector-icons';
+// Import icon libraries
+import { MaterialIcons } from '@expo/vector-icons';
+// Import database references
 import { auth, db } from '../firebaseConfig';
+// Import user profiles, households metadata, themes, and toast alert contexts
 import { useUser } from '../context/UserContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
+// Import sliding up modal and swipe-to-delete row templates
 import SlideModal from '../components/SlideModal';
 import SwipeableRow from '../components/SwipeableRow';
 import { ExpenseSkeleton } from '../components/Skeleton';
+// Import Firestore commands to subscribe to collections, write documents, delete records, and filter queries
 import {
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, deleteDoc, where, Timestamp
 } from 'firebase/firestore';
+// Import helper utilities
 import { logActivity } from '../utils/activityUtils';
 import { sendRemotePushNotification } from '../utils/notificationUtils';
 import { detectCategory, getCategoryIcon, checkAndDraftRecurringExpenses, getYearMonthString } from '../utils/expenseUtils';
 import { getSyncedDate } from '../utils/timeUtils';
 import { getCycleStartDate } from '../utils/retentionUtils';
+// Import TypeScript schemas
 import { Expense } from '../types';
-
 
 type Props = { navigation: any; route?: any };
 
+// Grab device dimensions
 const { width } = Dimensions.get('window');
 
+/**
+ * ExpenseScreen displays shared logs, balances cards, and settlement forms.
+ */
 export default function ExpenseScreen({ navigation }: Props) {
+  // Grab household details from context
   const { householdId, members, getMemberName, householdData, memberProfiles } = useHousehold();
   const hid = householdId ?? '';
+  
+  // Grab active theme mode
   const { isDark } = useTheme();
+
+  // Design color system tokens mapping
   const bg      = isDark ? '#070913' : '#F4F7FF';
   const surface = isDark ? '#111827' : '#FFFFFF';
   const cardBg  = isDark ? '#1E293B' : '#FFFFFF';
@@ -41,48 +67,63 @@ export default function ExpenseScreen({ navigation }: Props) {
   const primary = isDark ? '#818CF8' : '#4F46E5';
   const border = isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9';
   
+  // State hook storing the list of transactions/expenses loaded from Firestore
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  // Loading spinner state
   const [loading, setLoading] = useState(true);
   
+  // Grab context toast and profile references
   const { showToast } = useToast();
   const { profile: userData } = useUser();
 
+  // Modals visibility states
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isSettleModalVisible, setIsSettleModalVisible] = useState(false);
+  // Toggle split options view inside add modal
   const [showSplitOptions, setShowSplitOptions] = useState(false);
+  // Filter query parameters ('all' vs 'logs' vs 'settlements')
   const [txFilter, setTxFilter] = useState<'all' | 'logs' | 'settlements'>('all');
 
+  // Add Expense input states
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
 
-  
+  // Selected roommates mapping for splitting costs
   const [selectedMembers, setSelectedMembers] = useState<Record<string, boolean>>({});
+  // Settle Up inputs states
   const [settleAmount, setSettleAmount] = useState('');
   const [settleWithUid, setSettleWithUid] = useState<string | null>(null);
 
+  // Focus refs targeting inputs
   const expenseInputRef = useRef<TextInput>(null);
   const settleInputRef = useRef<TextInput>(null);
 
+  // Effect: Autofocus expense description input when the modal loads
   useEffect(() => {
     if (isModalVisible) setTimeout(() => expenseInputRef.current?.focus(), 250);
   }, [isModalVisible]);
 
+  // Effect: Autofocus settle up payment input when the settle modal loads
   useEffect(() => {
     if (isSettleModalVisible) setTimeout(() => settleInputRef.current?.focus(), 250);
   }, [isSettleModalVisible]);
 
+  // Effect: Pre-select all household members when starting a new expense log
   useEffect(() => {
     const initialSelection: Record<string, boolean> = {};
     members.forEach(uid => initialSelection[uid] = true);
     setSelectedMembers(initialSelection);
   }, [members, isModalVisible]);
 
+  // Effect: Syncs list from Firestore expenses subcollection, filtering items older than 3 months
   useEffect(() => {
     if (!hid) { setLoading(false); return; }
     const cycleStartDay = householdData?.billingCycleStartDay || 1;
     const now = getSyncedDate();
     const currentCycleStart = getCycleStartDate(now, cycleStartDay);
+    
+    // Filter window: hide anything older than the last 3 billing cycles
     const mainStartDate = new Date(currentCycleStart);
     mainStartDate.setMonth(mainStartDate.getMonth() - 2);
 
@@ -91,6 +132,8 @@ export default function ExpenseScreen({ navigation }: Props) {
       where('createdAt', '>=', Timestamp.fromDate(mainStartDate)),
       orderBy('createdAt', 'desc')
     );
+
+    // Live subscription to transactions history
     const unsub = onSnapshot(q, (snap) => {
       const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense));
       setExpenses(fetched);
@@ -100,6 +143,7 @@ export default function ExpenseScreen({ navigation }: Props) {
       setLoading(false);
     });
 
+    // Query active recurring templates to check and auto-draft new cycles on the 1st of the month
     const qRecurring = query(
       collection(db, 'households', hid, 'expenses'),
       where('isRecurring', '==', true)
@@ -117,6 +161,7 @@ export default function ExpenseScreen({ navigation }: Props) {
     };
   }, [householdId, householdData?.billingCycleStartDay]);
 
+  // Action: Validates and writes a new expense log document into Firestore
   const handleAddExpense = async () => {
     const parsed = parseFloat(amount);
     if (!title.trim() || isNaN(parsed) || parsed <= 0) {
@@ -131,25 +176,30 @@ export default function ExpenseScreen({ navigation }: Props) {
     const currentUid = auth.currentUser?.uid;
     if (!currentUid) return;
     const currentUserName = userData?.username ? userData.username : (auth.currentUser?.email?.split('@')[0] || 'Member');
+    
     try {
       const expenseData: any = {
         type: 'expense',
         title: title.trim(),
         amount: parsed,
-        category: detectCategory(title.trim()),
+        category: detectCategory(title.trim()), // Predict category based on title (e.g. rent, groceries)
         paidByUid: currentUid,
         payerName: getMemberName(currentUid), 
         splitAmong: splitAmongUids,
         createdAt: serverTimestamp(),
       };
+      
+      // If recurring, tag parameters to track automated monthly drafting events
       if (isRecurring) {
         expenseData.isRecurring = true;
         expenseData.lastDraftedMonth = getYearMonthString(new Date());
       }
+      
       await addDoc(collection(db, 'households', hid, 'expenses'), expenseData);
       logActivity(hid, 'expense_add', title.trim(), currentUserName, parsed);
       showToast('Expense logged', 'success');
 
+      // Dispatch push notifications to roommates
       try {
         const otherMembers = members.filter(uid => uid !== currentUid);
         const tokens = otherMembers
@@ -169,10 +219,12 @@ export default function ExpenseScreen({ navigation }: Props) {
         console.error('Error sending push notifications for expense:', e);
       }
 
+      // Reset states
       setTitle(''); setAmount(''); setIsRecurring(false); setIsModalVisible(false);
     } catch { Alert.alert('Error', 'Could not add expense.'); }
   };
 
+  // Action: Validates and writes a payment/settlement record document into Firestore
   const handleAddSettlement = async () => {
     const parsed = parseFloat(settleAmount);
     if (isNaN(parsed) || parsed <= 0 || !settleWithUid) {
@@ -182,6 +234,7 @@ export default function ExpenseScreen({ navigation }: Props) {
     const currentUid = auth.currentUser?.uid;
     if (!currentUid) return;
     const currentUserName = userData?.username ? userData.username : (auth.currentUser?.email?.split('@')[0] || 'Member');
+    
     try {
       await addDoc(collection(db, 'households', hid, 'expenses'), {
         type: 'payment',
@@ -193,6 +246,7 @@ export default function ExpenseScreen({ navigation }: Props) {
       logActivity(hid, 'payment_add', `to ${getMemberName(settleWithUid)}`, currentUserName, parsed);
       showToast('Payment recorded', 'success');
 
+      // Dispatch push alert to payee roommate
       try {
         const receiverToken = memberProfiles[settleWithUid]?.pushToken;
         if (receiverToken) {
@@ -208,10 +262,12 @@ export default function ExpenseScreen({ navigation }: Props) {
         console.error('Error sending push notification for settlement:', e);
       }
 
+      // Reset states
       setSettleAmount(''); setSettleWithUid(null); setIsSettleModalVisible(false);
     } catch { Alert.alert('Error', 'Could not record settlement.'); }
   };
 
+  // Action: Prompts confirmation alert dialog and deletes document
   const handleDelete = useCallback(async (id: string) => {
     Alert.alert('Delete Transaction', 'Remove this from history?', [
       { text: 'Cancel', style: 'cancel' },
@@ -224,37 +280,46 @@ export default function ExpenseScreen({ navigation }: Props) {
     ]);
   }, [householdId]);
 
+  // Memo: Computes total household spend and peer-to-peer balance matrices in real time
   const { totalHouseholdSpent, peerBalances } = useMemo(() => {
     const currentUid = auth.currentUser?.uid || '';
-    let totalHouseholdSpent = 0;
-    const peerBalances: Record<string, number> = {};
-    members.forEach(uid => { if (uid !== currentUid) peerBalances[uid] = 0; });
+    let spentSum = 0;
+    const balances: Record<string, number> = {};
+    
+    // Initialize balances for each roommate as 0
+    members.forEach(uid => { if (uid !== currentUid) balances[uid] = 0; });
 
+    // Loop through all synced transactions
     expenses.forEach(exp => {
       if (exp.type === 'expense' && exp.amount) {
-        totalHouseholdSpent += exp.amount;
+        spentSum += exp.amount;
         if (exp.splitAmong && exp.splitAmong.length > 0 && exp.paidByUid) {
+          // Individual share is total amount split evenly among participants
           const share = exp.amount / exp.splitAmong.length;
           exp.splitAmong.forEach(splitUid => {
             if (splitUid !== exp.paidByUid) {
-              if (splitUid === currentUid) peerBalances[exp.paidByUid!] = (peerBalances[exp.paidByUid!] || 0) + share;
-              else if (exp.paidByUid === currentUid) peerBalances[splitUid] = (peerBalances[splitUid] || 0) - share;
+              // If you were part of the split, increase what you owe the payer
+              if (splitUid === currentUid) balances[exp.paidByUid!] = (balances[exp.paidByUid!] || 0) + share;
+              // If you paid, decrease what other participants owe you (represented as negative balances)
+              else if (exp.paidByUid === currentUid) balances[splitUid] = (balances[splitUid] || 0) - share;
             }
           });
         }
       } else if (exp.type === 'payment' && exp.amount && exp.fromPaidUid && exp.toReceivedUid) {
-        if (exp.fromPaidUid === currentUid) peerBalances[exp.toReceivedUid] = (peerBalances[exp.toReceivedUid] || 0) - exp.amount;
-        else if (exp.toReceivedUid === currentUid) peerBalances[exp.fromPaidUid] = (peerBalances[exp.fromPaidUid] || 0) + exp.amount;
+        // Apply payments/settlements directly to adjust balances
+        if (exp.fromPaidUid === currentUid) balances[exp.toReceivedUid] = (balances[exp.toReceivedUid] || 0) - exp.amount;
+        else if (exp.toReceivedUid === currentUid) balances[exp.fromPaidUid] = (balances[exp.fromPaidUid] || 0) + exp.amount;
       }
     });
-    return { totalHouseholdSpent, peerBalances };
+    return { totalHouseholdSpent: spentSum, peerBalances: balances };
   }, [expenses, members]);
 
+  // List Item Renderer: Builds visual cards representing transaction logs
   const renderExpense = useCallback(({ item }: { item: Expense }) => {
     const isPayment = item.type === 'payment';
     const currentUid = auth.currentUser?.uid;
 
-    // ─── SETTLEMENT CARD ─────────────────────────────────────────────────────
+    // ─── SETTLEMENT CARD RENDERER ───────────────────────────────────────────
     if (isPayment) {
       const isMeFrom = item.fromPaidUid === currentUid;
       const isMeTo   = item.toReceivedUid === currentUid;
@@ -302,12 +367,12 @@ export default function ExpenseScreen({ navigation }: Props) {
                 <MaterialIcons name={iconName} size={24} color={chipColor} />
               </View>
 
-              {/* Text */}
+              {/* Detail texts */}
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 15, fontWeight: '900', color: textMain }} numberOfLines={1}>
                   {primaryText}
                 </Text>
-                {/* Chip */}
+                {/* Status indicator tag */}
                 <View style={{
                   marginTop: 6,
                   alignSelf: 'flex-start',
@@ -334,53 +399,53 @@ export default function ExpenseScreen({ navigation }: Props) {
       );
     }
 
-    // ─── EXPENSE LOG CARD ────────────────────────────────────────────────────
+    // ─── EXPENSE LOG CARD RENDERER ──────────────────────────────────────────
     const iconName    = getCategoryIcon(item.category);
     const splitCount  = item.splitAmong?.length || 1;
     const indvShare   = item.amount / splitCount;
     const iPaid       = item.paidByUid === currentUid;
     const amIInvolved = Boolean(item.splitAmong?.includes(currentUid!));
 
-    // Colour + chip configuration
-    let chipColor: string;
-    let chipBg: string;
-    let chipLabel: string;
-    let chipEmoji: string;
-    let accentIcon: string;
-    let accentColor: string;
+    // Dynamic color coding styling parameters based on debt relations
+    let debtColor: string;
+    let debtBg: string;
+    let debtLabel: string;
+    let debtEmoji: string;
+    let iconToDisplay: string;
+    let leftStripeColor: string;
 
     if (iPaid && splitCount > 1) {
-      // You paid for others → Emerald (lent)
-      chipColor  = '#10B981';
-      chipBg     = isDark ? 'rgba(16,185,129,0.12)' : '#F0FDF4';
-      chipLabel  = `LENT ₹${(item.amount - indvShare).toFixed(0)}`;
-      chipEmoji  = '↑';
-      accentIcon = 'trending-up';
-      accentColor = '#10B981';
+      // You paid for others (Lent cash) → Emerald
+      debtColor  = '#10B981';
+      debtBg     = isDark ? 'rgba(16,185,129,0.12)' : '#F0FDF4';
+      debtLabel  = `LENT ₹${(item.amount - indvShare).toFixed(0)}`;
+      debtEmoji  = '↑';
+      iconToDisplay = 'trending-up';
+      leftStripeColor = '#10B981';
     } else if (iPaid && splitCount === 1) {
-      // Paid for yourself only → Indigo
-      chipColor  = primary;
-      chipBg     = isDark ? 'rgba(99,102,241,0.12)' : '#EEF2FF';
-      chipLabel  = 'PERSONAL';
-      chipEmoji  = '•';
-      accentIcon = iconName;
-      accentColor = primary;
+      // Personal expense Paid by you → Indigo
+      debtColor  = primary;
+      debtBg     = isDark ? 'rgba(99,102,241,0.12)' : '#EEF2FF';
+      debtLabel  = 'PERSONAL';
+      debtEmoji  = '•';
+      iconToDisplay = iconName;
+      leftStripeColor = primary;
     } else if (amIInvolved) {
-      // You owe → Rose
-      chipColor  = '#F87171';
-      chipBg     = isDark ? 'rgba(248,113,113,0.12)' : '#FEF2F2';
-      chipLabel  = `OWE ₹${indvShare.toFixed(0)}`;
-      chipEmoji  = '↓';
-      accentIcon = 'trending-down';
-      accentColor = '#F87171';
+      // You owe others money → Rose
+      debtColor  = '#F87171';
+      debtBg     = isDark ? 'rgba(248,113,113,0.12)' : '#FEF2FF';
+      debtLabel  = `OWE ₹${indvShare.toFixed(0)}`;
+      debtEmoji  = '↓';
+      iconToDisplay = 'trending-down';
+      leftStripeColor = '#F87171';
     } else {
-      // Not involved → Slate
-      chipColor  = textMuted;
-      chipBg     = isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9';
-      chipLabel  = 'NOT INVOLVED';
-      chipEmoji  = '–';
-      accentIcon = iconName;
-      accentColor = textMuted;
+      // Observer only (not split among you) → Slate
+      debtColor  = textMuted;
+      debtBg     = isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9';
+      debtLabel  = 'NOT INVOLVED';
+      debtEmoji  = '–';
+      iconToDisplay = iconName;
+      leftStripeColor = textMuted;
     }
 
     return (
@@ -398,24 +463,24 @@ export default function ExpenseScreen({ navigation }: Props) {
           shadowRadius: 10,
           elevation: 2,
         }}>
-          {/* Left accent stripe */}
+          {/* Accent border strip overlay */}
           <View style={{
             position: 'absolute', left: 0, top: 0, bottom: 0,
-            width: 4, backgroundColor: accentColor,
+            width: 4, backgroundColor: leftStripeColor,
           }} />
 
           <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, paddingLeft: 18 }}>
-            {/* Icon bubble */}
+            {/* Category / Debt Icon wrapper */}
             <View style={{
               width: 52, height: 52, borderRadius: 18,
-              backgroundColor: chipBg,
+              backgroundColor: debtBg,
               alignItems: 'center', justifyContent: 'center',
               marginRight: 14,
             }}>
-              <MaterialIcons name={accentIcon as any} size={22} color={accentColor} />
+              <MaterialIcons name={iconToDisplay as any} size={22} color={leftStripeColor} />
             </View>
 
-            {/* Text col */}
+            {/* Description details */}
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={{ fontSize: 15, fontWeight: '900', color: textMain, flexShrink: 1 }} numberOfLines={1}>
@@ -430,22 +495,22 @@ export default function ExpenseScreen({ navigation }: Props) {
               </Text>
             </View>
 
-            {/* Right: amount + chip */}
+            {/* Price values and debt indicator status tags */}
             <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-              <Text style={{ fontSize: 20, fontWeight: '900', color: accentColor }}>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: leftStripeColor }}>
                 ₹{item.amount.toFixed(0)}
               </Text>
               <View style={{
                 marginTop: 5,
-                backgroundColor: chipBg,
+                backgroundColor: debtBg,
                 borderRadius: 8,
                 paddingHorizontal: 7,
                 paddingVertical: 3,
                 borderWidth: 1,
-                borderColor: isDark ? `${chipColor}35` : `${chipColor}30`,
+                borderColor: isDark ? `${debtColor}35` : `${debtColor}30`,
               }}>
-                <Text style={{ fontSize: 9, fontWeight: '900', color: chipColor, letterSpacing: 0.8 }}>
-                  {chipEmoji} {chipLabel}
+                <Text style={{ fontSize: 9, fontWeight: '900', color: debtColor, letterSpacing: 0.8 }}>
+                  {debtEmoji} {debtLabel}
                 </Text>
               </View>
             </View>
@@ -455,9 +520,10 @@ export default function ExpenseScreen({ navigation }: Props) {
     );
   }, [getMemberName, handleDelete, textMain, textMuted, cardBg, border, primary, isDark]);
 
+  // List Header Renderer containing aggregate summaries cards and filters
   const renderHeader = () => (
     <View>
-      {/* Lavender Summary Card */}
+      {/* Lavender Main Summary Statistics Card */}
       <View style={{ backgroundColor: '#7C3AED', borderRadius: 32, padding: 24, marginBottom: 20, shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 }}>
         <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Total Household Spending</Text>
         <Text style={{ color: '#FFFFFF', fontSize: 44, fontWeight: '900', letterSpacing: -1 }}>₹{totalHouseholdSpent.toLocaleString()}</Text>
@@ -480,7 +546,7 @@ export default function ExpenseScreen({ navigation }: Props) {
         </View>
       </View>
 
-      {/* Settle Up Action Button */}
+      {/* Settle Up Action Button trigger */}
       <TouchableOpacity onPress={() => setIsSettleModalVisible(true)} activeOpacity={0.8}>
         <LinearGradient
           colors={isDark ? ['#6366F1', '#4F46E5'] : ['#818CF8', '#A78BFA']}
@@ -492,7 +558,7 @@ export default function ExpenseScreen({ navigation }: Props) {
         </LinearGradient>
       </TouchableOpacity>
 
-      {/* Your Balances Section */}
+      {/* Your Balances peer items details */}
       <View style={{ marginBottom: 28 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
            <Text style={{ color: textMain, fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Your Balances</Text>
@@ -501,6 +567,7 @@ export default function ExpenseScreen({ navigation }: Props) {
            </View>
         </View>
         
+        {/* If completely clear of debts */}
         {Object.entries(peerBalances).filter(([_, amount]) => Math.abs(amount) > 0.01).length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: cardBg, borderRadius: 24, borderWidth: 1, borderColor: border }}>
             <View style={{ backgroundColor: isDark ? 'rgba(34,197,94,0.1)' : '#F0FDF4', padding: 12, borderRadius: 20, marginBottom: 12 }}>
@@ -540,13 +607,12 @@ export default function ExpenseScreen({ navigation }: Props) {
         )}
       </View>
 
-      {/* Transactions header + filter tabs */}
+      {/* Transactions headers and filter chip buttons */}
       <View style={{ marginBottom: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <Text style={{ color: textMain, fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }}>Transactions</Text>
           <Text style={{ color: textMuted, fontSize: 10, fontWeight: '700' }}>{expenses.length} total</Text>
         </View>
-        {/* Filter chips */}
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {(['all', 'logs', 'settlements'] as const).map(f => {
             const active = txFilter === f;
@@ -580,7 +646,7 @@ export default function ExpenseScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['top']}>
-      {/* Custom Header */}
+      {/* Custom Header Nav bar */}
       <View style={{ height: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24 }}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: surface, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.4 : 0.05, shadowRadius: 5, elevation: 2, borderWidth: 1, borderColor: border }}>
           <MaterialIcons name="chevron-left" size={28} color={textMain} />
@@ -591,9 +657,9 @@ export default function ExpenseScreen({ navigation }: Props) {
               <MaterialIcons name="add" size={24} color="#FFF" />
             </TouchableOpacity>
           </View>
-
       </View>
 
+      {/* Main scroll list */}
       <FlatList
         data={expenses.filter(e => {
           if (txFilter === 'logs') return e.type === 'expense';
@@ -621,14 +687,16 @@ export default function ExpenseScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Slide Modals */}
+      {/* ADD EXPENSE SLIDE MODAL */}
       <SlideModal visible={isModalVisible} onClose={() => { setIsModalVisible(false); setShowSplitOptions(false); setTitle(''); setAmount(''); setIsRecurring(false); }} title={showSplitOptions ? "Split Among" : "Add Expense"}>
         {!showSplitOptions ? (
           <View style={{ gap: 14 }}>
+            {/* Description field */}
             <View>
               <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, marginLeft: 4 }}>Description</Text>
               <TextInput ref={expenseInputRef} style={{ backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderRadius: 16, padding: 12, paddingHorizontal: 16, color: textMain, fontSize: 15, fontWeight: '700', borderWidth: 1, borderColor: border }} placeholder="What was this for?" placeholderTextColor={textMuted} value={title} onChangeText={setTitle} />
             </View>
+            {/* Price field */}
             <View>
               <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, marginLeft: 4 }}>Amount</Text>
               <View style={{ backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderRadius: 16, paddingHorizontal: 16, height: 50, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: border }}>
@@ -636,6 +704,7 @@ export default function ExpenseScreen({ navigation }: Props) {
                 <TextInput style={{ flex: 1, color: textMain, fontSize: 18, fontWeight: '900' }} placeholder="0" placeholderTextColor={textMuted} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
               </View>
             </View>
+            {/* Split options button triggers */}
             <TouchableOpacity onPress={() => setShowSplitOptions(true)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(129,140,248,0.1)' : '#EEF2FF', padding: 12, paddingHorizontal: 16, borderRadius: 16 }}>
               <MaterialIcons name="groups" size={20} color={primary} style={{ marginRight: 12 }} />
               <View style={{ flex: 1 }}>
@@ -645,6 +714,7 @@ export default function ExpenseScreen({ navigation }: Props) {
               <MaterialIcons name="chevron-right" size={18} color={primary} />
             </TouchableOpacity>
 
+            {/* Recurring toggle switch row */}
             <TouchableOpacity
               onPress={() => setIsRecurring(!isRecurring)}
               activeOpacity={0.8}
@@ -660,6 +730,7 @@ export default function ExpenseScreen({ navigation }: Props) {
               </View>
             </TouchableOpacity>
 
+            {/* Log submit button */}
             <TouchableOpacity onPress={handleAddExpense}>
               <LinearGradient colors={isDark ? ['#4F46E5', '#6366F1'] : ['#4F46E5', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '900', textTransform: 'uppercase' }}>Log Expense</Text>
@@ -667,6 +738,7 @@ export default function ExpenseScreen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
         ) : (
+          // Split members multi-selection screen inside modal
           <View>
             <ScrollView style={{ maxHeight: 350 }}>
               {members.map(uid => (
@@ -686,8 +758,10 @@ export default function ExpenseScreen({ navigation }: Props) {
         )}
       </SlideModal>
 
+      {/* SETTLE UP DEBTS SLIDE MODAL */}
       <SlideModal visible={isSettleModalVisible} onClose={() => setIsSettleModalVisible(false)} title="Settle Up">
         <View style={{ gap: 14 }}>
+          {/* Peer list selector */}
           <View>
             <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Pay Someone</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, paddingHorizontal: 20 }}>
@@ -701,6 +775,7 @@ export default function ExpenseScreen({ navigation }: Props) {
               ))}
             </ScrollView>
           </View>
+          {/* Amount selection */}
           <View>
              <Text style={{ color: textMuted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Amount Paid</Text>
              <View style={{ backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderRadius: 16, paddingHorizontal: 16, height: 50, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: border }}>
@@ -708,6 +783,7 @@ export default function ExpenseScreen({ navigation }: Props) {
                <TextInput ref={settleInputRef} style={{ flex: 1, color: textMain, fontSize: 18, fontWeight: '900' }} placeholder="0" placeholderTextColor={textMuted} keyboardType="decimal-pad" value={settleAmount} onChangeText={setSettleAmount} />
              </View>
           </View>
+          {/* Submit settle up */}
           <TouchableOpacity onPress={handleAddSettlement}>
              <LinearGradient colors={['#4F46E5', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
                <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '900', textTransform: 'uppercase' }}>Record Payment</Text>

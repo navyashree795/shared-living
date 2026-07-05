@@ -1,5 +1,16 @@
+/*
+ * FILE: src/components/TimeWheelPicker.tsx
+ * PURPOSE: Interactive scrollable wheel time picker dial. Includes three independent drums
+ *          (Hour, Minute, AM/PM) aligning snap offsets, scaling aligned text entries,
+ *          and compiling final Date objects.
+ * WHERE USED: Loaded inside a Modal popup inside ChoresScreen.
+ */
+
+// Import React hooks and refs references
 import React, { useRef, useState, memo, useCallback, useEffect } from "react";
+// Import layout components, flat lists, and animation drivers
 import { View, Text, FlatList, Animated, NativeScrollEvent, NativeSyntheticEvent, TouchableOpacity } from "react-native";
+// Import theme hook
 import { useTheme } from "../context/ThemeContext";
 
 interface WheelPickerProps {
@@ -13,7 +24,10 @@ interface WheelPickerProps {
 const ITEM_HEIGHT = 45;
 const VISIBLE_ITEMS = 3;
 
+// ─── DRUM PICKER ITEM RENDERER ─────────────────────────────────────────────
+// Renders individual text elements inside the drum, scaling and fading items as they approach the center highlight slot
 const PickerItem = memo(({ item, index, scrollY, width, textColor }: { item: string; index: number; scrollY: Animated.Value; width: number; textColor: string }) => {
+  // Interpolate opacity based on scroll distance from highlight slot (fade non-selected options to 30% opacity)
   const opacity = scrollY.interpolate({
     inputRange: [
       (index - 1) * ITEM_HEIGHT,
@@ -24,6 +38,7 @@ const PickerItem = memo(({ item, index, scrollY, width, textColor }: { item: str
     extrapolate: "clamp",
   });
 
+  // Interpolate scaling zoom factor (magnify active choice by 10%)
   const scale = scrollY.interpolate({
     inputRange: [
       (index - 1) * ITEM_HEIGHT,
@@ -35,6 +50,7 @@ const PickerItem = memo(({ item, index, scrollY, width, textColor }: { item: str
   });
 
   return (
+    // Render drum row element
     <View style={{ height: ITEM_HEIGHT, width }} className="items-center justify-center">
       <Animated.Text 
         style={{ opacity, transform: [{ scale }], color: textColor }} 
@@ -47,14 +63,17 @@ const PickerItem = memo(({ item, index, scrollY, width, textColor }: { item: str
 });
 PickerItem.displayName = "PickerItem";
 
+// ─── INDEPENDENT DRUM PICKER WHEEL ─────────────────────────────────────────
+// A snap-scrolling column FlatList representing a single time component (e.g. minutes)
 export const WheelPicker: React.FC<WheelPickerProps> = memo(({ data, initialIndex, onSelect, width = 60, isDark = false }) => {
+  // Animation driver tracking scroll Y offsets
   const scrollY = useRef(new Animated.Value(initialIndex * ITEM_HEIGHT)).current;
+  // Reference targeting FlatList for scroll manipulations
   const flatListRef = useRef<FlatList>(null);
-  
-  // Track current index locally to avoid redundant updates
+  // Ref backing current selection index
   const lastIndex = useRef(initialIndex);
 
-  // Force physical scroll alignment to the initial index after layout is ready (run once on mount)
+  // Force physical scroll alignment to target initial index value after layout mounts
   const initialIndexRef = useRef(initialIndex);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -66,11 +85,13 @@ export const WheelPicker: React.FC<WheelPickerProps> = memo(({ data, initialInde
     return () => clearTimeout(timer);
   }, []);
 
+  // Map FlatList scroll events to our Animated.Value
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
     { useNativeDriver: true }
   );
 
+  // Calculate chosen index value based Y offsets
   const updateSelection = (y: number) => {
     const index = Math.round(y / ITEM_HEIGHT);
     if (index >= 0 && index < data.length && index !== lastIndex.current) {
@@ -79,10 +100,12 @@ export const WheelPicker: React.FC<WheelPickerProps> = memo(({ data, initialInde
     }
   };
 
+  // Triggers selection updates when scrolling momentum finishes
   const onMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     updateSelection(event.nativeEvent.contentOffset.y);
   };
 
+  // Triggers selection updates when dragging actions finish
   const onScrollEndDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     updateSelection(event.nativeEvent.contentOffset.y);
   };
@@ -92,6 +115,7 @@ export const WheelPicker: React.FC<WheelPickerProps> = memo(({ data, initialInde
 
   return (
     <View style={{ height: ITEM_HEIGHT * VISIBLE_ITEMS, width }} className="justify-center overflow-hidden">
+      {/* Selection border highlight overlay panel */}
       <View 
         style={{ 
           top: ITEM_HEIGHT,
@@ -100,6 +124,7 @@ export const WheelPicker: React.FC<WheelPickerProps> = memo(({ data, initialInde
         }}
         className="absolute left-0 right-0 h-[45px] rounded-2xl border-y" 
       />
+      {/* Scrollable list representation */}
       <Animated.FlatList
         ref={flatListRef}
         data={data}
@@ -108,6 +133,7 @@ export const WheelPicker: React.FC<WheelPickerProps> = memo(({ data, initialInde
         )}
         keyExtractor={(_, index) => index.toString()}
         showsVerticalScrollIndicator={false}
+        // Force list scrolling to align directly to item heights intervals
         snapToInterval={ITEM_HEIGHT}
         snapToAlignment="center"
         decelerationRate="fast"
@@ -145,22 +171,30 @@ interface TimeWheelPickerProps {
   onCancel: () => void;
 }
 
+// ─── THREE-DRUM CLOCK TIME WHEEL PICKER ────────────────────────────────────
+// Combines Hours, Minutes, and AM/PM wheels. Cache current state variables in mutable React refs 
+// during active scrolling events to keep scroll gestures completely lag-free.
 export const TimeWheelPicker: React.FC<TimeWheelPickerProps> = ({ initialTime, onConfirm, onCancel }) => {
+  // Retrieve global dark theme context
   const { isDark } = useTheme();
-  // Use separate refs for selection to avoid closure issues with onSelect and prevent janky re-renders during gesture scrolling
+  
+  // Use separate refs for selection to prevent lag during active dragging gestures
   const selectedHour = useRef(initialTime.getHours() % 12 || 12);
   const selectedMinute = useRef(initialTime.getMinutes());
   const selectedAmPm = useRef(initialTime.getHours() >= 12 ? 'PM' : 'AM');
 
+  // Lists configurations
   const hours = useRef(Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, "0"))).current;
   const minutes = useRef(Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0"))).current;
   const periods = useRef(["AM", "PM"]).current;
 
+  // Compile final Date based on selections
   const handleConfirm = () => {
     const finalDate = new Date();
     let finalHour = selectedHour.current;
     if (selectedAmPm.current === 'PM' && finalHour !== 12) finalHour += 12;
     if (selectedAmPm.current === 'AM' && finalHour === 12) finalHour = 0;
+    // Set hours and minutes values
     finalDate.setHours(finalHour, selectedMinute.current, 0, 0);
     onConfirm(finalDate);
   };
@@ -205,6 +239,7 @@ export const TimeWheelPicker: React.FC<TimeWheelPickerProps> = ({ initialTime, o
       </View>
 
       <View style={{ backgroundColor: innerBg, borderColor: innerBorder, borderWidth: 1 }} className="flex-row items-center justify-center rounded-[32px] py-6 shadow-sm">
+        {/* Hour Drum */}
         <WheelPicker 
           data={hours} 
           initialIndex={selectedHour.current - 1} 
@@ -215,6 +250,7 @@ export const TimeWheelPicker: React.FC<TimeWheelPickerProps> = ({ initialTime, o
         <View className="mx-1">
           <Text style={{ color: isDark ? "rgba(255,255,255,0.15)" : "#E2E8F0" }} className="text-3xl font-black">:</Text>
         </View>
+        {/* Minute Drum */}
         <WheelPicker 
           data={minutes} 
           initialIndex={selectedMinute.current} 
@@ -223,6 +259,7 @@ export const TimeWheelPicker: React.FC<TimeWheelPickerProps> = ({ initialTime, o
           isDark={isDark}
         />
         <View className="w-3" />
+        {/* AM/PM Drum */}
         <WheelPicker 
           data={periods} 
           initialIndex={periods.indexOf(selectedAmPm.current)} 

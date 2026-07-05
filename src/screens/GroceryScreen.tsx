@@ -1,81 +1,119 @@
+/*
+ * FILE: src/screens/GroceryScreen.tsx
+ * PURPOSE: Group shopping list tracking. It enables roommates to add items, assign categorizations,
+ *          check items off into the cart, and split totals into shared expenses.
+ * WHERE USED: Mounted as a tab screen option inside MainTabs (App.tsx).
+ */
+
+// Import React hooks for states, side-effects, and direct input element references
 import React, { useState, useEffect, useRef } from 'react';
+// Import layout layouts, text elements, scrolls, inputs, and touch click clickables
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  Alert, ScrollView, Animated
+  Alert, ScrollView
 } from 'react-native';
+// Import linear gradients for statistics card backgrounds
 import { LinearGradient } from 'expo-linear-gradient';
+// Import Safe Area views to manage notch constraints
 import { SafeAreaView } from 'react-native-safe-area-context';
+// Import vector icons
 import { MaterialIcons } from '@expo/vector-icons';
+// Import reusable components
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import SlideModal from '../components/SlideModal';
-import SwipeableRow from '../components/SwipeableRow';
 import { Skeleton } from '../components/Skeleton';
+// Import auth session references and Firestore connection
 import { auth, db } from '../firebaseConfig';
+// Import user contexts
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useTheme } from '../context/ThemeContext';
+// Import helper utilities
 import { detectCategory } from '../utils/expenseUtils';
 import { logActivity } from '../utils/activityUtils';
 import { sendRemotePushNotification } from '../utils/notificationUtils';
 import { getSyncedDate } from '../utils/timeUtils';
 import { getCycleStartDate } from '../utils/retentionUtils';
+// Import Firestore commands to listen to queries, write docs, delete items, and commit batches
 import {
   collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, writeBatch, where, Timestamp
 } from 'firebase/firestore';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList, GroceryItem } from '../types';
-import GroceryItemRow, { CATEGORIES, Category } from '../components/GroceryItemRow';
+// Import TypeScript schemas
+import { GroceryItem } from '../types';
+import GroceryItemRow, { CATEGORIES } from '../components/GroceryItemRow';
 
 type Props = { navigation: any; route?: any };
 
-
+/**
+ * GroceryScreen displays active shopping checklists and cost stats.
+ */
 export default function GroceryScreen({ navigation }: Props) {
+  // Grab household details from context
   const { householdId, members, getMemberName, householdData, memberProfiles } = useHousehold();
   const hid = householdId ?? '';
+  
+  // Grab active theme mode
   const { isDark } = useTheme();
+  
+  // Design color tokens mapping
   const bg      = isDark ? '#070913' : '#F5F7FF';
   const surface = isDark ? '#0E1324' : '#FFFFFF';
   const text    = isDark ? '#F1F5F9' : '#1E1B4B';
   const muted   = isDark ? '#A78BFA' : '#4F46E5';
   const bord    = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
+
+  // State hook managing list of grocery list items
   const [items, setItems] = useState<GroceryItem[]>([]);
+  // Input fields form states
   const [newItem, setNewItem] = useState('');
   const [newQty, setNewQty] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(CATEGORIES[0].id);
+
+  // Retrieve user metadata details and toast dispatchers
   const { profile: userData } = useUser();
   const { showToast } = useToast();
+
+  // Loaders and modals visible states
   const [loading, setLoading] = useState(true);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
   const [loggingItem, setLoggingItem] = useState<GroceryItem | null>(null);
   const [logPrice, setLogPrice] = useState('');
+
+  // Ref referencing the add modal text input field to trigger keyboards popups
   const inputRef = useRef<TextInput>(null);
 
+  // Effect: Autofocus the item name input text field when the add modal is opened
   useEffect(() => {
     if (isAddModalVisible) {
+      // 250ms timeout ensures animations have finished rendering before focusing keyboards
       setTimeout(() => {
         inputRef.current?.focus();
       }, 250);
     }
   }, [isAddModalVisible]);
 
+  // Effect: Syncs list from Firestore groceries subcollection, filtering items older than 3 months
   useEffect(() => {
     if (!householdId) return;
-    const hid = householdId!;
+    const activeHid = householdId!;
     const cycleStartDay = householdData?.billingCycleStartDay || 1;
     const now = getSyncedDate();
     const currentCycleStart = getCycleStartDate(now, cycleStartDay);
+    
+    // Filter window: hide anything older than the last 3 billing cycles
     const mainStartDate = new Date(currentCycleStart);
     mainStartDate.setMonth(mainStartDate.getMonth() - 2);
 
     const q = query(
-      collection(db, 'households', hid, 'groceries'),
+      collection(db, 'households', activeHid, 'groceries'),
       where('createdAt', '>=', Timestamp.fromDate(mainStartDate)),
       orderBy('createdAt', 'desc')
     );
+
     const unsub = onSnapshot(q, (snap) => {
       const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as GroceryItem));
       setItems(fetched);
@@ -84,15 +122,19 @@ export default function GroceryScreen({ navigation }: Props) {
       console.error("Grocery fetch error:", err);
       setLoading(false);
     });
+
     return unsub;
   }, [householdId, householdData?.billingCycleStartDay]);
 
+  // Filter items based on checked status
   const pending = items.filter(i => !i.done);
   const done = items.filter(i => i.done);
 
+  // Calculate sum totals for pending spend vs cart items
   const estimatedCost = pending.reduce((sum, item) => sum + (item.price || 0), 0);
   const cartTotalCost = done.reduce((sum, item) => sum + (item.price || 0), 0);
 
+  // Helper closing form modals and resetting fields
   const handleCloseModal = () => {
     setIsAddModalVisible(false);
     setEditingItem(null);
@@ -102,6 +144,7 @@ export default function GroceryScreen({ navigation }: Props) {
     setSelectedCategoryId(CATEGORIES[0].id);
   };
 
+  // Helper initializing input fields with active item details when starting edit operations
   const handleStartEdit = (item: GroceryItem) => {
     setEditingItem(item);
     setNewItem(item.name);
@@ -111,6 +154,7 @@ export default function GroceryScreen({ navigation }: Props) {
     setIsAddModalVisible(true);
   };
 
+  // Action: Submits either new document insertions or updates existing grocery records
   const handleAdd = async () => {
     const name = newItem.trim();
     if (!name) return;
@@ -120,6 +164,7 @@ export default function GroceryScreen({ navigation }: Props) {
     
     try {
       if (editingItem) {
+        // Edit flow:
         await updateDoc(doc(db, 'households', hid, 'groceries', editingItem.id), {
           name,
           category: selectedCategoryId,
@@ -128,6 +173,7 @@ export default function GroceryScreen({ navigation }: Props) {
         });
         showToast('Item updated', 'success');
       } else {
+        // Insertion flow:
         await addDoc(collection(db, 'households', hid, 'groceries'), {
           name,
           done: false,
@@ -141,6 +187,7 @@ export default function GroceryScreen({ navigation }: Props) {
         logActivity(hid, 'grocery_add', name, currentUserName);
         showToast('Item added', 'success');
 
+        // Dispatch push notification alerts to other roommates
         try {
           const currentUid = auth.currentUser?.uid;
           if (currentUid) {
@@ -169,6 +216,7 @@ export default function GroceryScreen({ navigation }: Props) {
     }
   };
 
+  // Action: Toggles checkbox status and writes events logs on completion
   const handleToggle = async (item: GroceryItem) => {
     const currentUserName = userData?.username ? userData.username : (auth.currentUser?.email?.split('@')[0] || 'Member');
     try {
@@ -184,6 +232,7 @@ export default function GroceryScreen({ navigation }: Props) {
     }
   };
 
+  // Action: Deletes grocery document from database
   const handleDelete = async (itemId: string) => {
     try {
       await deleteDoc(doc(db, 'households', hid, 'groceries', itemId));
@@ -193,6 +242,7 @@ export default function GroceryScreen({ navigation }: Props) {
     }
   };
 
+  // Action: Clear bought items from cart using atomic writeBatch deletions
   const handleClearCompleted = () => {
     if (done.length === 0) return;
     
@@ -218,12 +268,16 @@ export default function GroceryScreen({ navigation }: Props) {
     ]);
   };
 
+  // Action: Creates split expense entry in `/expenses` collection and marks item as logged
   const executeLogExpense = async (item: GroceryItem, priceToUse: number) => {
     const currentUid = auth.currentUser?.uid;
     if (!currentUid) return;
 
     try {
+      // Predict category (e.g. food/household) using title search maps
       const categoryMatch = detectCategory(item.name);
+      
+      // Write split expense
       await addDoc(collection(db, 'households', hid, 'expenses'), {
         type: 'expense',
         title: `Groceries: ${item.name}`,
@@ -231,10 +285,11 @@ export default function GroceryScreen({ navigation }: Props) {
         category: categoryMatch,
         paidByUid: currentUid,
         payerName: getMemberName(currentUid), 
-        splitAmong: members, 
+        splitAmong: members, // Split cost evenly among all household members
         createdAt: serverTimestamp(),
       });
 
+      // Update grocery document parameters to prevent double expense logging
       await updateDoc(doc(db, 'households', hid, 'groceries', item.id), {
         price: priceToUse,
         expenseLogged: true,
@@ -247,11 +302,14 @@ export default function GroceryScreen({ navigation }: Props) {
     }
   };
 
+  // Action: Prepares grocery item to be logged as a shared expense
   const handleLogToExpenses = async (item: GroceryItem) => {
+    // If item has no price assigned, prompt input modal to enter price amount first
     if (!item.price || item.price <= 0) {
       setLoggingItem(item);
       setLogPrice('');
     } else {
+      // Directly prompt confirmation alert if price exists
       Alert.alert(
         'Log to Expenses',
         `Add an expense of ₹${item.price} for ${item.name}? This will be split among all members evenly.`,
@@ -267,6 +325,7 @@ export default function GroceryScreen({ navigation }: Props) {
     }
   };
 
+  // Action: Submits price input modal entries for grocery expenses conversions
   const handleConfirmLogExpense = async () => {
     if (!loggingItem) return;
     const amount = parseFloat(logPrice) || 0;
@@ -279,7 +338,7 @@ export default function GroceryScreen({ navigation }: Props) {
     await executeLogExpense(itemToLog, amount);
   };
 
-  // Convert flat data into sectioned data for FlatList
+  // Compile flat data list structured with custom headers for the rendering FlatList
   const listData: any[] = [];
   
   if (pending.length > 0) {
@@ -292,6 +351,7 @@ export default function GroceryScreen({ navigation }: Props) {
     done.forEach(item => listData.push({ type: 'item', data: item }));
   }
 
+  // Row Renderer mapping headers and item rows
   const renderRow = ({ item }: { item: any }) => {
     if (item.type === 'header') {
       return <Text className={`text-xs font-black tracking-widest pl-1 mb-2 mt-4 text-[#D97706]`}>{item.title}</Text>;
@@ -333,6 +393,7 @@ export default function GroceryScreen({ navigation }: Props) {
         onRightPress={() => setIsAddModalVisible(true)}
       />
 
+      {/* Spend indicators cards */}
       <View className="flex-row mx-6 mb-2 gap-3">
         <View style={{ flex: 1 }}>
           <LinearGradient
@@ -354,6 +415,7 @@ export default function GroceryScreen({ navigation }: Props) {
         </View>
       </View>
 
+      {/* Render skeleton components while list loads */}
       {loading ? (
         <View className="px-6 gap-3 pt-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -386,12 +448,14 @@ export default function GroceryScreen({ navigation }: Props) {
         />
       )}
 
+      {/* Add / Edit Item SlideModal */}
       <SlideModal
         visible={isAddModalVisible}
         onClose={handleCloseModal}
         title={editingItem ? "Edit Item" : "Add Item"}
       >
         <View className="pb-2 pt-2">
+          {/* Categories selectors */}
           <Text className="text-textMuted text-xs font-bold tracking-widest px-6 mb-3">SELECT CATEGORY</Text>
           <ScrollView 
             horizontal 
@@ -435,6 +499,7 @@ export default function GroceryScreen({ navigation }: Props) {
             })}
           </ScrollView>
 
+          {/* Form fields */}
           <View className="px-2 pb-4 mt-2">
             <View className="border-b border-border/60 pb-2 mb-6">
               <Text className="text-textMuted text-xs font-bold mb-1">Item Name</Text>
@@ -475,6 +540,7 @@ export default function GroceryScreen({ navigation }: Props) {
               </View>
             </View>
 
+            {/* Actions triggers */}
             <View className="flex-row justify-between mt-4">
               <TouchableOpacity 
                 className="flex-1 bg-background py-3.5 rounded-2xl items-center mr-3 border border-border/40"
@@ -493,7 +559,7 @@ export default function GroceryScreen({ navigation }: Props) {
         </View>
       </SlideModal>
 
-      {/* Log Expense Price Input Modal */}
+      {/* Log Expense Price Input SlideModal */}
       <SlideModal
         visible={!!loggingItem}
         onClose={() => setLoggingItem(null)}

@@ -1,7 +1,19 @@
+/*
+ * FILE: src/components/modals/NotificationsModal.tsx
+ * PURPOSE: Interactive slide modal listing daily action agendas and recent activity feeds.
+ *          Filters activities to show only events from other roommates that target the current user.
+ * WHERE USED: Dashboard screen notifications bell click trigger.
+ */
+
+// Import React hooks
 import React from "react";
+// Import layout layouts, texts, scrolls, and touch areas
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+// Import vector icons
 import { MaterialIcons } from "@expo/vector-icons";
+// Import slide modal wrapper
 import SlideModal from "../SlideModal";
+// Import helper predicting categories/icons matching activity codes
 import { getActivityConfig } from "../../utils/activityUtils";
 
 interface NotificationsModalProps {
@@ -14,6 +26,9 @@ interface NotificationsModalProps {
   isDark: boolean;
 }
 
+/**
+ * NotificationsModal displays daily agenda tasks and logs feeds.
+ */
 export const NotificationsModal = React.memo(({
   visible,
   onClose,
@@ -23,10 +38,12 @@ export const NotificationsModal = React.memo(({
   handleNav,
   isDark,
 }: NotificationsModalProps) => {
+  // Theme color styling variables mapping
   const textMain = isDark ? "#F1F5F9" : "#1A1D3B";
   const textMuted = isDark ? "#A78BFA" : "#4F46E5";
   const muted = isDark ? "#A78BFA" : "#4F46E5";
 
+  // Filter: only show notifications created by OTHER roommates that target me
   const relevantActivities = activities.filter((a) => {
     const isFromOther = a.userId !== currentUserId;
     const isForMe = !a.targetUid || a.targetUid === currentUserId;
@@ -36,7 +53,8 @@ export const NotificationsModal = React.memo(({
   return (
     <SlideModal visible={visible} onClose={onClose} title="Notifications">
       <ScrollView style={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
-        {/* Daily Agenda Section */}
+        
+        {/* SECTION 1: Daily Agenda (Urgent tasks/balances due) */}
         {agendaItems.length > 0 && (
           <View style={{ marginBottom: 20 }}>
             <Text
@@ -57,6 +75,7 @@ export const NotificationsModal = React.memo(({
                 <TouchableOpacity
                   key={item.id}
                   onPress={() => {
+                    // Close notification sheet before performing navigation redirects
                     onClose();
                     handleNav(item.navTarget);
                   }}
@@ -70,6 +89,7 @@ export const NotificationsModal = React.memo(({
                     borderColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(99,102,241,0.05)",
                   }}
                 >
+                  {/* Category icon indicator wrapper */}
                   <View
                     style={{
                       width: 40,
@@ -83,6 +103,8 @@ export const NotificationsModal = React.memo(({
                   >
                     <MaterialIcons name={item.icon} size={20} color={item.color} />
                   </View>
+                  
+                  {/* Agenda titles */}
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: textMain, fontWeight: "800", fontSize: 13 }}>
                       {item.title}
@@ -98,7 +120,7 @@ export const NotificationsModal = React.memo(({
           </View>
         )}
 
-        {/* Activity Section */}
+        {/* SECTION 2: Recent Activity Feed (Logs of roommate updates) */}
         <View>
           <Text
             style={{
@@ -114,6 +136,7 @@ export const NotificationsModal = React.memo(({
             Recent Activity
           </Text>
           {relevantActivities.length === 0 ? (
+            // Empty state placeholder
             <View style={{ alignItems: "center", paddingVertical: 40 }}>
               <MaterialIcons
                 name="notifications-none"
@@ -128,6 +151,7 @@ export const NotificationsModal = React.memo(({
           ) : (
             <View style={{ gap: 10 }}>
               {relevantActivities.map((item, idx) => {
+                // Fetch icon configuration matching the activity code type
                 const config = getActivityConfig(item.type);
                 return (
                   <View
@@ -142,6 +166,7 @@ export const NotificationsModal = React.memo(({
                       borderColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(99,102,241,0.05)",
                     }}
                   >
+                    {/* Activity configuration icon bubble wrapper */}
                     <View
                       style={{
                         width: 40,
@@ -155,6 +180,8 @@ export const NotificationsModal = React.memo(({
                     >
                       <MaterialIcons name={config.icon} size={20} color={config.color} />
                     </View>
+                    
+                    {/* Activity descriptions */}
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center" }}>
                         <Text style={{ color: textMain, fontWeight: "800", fontSize: 13 }}>
@@ -167,6 +194,8 @@ export const NotificationsModal = React.memo(({
                           {item.title}
                         </Text>
                       </View>
+                      
+                      {/* Timestamp of the activity */}
                       <Text style={{ color: textMuted, fontSize: 10, marginTop: 4, fontWeight: "600" }}>
                         {item.createdAt?.seconds
                           ? new Date(item.createdAt.seconds * 1000).toLocaleTimeString([], {

@@ -1,17 +1,38 @@
+/*
+ * FILE: src/components/modals/HomeLocationModal.tsx
+ * PURPOSE: Full-screen MapView modal enabling household owners to pin home coordinate coordinates,
+ *          center on current GPS position, and drag pins.
+ * WHERE USED: Dashboard screen household settings edit panels.
+ */
+
+// Import React hooks for managing state parameters, viewport layout dimensions, refs, and mounts
 import React, { useState, useEffect, useRef } from "react";
+// Import UI layout components, touch triggers, modal containers, and loading indicators
 import { View, Text, TouchableOpacity, Modal, ActivityIndicator } from "react-native";
+// Import Map components and pinned markers
 import MapView, { Marker } from "react-native-maps";
+// Import device locations libraries
 import * as Location from "expo-location";
+// Import vector icons
 import { MaterialIcons } from "@expo/vector-icons";
 
+// Prop declarations mapping component params
 interface HomeLocationModalProps {
+  // Modal visibility trigger flag
   visible: boolean;
+  // Callback invoked on close
   onClose: () => void;
+  // Existing pinned location coordinates dictionary
   initialLocation: { latitude: number; longitude: number } | null;
+  // Submit function to write coordinates updates in Firestore
   onSave: (coords: { latitude: number; longitude: number }) => Promise<void>;
+  // Active theme configuration value
   isDark: boolean;
 }
 
+/**
+ * HomeLocationModal renders full-screen maps.
+ */
 export function HomeLocationModal({
   visible,
   onClose,
@@ -19,13 +40,16 @@ export function HomeLocationModal({
   onSave,
   isDark,
 }: HomeLocationModalProps) {
+  // Local state inputs managing selected coordinates
   const [selectedCoords, setSelectedCoords] = useState<{ latitude: number; longitude: number } | null>(
     initialLocation
   );
+  // Loader status flag
   const [loading, setLoading] = useState(false);
+  // Reference targeting the MapView component to trigger camera movements
   const mapRef = useRef<MapView | null>(null);
 
-  // Load initial location or fetch current device location on mount
+  // Sync state coordinates on visibilities updates or fetch device location coords if none exists
   useEffect(() => {
     if (visible) {
       if (initialLocation) {
@@ -52,7 +76,7 @@ export function HomeLocationModal({
     }
   }, [visible, initialLocation]);
 
-  // Animate map when selected coordinates change
+  // Effect: Trigger MapView pan animations whenever selected coordinates change
   useEffect(() => {
     if (selectedCoords && mapRef.current) {
       mapRef.current.animateToRegion(
@@ -67,6 +91,7 @@ export function HomeLocationModal({
     }
   }, [selectedCoords]);
 
+  // Center map camera on user current position coordinates
   const handleCenterOnMe = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -83,6 +108,7 @@ export function HomeLocationModal({
     }
   };
 
+  // Submit pinned coordinate modifications
   const handleConfirm = async () => {
     if (!selectedCoords) return;
     setLoading(true);
@@ -102,7 +128,7 @@ export function HomeLocationModal({
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: bgSurface }}>
-        {/* Map Header */}
+        {/* Header navigation bar */}
         <View
           style={{
             flexDirection: "row",
@@ -115,16 +141,18 @@ export function HomeLocationModal({
             borderBottomColor: isDark ? "rgba(255,255,255,0.06)" : "#EEF2FF",
           }}
         >
+          {/* Close button */}
           <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
             <MaterialIcons name="close" size={24} color={textMain} />
           </TouchableOpacity>
+          {/* Title label */}
           <Text style={{ fontSize: 16, fontWeight: "900", color: textMain }}>
             Set Home Location
           </Text>
           <View style={{ width: 32 }} />
         </View>
 
-        {/* Full Screen Map */}
+        {/* Map View */}
         <View style={{ flex: 1, position: "relative" }}>
           <MapView
             ref={mapRef}
@@ -139,6 +167,7 @@ export function HomeLocationModal({
               setSelectedCoords(e.nativeEvent.coordinate);
             }}
           >
+            {/* Draggable Marker Pin */}
             {selectedCoords && (
               <Marker
                 coordinate={selectedCoords}
@@ -148,7 +177,7 @@ export function HomeLocationModal({
             )}
           </MapView>
 
-          {/* Floating Center On Me Button */}
+          {/* Floating Center On Me GPS Button */}
           <TouchableOpacity
             onPress={handleCenterOnMe}
             style={{
@@ -173,7 +202,7 @@ export function HomeLocationModal({
             <MaterialIcons name="my-location" size={24} color="#4F46E5" />
           </TouchableOpacity>
 
-          {/* Bottom Card for Confirmation */}
+          {/* Bottom confirmation card */}
           <View
             style={{
               position: "absolute",
@@ -206,6 +235,7 @@ export function HomeLocationModal({
               </Text>
             )}
 
+            {/* Confirm action button */}
             <TouchableOpacity
               onPress={handleConfirm}
               disabled={loading || !selectedCoords}

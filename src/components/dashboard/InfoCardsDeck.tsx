@@ -1,6 +1,17 @@
+/*
+ * FILE: src/components/dashboard/InfoCardsDeck.tsx
+ * PURPOSE: Horizontally scrolling slider component of household credentials and utility cards.
+ *          Provides quick copying, viewing toggles, and direct links.
+ * WHERE USED: Dashboard screen household metadata cards deck.
+ */
+
+// Import React module reference
 import React from "react";
+// Import layout components, scrolls, and touch triggers
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+// Import vector icons
 import { MaterialIcons } from "@expo/vector-icons";
+// Import clipboard copying library
 import * as Clipboard from "expo-clipboard";
 
 interface InfoCardsDeckProps {
@@ -13,6 +24,7 @@ interface InfoCardsDeckProps {
   showToast: (msg: string, type?: "success" | "error" | "info") => void;
 }
 
+// Render InfoCardsDeck memoized to optimize re-renders
 export const InfoCardsDeck = React.memo(({
   detailsList,
   isDark,
@@ -24,40 +36,48 @@ export const InfoCardsDeck = React.memo(({
 }: InfoCardsDeckProps) => {
   const textMain = isDark ? "#F1F5F9" : "#1A1D3B";
 
+  // ─── COMPONENT THEME COLOR ASSIGNER ───────────────────────────────────────
+  // Dynamically assigns color palettes based on field type and keywords match (Wifi, Landlord, Trash, etc.)
   const getFieldTheme = (field: any) => {
     const icon = field.icon || "";
     const label = (field.label || "").toLowerCase();
     
+    // Wifi parameters styling
     if (label.includes("wifi") || icon === "wifi" || icon === "vpn-key") {
       return {
         primary: "#6366F1", // Indigo
         bg: isDark ? "rgba(99, 102, 241, 0.15)" : "#EEF2FF",
       };
     }
+    // Landlord parameters styling
     if (label.includes("landlord") || label.includes("contact") || label.includes("phone") || icon === "phone-in-talk" || icon === "call") {
       return {
         primary: "#10B981", // Emerald
         bg: isDark ? "rgba(16, 185, 129, 0.15)" : "#ECFDF5",
       };
     }
+    // Trash parameters styling
     if (label.includes("trash") || label.includes("truck") || label.includes("garbage") || icon === "delete-outline" || icon === "delete") {
       return {
         primary: "#F59E0B", // Amber
         bg: isDark ? "rgba(245, 158, 11, 0.15)" : "#FEF3C7",
       };
     }
+    // Link parameters styling
     if (field.type === "link" || icon === "link") {
       return {
         primary: "#EC4899", // Pink
         bg: isDark ? "rgba(236, 72, 153, 0.15)" : "#FDF2F8",
       };
     }
+    // Default styling fallback
     return {
       primary: "#8B5CF6", // Violet
       bg: isDark ? "rgba(139, 92, 246, 0.15)" : "#F5F3FF",
     };
   };
 
+  // Copy parameter string to clipboard
   const copyToClipboard = async (text: string) => {
     if (!text) return;
     await Clipboard.setStringAsync(text);
@@ -65,13 +85,16 @@ export const InfoCardsDeck = React.memo(({
   };
 
   return (
+    // Wrap cards in styled outer view
     <View style={{ marginBottom: 28 }}>
+      {/* Horizontally scrolling list wrapper */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 8 }}
       >
         {detailsList.map((field: any) => {
+          // Resolve theme layout colors based on labels keywords matching
           const theme = getFieldTheme(field);
           return (
             <View
@@ -94,7 +117,7 @@ export const InfoCardsDeck = React.memo(({
                 overflow: "hidden",
               }}
             >
-              {/* Ambient background glow circle */}
+              {/* Decorative background glow circles */}
               <View
                 style={{
                   position: "absolute",
@@ -108,7 +131,7 @@ export const InfoCardsDeck = React.memo(({
                 }}
               />
 
-              {/* Card Top Row */}
+              {/* Card Header Section with Icon and Actions */}
               <View
                 style={{
                   flexDirection: "row",
@@ -117,7 +140,7 @@ export const InfoCardsDeck = React.memo(({
                   width: "100%",
                 }}
               >
-                {/* Icon Container */}
+                {/* Utility icon bubble */}
                 <View
                   style={{
                     backgroundColor: theme.bg,
@@ -131,7 +154,7 @@ export const InfoCardsDeck = React.memo(({
                   <MaterialIcons name={field.icon} size={18} color={theme.primary} />
                 </View>
 
-                {/* Actions Row */}
+                {/* Password visibility toggles & copy/call buttons */}
                 <View style={{ flexDirection: "row", gap: 6 }}>
                   {field.type === "password" && (
                     <TouchableOpacity
@@ -155,6 +178,7 @@ export const InfoCardsDeck = React.memo(({
                     </TouchableOpacity>
                   )}
 
+                  {/* Actions (Launch Web Links / Trigger calls / Copy strings) */}
                   <TouchableOpacity
                     onPress={() => {
                       if (field.type === "link") {
@@ -191,7 +215,7 @@ export const InfoCardsDeck = React.memo(({
                 </View>
               </View>
 
-              {/* Card Bottom / Info Section */}
+              {/* Card Footer Section showing label and decrypted value */}
               <View style={{ marginTop: 14 }}>
                 <Text
                   style={{
@@ -213,6 +237,7 @@ export const InfoCardsDeck = React.memo(({
                   }}
                   numberOfLines={1}
                 >
+                  {/* Hide password characters unless explicitly clicked */}
                   {field.type === "password" && !revealedFields.includes(field.id)
                     ? "••••••••"
                     : field.value}
@@ -226,4 +251,5 @@ export const InfoCardsDeck = React.memo(({
   );
 });
 
+// Explicitly assign display name for React DevTools mapping
 InfoCardsDeck.displayName = "InfoCardsDeck";

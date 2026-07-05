@@ -1,49 +1,86 @@
+/*
+ * FILE: src/screens/HouseholdSetupScreen.tsx
+ * PURPOSE: Provides forms to register new roommate/travel spaces or join existing ones.
+ *          It coordinates client-side geolocation pinning (for roommate houses), invite code checks,
+ *          and OTP-style keyboard focus selectors.
+ * WHERE USED: Routed from HouseholdSelectionScreen when selecting "Create New" or "Join Existing" options.
+ */
+
+// Import React hooks for states, lifecycles, and direct element reference hooks
 import React, { useState, useEffect, useRef } from 'react';
+// Import essential React Native layout structures, input fields, spinners, and touch zones
 import {
   View, Text, TouchableOpacity, TextInput, Alert,
-  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
+  ActivityIndicator, KeyboardAvoidingView, ScrollView,
   TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
+// Import Safe Area utilities
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+// Import vector icons
 import { MaterialIcons } from '@expo/vector-icons';
+// Import keyboard avoiding properties calculator
 import { getKeyboardAvoidingProps } from '../utils/keyboardUtils';
+// Import auth session references and Firestore database
 import { auth, db } from '../firebaseConfig';
+// Import custom household context hook to set active household IDs globally
 import { useHousehold } from '../context/HouseholdContext';
+// Import Firestore query document references, writes, filter queries, and list updates
 import {
   doc, setDoc, updateDoc, query, collection,
   where, getDocs, arrayUnion,
 } from 'firebase/firestore';
+// Import custom theme hook
 import { useTheme } from '../context/ThemeContext';
+// Import navigation parameter type mappings
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
+// Import invitation validations API modules
 import { validateInvitation, acceptInvitation } from '../utils/invitationApi';
-
+// Import Expo Location SDK to fetch active GPS coordinates of the phone
 import * as Location from 'expo-location';
 
+// Define navigation types for props
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdSetup'>;
 
+/**
+ * HouseholdSetupScreen displays segments for setting up new or joining existing roommate/travel groups.
+ */
 export default function HouseholdSetupScreen({ navigation, route }: Props) {
+  // Grab safe area top padding
   const insets = useSafeAreaInsets();
+  // Get keyboard behavior settings
   const { behavior, keyboardVerticalOffset } = getKeyboardAvoidingProps('setup', insets.top);
 
+  // Grab active theme mode
   const { isDark } = useTheme();
+  
+  // Set default initial tab based on parameters passed from the selection screen ('create' or 'join')
   const initialTab = route.params?.activeTab || 'create';
   const [activeTab, setActiveTab] = useState<'create' | 'join'>(initialTab);
+  
+  // Create tab inputs
   const [householdName, setHouseholdName] = useState('');
   const [householdType, setHouseholdType] = useState<'roommate' | 'travel'>('roommate');
   const [tripEndDate, setTripEndDate] = useState('');
   const [retentionPolicy, setRetentionPolicy] = useState<'7_days_trip_end' | '15_days_trip_end'>('7_days_trip_end');
+  
+  // Join tab inputs
   const [inviteCodeInput, setInviteCodeInput] = useState(route.params?.code || '');
   const [pastedLink, setPastedLink] = useState('');
+  
+  // Loader spinner state
   const [loading, setLoading] = useState(false);
+  // Grab global household set id callback
   const { setHouseholdId } = useHousehold();
 
-  // OTP-style refs
+  // OTP-style input refs to handle keyboard focus jumps between characters
   const codeRefs = useRef<(TextInput | null)[]>([]);
+  // Digit array to track characters inputted in the 6 invite fields
   const [codeDigits, setCodeDigits] = useState<string[]>(
     (route.params?.code || '').split('').concat(Array(6).fill('')).slice(0, 6)
   );
 
+  // Theme colors mapping
   const bg      = isDark ? '#070913' : '#F5F7FF';
   const surface = isDark ? '#0E1324' : '#FFFFFF';
   const text    = isDark ? '#F1F5F9' : '#1E1B4B';
@@ -51,6 +88,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
   const bord    = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
   const accent  = '#6366F1';
 
+  // Helper to generate a random 6-character alphanumeric uppercase invitation code
   const generateInviteCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
@@ -58,14 +96,17 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
     return code;
   };
 
+  // Action: Executes household creation and database insertions
   const handleCreateHousehold = async () => {
     if (!householdName.trim()) { Alert.alert("Error", "Please enter a household name."); return; }
     
     let homeLocation: { latitude: number; longitude: number } | null = null;
     
+    // If roommate household, request location permissions to lock in GPS home coordinates
     if (householdType === 'roommate') {
       try {
         setLoading(true);
+        // Request GPS coordinates access
         const { status: foreStatus } = await Location.requestForegroundPermissionsAsync();
         if (foreStatus !== 'granted') {
           Alert.alert(
@@ -76,6 +117,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
           return;
         }
         
+        // Grab latitude/longitude coordinates
         const loc = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
@@ -94,6 +136,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
       }
     }
     
+    // If travel trip, validate date parameters format
     if (householdType === 'travel') {
       if (!tripEndDate.trim()) {
         Alert.alert("Error", "Please enter the Trip End Date.");
@@ -119,8 +162,9 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
       const user = auth.currentUser;
       if (!user) throw new Error("No user logged in");
       const code = generateInviteCode();
-      const householdId = `hh_${Date.now()}_${code}`;
+      const newHouseholdId = `hh_${Date.now()}_${code}`;
 
+      // Assemble household schema document data
       const householdData: any = { 
         name: householdName.trim(), 
         inviteCode: code, 
@@ -130,19 +174,22 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
         type: householdType 
       };
 
+      // Include locked GPS coordinates if roommate flat
       if (householdType === 'roommate' && homeLocation) {
         householdData.info = {
           homeLocation
         };
       }
 
+      // Compute data retention expiration date if trip household
       if (householdType === 'travel') {
         const dateMatch = tripEndDate.trim().match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/)!;
         const year = parseInt(dateMatch[1], 10);
         const month = parseInt(dateMatch[2], 10) - 1;
         const day = parseInt(dateMatch[3], 10);
-        const parsedDate = new Date(year, month, day, 23, 59, 59, 999); // Trip end of day
+        const parsedDate = new Date(year, month, day, 23, 59, 59, 999); // Set to end of day
         
+        // Expiration limit defaults (7 days or 15 days after trip ends)
         const daysToAdd = retentionPolicy === '15_days_trip_end' ? 15 : 7;
         const expirationDate = new Date(parsedDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
 
@@ -153,9 +200,12 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
         householdData.expiresAt = expirationDate.toISOString();
       }
 
-      await setDoc(doc(db, "households", householdId), householdData);
-      await setDoc(doc(db, "users", user.uid), { householdId }, { merge: true });
-      setHouseholdId(householdId);
+      // Write household document and link household ID to user profile
+      await setDoc(doc(db, "households", newHouseholdId), householdData);
+      await setDoc(doc(db, "users", user.uid), { householdId: newHouseholdId }, { merge: true });
+      
+      // Update global context active ID
+      setHouseholdId(newHouseholdId);
       Alert.alert("Success", "Household created successfully!");
       
       const state = navigation.getState();
@@ -168,22 +218,32 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
     setLoading(false);
   };
 
+  // Action: Executes household lookup using invite code and registers user to members list
   const handleJoinHousehold = React.useCallback(async (overrideCode?: string) => {
     const codeToUse = typeof overrideCode === 'string' ? overrideCode : inviteCodeInput.trim();
     if (!codeToUse || codeToUse.length !== 6) { Alert.alert('Error', 'Please enter a valid 6-character code.'); return; }
+    
     setLoading(true);
     try {
       const code = codeToUse.toUpperCase();
       const user = auth.currentUser;
       if (!user) throw new Error("No user logged in");
+      
+      // Query Firestore looking for household matching code
       const q = query(collection(db, 'households'), where('inviteCode', '==', code));
       const snap = await getDocs(q);
+      
       if (snap.empty) { Alert.alert('Error', 'No household found with this code.'); setLoading(false); return; }
+      
       const householdDoc = snap.docs[0];
-      const householdId = householdDoc.id;
-      await updateDoc(doc(db, 'households', householdId), { members: arrayUnion(user.uid) });
-      await setDoc(doc(db, 'users', user.uid), { householdId }, { merge: true });
-      setHouseholdId(householdId);
+      const joinedHouseholdId = householdDoc.id;
+      
+      // Add user UID to members list and update user profile
+      await updateDoc(doc(db, 'households', joinedHouseholdId), { members: arrayUnion(user.uid) });
+      await setDoc(doc(db, 'users', user.uid), { householdId: joinedHouseholdId }, { merge: true });
+      
+      // Switch active context
+      setHouseholdId(joinedHouseholdId);
       Alert.alert('Success', `Joined ${householdDoc.data().name}!`);
       
       const state = navigation.getState();
@@ -194,8 +254,9 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
       Alert.alert('Error', `Failed to join household: ${error.message}`);
     }
     setLoading(false);
-  }, [inviteCodeInput, navigation]);
+  }, [inviteCodeInput, setHouseholdId, navigation]);
 
+  // Hook to handle deep code joins forwarded from other screens on parameters changes
   useEffect(() => {
     if (route.params?.code) {
       setActiveTab('join');
@@ -203,6 +264,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
     }
   }, [route.params?.code, handleJoinHousehold]);
 
+  // Extract invite token uuid from link strings
   const extractToken = (urlStr: string): string | null => {
     try {
       const match = urlStr.match(/\/invite\/([a-zA-Z0-9_\-]+)/);
@@ -216,6 +278,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
     }
   };
 
+  // Action: Join household using shared link validation API
   const handleJoinViaLink = async () => {
     const token = extractToken(pastedLink);
     if (!token) {
@@ -224,6 +287,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
     }
     setLoading(true);
     try {
+      // Validate token status
       const validation = await validateInvitation(token);
       if (!validation.valid) {
         Alert.alert("Invalid Link", validation.message || "This invitation link is invalid or expired.");
@@ -231,6 +295,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
         return;
       }
 
+      // Prompt confirmation alert dialog
       Alert.alert(
         "Join Household",
         `You have been invited to join the household "${validation.householdName}".\n\nWould you like to join?`,
@@ -238,6 +303,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
           { text: "Cancel", style: "cancel", onPress: () => setLoading(false) },
           {
             text: "Join",
+            // Triggers Firestore atomic transactions
             onPress: async () => {
               try {
                 setLoading(true);
@@ -269,6 +335,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
     }
   };
 
+  // Callback to handle OTP digit character changes and jump focus to the next field
   const handleCodeChange = (value: string, index: number) => {
     const newDigits = [...codeDigits];
     const upper = value.toUpperCase();
@@ -276,14 +343,18 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
     setCodeDigits(newDigits);
     const fullCode = newDigits.join('');
     setInviteCodeInput(fullCode);
+    
+    // Jump focus to next textinput field if user entered a character
     if (upper && index < 5) {
       codeRefs.current[index + 1]?.focus();
     }
+    // Automatically submit once all 6 characters are inputted
     if (fullCode.length === 6 && !fullCode.includes('')) {
       handleJoinHousehold(fullCode);
     }
   };
 
+  // Callback handling backspace keypress on empty OTP fields to jump focus backwards
   const handleCodeKeyPress = (e: any, index: number) => {
     if (e.nativeEvent.key === 'Backspace' && !codeDigits[index] && index > 0) {
       codeRefs.current[index - 1]?.focus();
@@ -292,7 +363,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: bg }}>
-      {/* Back button */}
+      {/* Page header back indicator button */}
       <View style={{ paddingHorizontal: 24, paddingTop: 8 }}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -312,7 +383,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }}>
               
-              {/* Title */}
+              {/* Header illustration layout */}
               <View style={{ alignItems: 'center', marginBottom: 32 }}>
                 <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: accent, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
                   <MaterialIcons name={activeTab === 'create' ? 'add-home' : 'group-add'} size={28} color="#fff" />
@@ -325,7 +396,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
                 </Text>
               </View>
 
-              {/* Segmented Control */}
+              {/* Segmented Mode Tab Toggle Control (Create vs Join) */}
               <View style={{ flexDirection: 'row', backgroundColor: surface, borderRadius: 16, padding: 4, marginBottom: 28, borderWidth: 1, borderColor: bord }}>
                 {(['create', 'join'] as const).map(tab => (
                   <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}
@@ -337,7 +408,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
                 ))}
               </View>
 
-              {/* Create Tab */}
+              {/* CREATE TAB FORM CARD */}
               {activeTab === 'create' && (
                 <View style={{ backgroundColor: surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: bord }}>
                   <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10, paddingLeft: 4 }}>Household Name</Text>
@@ -350,6 +421,8 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
                     returnKeyType="done"
                     onSubmitEditing={handleCreateHousehold}
                   />
+                  
+                  {/* Purpose Toggle Control (Roommates vs Travel Trips) */}
                   <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10, paddingLeft: 4 }}>Purpose</Text>
                   <View style={{ flexDirection: 'row', backgroundColor: bg, borderRadius: 16, padding: 4, marginBottom: 20, borderWidth: 1, borderColor: bord }}>
                     {(['roommate', 'travel'] as const).map(t => (
@@ -362,6 +435,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
                     ))}
                   </View>
 
+                  {/* Travel type settings: date picker and deletion policy selectors */}
                   {householdType === 'travel' && (
                     <>
                       <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10, paddingLeft: 4 }}>Trip End Date</Text>
@@ -388,6 +462,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
                     </>
                   )}
 
+                  {/* Submit trigger button */}
                   <TouchableOpacity onPress={handleCreateHousehold} disabled={loading}
                     style={{ backgroundColor: accent, paddingVertical: 16, borderRadius: 16, alignItems: 'center' }}>
                     {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Create Space</Text>}
@@ -395,9 +470,10 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
                 </View>
               )}
 
-              {/* Join Tab — OTP-style input & manual link paste option */}
+              {/* JOIN TAB FORM CARD */}
               {activeTab === 'join' && (
                 <View style={{ backgroundColor: surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: bord }}>
+                  {/* Alphanumeric Invite Code Fields */}
                   <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, paddingLeft: 4 }}>Invite Code</Text>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 24 }}>
                     {[0, 1, 2, 3, 4, 5].map(i => (
@@ -428,6 +504,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
                     <View style={{ flex: 1, height: 1, backgroundColor: bord }} />
                   </View>
 
+                  {/* Manual Paste Link Section */}
                   <Text style={{ fontSize: 10, fontWeight: '800', color: muted, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10, paddingLeft: 4 }}>Invitation Link or Token</Text>
                   <TextInput
                     style={{ backgroundColor: bg, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 16, color: text, fontSize: 15, fontWeight: '600', borderWidth: 1, borderColor: bord, marginBottom: 20 }}
@@ -445,7 +522,7 @@ export default function HouseholdSetupScreen({ navigation, route }: Props) {
                 </View>
               )}
 
-              {/* Sign Out */}
+              {/* Sign Out link trigger at the bottom */}
               <TouchableOpacity onPress={() => auth.signOut()} style={{ marginTop: 32, paddingVertical: 12, alignItems: 'center' }}>
                 <Text style={{ color: '#EF4444', fontSize: 14, fontWeight: '700' }}>Sign Out</Text>
               </TouchableOpacity>

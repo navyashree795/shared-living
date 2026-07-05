@@ -1,45 +1,70 @@
+/*
+ * FILE: src/components/modals/QuickChoreModal.tsx
+ * PURPOSE: Quick task Logger overlay popup dialog enabling fast chore setup,
+ *          assignee settings, default 8:00 PM notifications scheduling, and DB writes.
+ * WHERE USED: Dashboard screen quick shortcuts tray drawer.
+ */
+
+// Import React hooks for managing state parameters, input refs, and mount handlers
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Modal, KeyboardAvoidingView, Platform } from "react-native";
+// Import UI layout components, input blocks, scrolls, alerts, overlays, and avoiding wrappers
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Modal, KeyboardAvoidingView } from "react-native";
+// Import vector icons
 import { MaterialIcons } from "@expo/vector-icons";
+// Import utility helper resolving keyboard offsets
 import { getKeyboardAvoidingProps } from "../../utils/keyboardUtils";
+// Import Firestore commands to write document updates and handle server timestamps
 import { collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+// Import Firebase auth and database connections
 import { auth, db } from "../../firebaseConfig";
+// Import user context, household details, toast alerts, and theme selectors
 import { useUser } from "../../context/UserContext";
 import { useHousehold } from "../../context/HouseholdContext";
 import { useToast } from "../../context/ToastContext";
 import { useTheme } from "../../context/ThemeContext";
+// Import helper utilities
 import { logActivity } from "../../utils/activityUtils";
 import { getSyncedDate, getNextOccurrence } from "../../utils/timeUtils";
 import { scheduleChoreReminder } from "../../utils/notificationUtils";
-import SlideModal from "../SlideModal";
 
 interface QuickChoreModalProps {
   visible: boolean;
   onClose: () => void;
 }
 
+/**
+ * QuickChoreModal logs chores with assignee avatars lists.
+ */
 export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModalProps) => {
+  // Retrieve keyboard offsets and properties
   const { behavior, keyboardVerticalOffset } = getKeyboardAvoidingProps('modal');
+  // Retrieve household details, members list, and member names resolvers
   const { householdId, members, getMemberName } = useHousehold();
   const { profile: userData } = useUser();
   const { showToast } = useToast();
   const { isDark } = useTheme();
 
+  // Local form inputs states
   const [title, setTitle] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
 
+  // Input ref to trigger keyboard autofocus
   const inputRef = useRef<TextInput>(null);
 
+  // Initialize input fields with default parameters when modal opens
   useEffect(() => {
     if (visible) {
       setTitle("");
+      // Default assignee to current logged-in user
       setAssignedTo(auth.currentUser?.uid || "");
+      // 250ms timeout ensures overlays have popped before opening virtual keyboards
       setTimeout(() => {
         inputRef.current?.focus();
       }, 250);
     }
   }, [visible]);
 
+  // Action: Validates fields and logs chore documents
   const handleSave = async () => {
     const choreTitle = title.trim();
     if (!choreTitle) {
@@ -55,8 +80,9 @@ export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModal
     const currentUid = auth.currentUser?.uid;
     if (!currentUid) return;
 
+    // Get current synchronized time details
     const now = getSyncedDate();
-    // Default chore time to 8:00 PM for today
+    // Default quick-added chores to fire reminders at 8:00 PM
     const formattedTime = "08:00 PM";
     const today = now.toLocaleDateString("en-US", { weekday: "short" }); // e.g. "Mon"
     const nextTarget = getNextOccurrence(today, formattedTime);
@@ -65,8 +91,10 @@ export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModal
       : auth.currentUser?.email?.split("@")[0] || "Member";
 
     try {
+      // Schedule local push notification alerts
       const notifId = await scheduleChoreReminder(choreTitle, nextTarget);
 
+      // Add document to chores subcollection
       await addDoc(collection(db, "households", householdId, "chores"), {
         title: choreTitle,
         assignedToUid: assignedTo,
@@ -129,7 +157,7 @@ export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModal
             borderColor: border,
           }}
         >
-          {/* Header */}
+          {/* Modal Header */}
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: isDark ? "rgba(236, 72, 153, 0.2)" : "#FDF2F8", alignItems: "center", justifyContent: "center" }}>
@@ -143,7 +171,7 @@ export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModal
           </View>
 
           <View style={{ gap: 24 }}>
-            {/* Input Section */}
+            {/* Title text input section */}
             <View>
               <Text style={{ color: textMuted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8, marginLeft: 4 }}>
                 What needs to be done?
@@ -161,7 +189,7 @@ export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModal
               </View>
             </View>
 
-            {/* Assignee Section */}
+            {/* Assignee horizontal list section */}
             <View>
               <Text style={{ color: textMuted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 12, marginLeft: 4 }}>
                 Assign To
@@ -180,6 +208,7 @@ export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModal
                         opacity: isSelected ? 1 : 0.6,
                       }}
                     >
+                      {/* Avatar initial circle bubble */}
                       <View
                         style={{
                           width: 56,
@@ -210,7 +239,7 @@ export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModal
               </ScrollView>
             </View>
 
-            {/* Info Pill */}
+            {/* Info warning pill alert */}
             <View style={{ backgroundColor: isDark ? "rgba(245,158,11,0.1)" : "#FFFBEB", paddingVertical: 12, paddingHorizontal: 16, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: isDark ? "rgba(245,158,11,0.2)" : "#FEF3C7" }}>
               <MaterialIcons name="schedule" size={18} color="#D97706" />
               <Text style={{ color: "#D97706", fontSize: 12, fontWeight: "700", flex: 1, lineHeight: 18 }}>
@@ -218,7 +247,7 @@ export const QuickChoreModal = React.memo(({ visible, onClose }: QuickChoreModal
               </Text>
             </View>
 
-            {/* Submit Button */}
+            {/* Save trigger button */}
             <TouchableOpacity
               onPress={handleSave}
               style={{

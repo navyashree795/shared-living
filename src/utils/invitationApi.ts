@@ -1,3 +1,11 @@
+/*
+ * FILE: src/utils/invitationApi.ts
+ * PURPOSE: Invitation management API helper. It creates, validates, and processes household joining codes,
+ *          ensuring data consistency using atomic Firestore transactional updates.
+ * WHERE USED: Called by ThemedApp in App.tsx (deep linking handler) and by HouseholdSetupScreen.tsx.
+ */
+
+// Import Firestore document, subcollection, transaction, and field modifiers
 import { 
   doc, 
   getDoc, 
@@ -8,25 +16,36 @@ import {
   Timestamp, 
   arrayUnion 
 } from 'firebase/firestore';
+// Import Firebase auth client SDK links
 import { auth, db } from '../firebaseConfig';
 
 export interface ValidateInvitationResponse {
+  // True if token exists, is pending, and has not expired
   valid: boolean;
+  // User readable warning detail message if invalid
   message?: string;
+  // Associated household ID
   householdId?: string;
+  // Associated household display name
   householdName?: string;
 }
 
 export interface AcceptInvitationResponse {
+  // True if transaction finishes successfully
   success: boolean;
+  // True if user was already a registered member of the target household
   alreadyMember?: boolean;
+  // Associated household ID joined
   householdId: string;
 }
 
-// Helper to generate a 32-character random hex token on the client
+/**
+ * Generates a random 32-character hexadecimal token on the client.
+ */
 const generateHexToken = (): string => {
   const chars = '0123456789abcdef';
   let token = '';
+  // Loop 32 times to build token string
   for (let i = 0; i < 32; i++) {
     token += chars[Math.floor(Math.random() * 16)];
   }
@@ -34,16 +53,17 @@ const generateHexToken = (): string => {
 };
 
 /**
- * Create an invitation token for a household directly in Firestore.
+ * Generates a pending invitation document in Firestore, valid for 7 days.
  */
 export const createInvitation = async (householdId: string): Promise<string> => {
+  // Grab current logged in user unique id
   const uid = auth.currentUser?.uid;
   if (!uid) {
     throw new Error('User must be logged in to create invitations.');
   }
 
   try {
-    // 1. Verify household exists and fetch its data
+    // 1. Verify household document exists
     const householdDoc = await getDoc(doc(db, 'households', householdId));
     if (!householdDoc.exists()) {
       throw new Error('Household not found.');
@@ -52,12 +72,12 @@ export const createInvitation = async (householdId: string): Promise<string> => 
     const householdData = householdDoc.data();
     const members = householdData?.members || [];
 
-    // 2. Verify current user's membership in the household
+    // 2. Verify current user belongs to the target household
     if (!members.includes(uid)) {
       throw new Error('You do not belong to this household.');
     }
 
-    // 3. Generate token and set invitation doc
+    // 3. Generate invitation token and write details
     const token = generateHexToken();
     const invitationData = {
       token,
@@ -70,6 +90,7 @@ export const createInvitation = async (householdId: string): Promise<string> => 
       usedAt: null
     };
 
+    // Save invitation to DB root collection
     await setDoc(doc(db, 'invitations', token), invitationData);
     return token;
   } catch (error: any) {
@@ -79,14 +100,16 @@ export const createInvitation = async (householdId: string): Promise<string> => 
 };
 
 /**
- * Validate an invitation token directly from Firestore.
+ * Checks if a token is valid for joining a household.
  */
 export const validateInvitation = async (token: string): Promise<ValidateInvitationResponse> => {
+  // Check if token exists
   if (!token) {
     throw new Error('Invitation token is required.');
   }
 
   try {
+    // Fetch invitation document from DB
     const inviteDoc = await getDoc(doc(db, 'invitations', token));
     if (!inviteDoc.exists()) {
       return { valid: false, message: 'Invalid invitation link.' };
@@ -97,16 +120,20 @@ export const validateInvitation = async (token: string): Promise<ValidateInvitat
       return { valid: false, message: 'Invitation is empty.' };
     }
 
+    // Verify invitation status is pending
     if (inviteData.status !== 'pending') {
       return { valid: false, message: 'This invitation has already been used.' };
     }
 
+    // Check if invitation has expired
     const expiresAt = inviteData.expiresAt.toDate();
     if (expiresAt < new Date()) {
+      // Mark invitation status as expired
       await updateDoc(doc(db, 'invitations', token), { status: 'expired' });
       return { valid: false, message: 'This invitation has expired.' };
     }
 
+    // Fetch household document
     const householdDoc = await getDoc(doc(db, 'households', inviteData.householdId));
     if (!householdDoc.exists()) {
       return { valid: false, message: 'Household no longer exists.' };
@@ -125,15 +152,18 @@ export const validateInvitation = async (token: string): Promise<ValidateInvitat
 };
 
 /**
- * Accept an invitation and join the household atomically using a Firestore transaction.
+ * Atomically consumes an invitation token, removes the user from their prior household,
+ * and adds them to the new household members list in a single Firestore transaction.
  */
 export const acceptInvitation = async (token: string): Promise<AcceptInvitationResponse> => {
+  // Check if user is authenticated
   const uid = auth.currentUser?.uid;
   if (!uid) {
     throw new Error('User must be logged in to accept invitations.');
   }
 
   try {
+    // Execute atomic transaction to maintain database integrity
     return await runTransaction(db, async (transaction) => {
       const inviteRef = doc(db, 'invitations', token);
       const inviteDoc = await transaction.get(inviteRef);
@@ -167,17 +197,19 @@ export const acceptInvitation = async (token: string): Promise<AcceptInvitationR
       const householdData = householdDoc.data();
       const members = householdData?.members || [];
 
+      // Check if user is already a member
       if (members.includes(uid)) {
         return { success: true, alreadyMember: true, householdId: inviteData.householdId };
       }
 
+      // Fetch user profile document
       const userRef = doc(db, 'users', uid);
       const userDoc = await transaction.get(userRef);
       if (!userDoc.exists()) {
         throw new Error('User profile not found.');
       }
 
-      // If user belongs to a different household, remove them from that household first
+      // Remove user from prior household members list if applicable
       const oldHouseholdId = userDoc.data()?.householdId;
       if (oldHouseholdId && oldHouseholdId !== inviteData.householdId) {
         const oldHouseholdRef = doc(db, 'households', oldHouseholdId);
@@ -185,21 +217,24 @@ export const acceptInvitation = async (token: string): Promise<AcceptInvitationR
         if (oldHouseholdDoc.exists()) {
           const oldMembers = oldHouseholdDoc.data()?.members || [];
           const updatedOldMembers = oldMembers.filter((m: string) => m !== uid);
+          // Update prior household member list to exclude user
           transaction.update(oldHouseholdRef, { members: updatedOldMembers });
         }
       }
 
-      // Atomically update invitation status, add member to household, and set user's householdId
+      // Consume invitation token
       transaction.update(inviteRef, {
         status: 'accepted',
         usedBy: uid,
         usedAt: serverTimestamp()
       });
 
+      // Append user to new household members array
       transaction.update(householdRef, {
         members: arrayUnion(uid)
       });
 
+      // Update user profile link to point to new household ID
       transaction.update(userRef, {
         householdId: inviteData.householdId
       });

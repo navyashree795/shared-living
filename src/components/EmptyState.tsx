@@ -1,30 +1,70 @@
+/*
+ * FILE: src/components/EmptyState.tsx
+ * PURPOSE: Placeholder layout component displaying descriptions when feeds are empty.
+ * WHERE USED: Feed widget areas (activities, bills, lists, timeline) when no entries exist.
+ */
+
+// Import React components references
 import React from 'react';
-import { View, Text } from 'react-native';
+// Import layout components, texts, and vector icons
+import { View, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useTheme } from '../context/ThemeContext';
 
 interface EmptyStateProps {
-  icon: keyof typeof MaterialIcons.glyphMap;
-  title: string;
-  description: string;
+  // Title description header (optional fallback for title)
+  message?: string;
+  // Subtext detailed instructions
+  description?: string;
+  // Icon name lookup
+  icon?: keyof typeof MaterialIcons.glyphMap;
+  // Optional title property mapping
+  title?: string;
 }
 
-const EmptyState: React.FC<EmptyStateProps> = ({ icon, title, description }) => {
-  const { isDark } = useTheme();
-  const text = isDark ? '#E2E8F0' : '#0F172A';
-  const muted = isDark ? '#818CF8' : '#64748B';
-  const iconBg = isDark ? '#0F1320' : '#F1F5F9';
-  const iconColor = isDark ? '#4F46E5' : '#94A3B8';
-
+// Render EmptyState component
+export const EmptyState: React.FC<EmptyStateProps> = ({ 
+  message, 
+  title,
+  description = "Tap the action button to get started.", 
+  icon = "info-outline" 
+}) => {
+  const finalMessage = message || title || "No items found";
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 40 }}>
-      <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-        <MaterialIcons name={icon} size={36} color={iconColor} />
-      </View>
-      <Text style={{ color: text, fontSize: 18, fontWeight: '800', marginBottom: 8, textAlign: 'center' }}>{title}</Text>
-      <Text style={{ color: muted, fontSize: 14, textAlign: 'center', lineHeight: 22 }}>{description}</Text>
+    <View style={styles.container}>
+      {/* Icon header indicator */}
+      <MaterialIcons name={icon} size={36} color="#94A3B8" style={styles.icon} />
+      {/* Message title label */}
+      <Text style={styles.message}>{finalMessage}</Text>
+      {/* Description instruction label */}
+      <Text style={styles.description}>{description}</Text>
     </View>
   );
 };
+
+// --- Strict StyleSheet Properties Layout ---
+const styles = StyleSheet.create({
+  container: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 24,
+  },
+  icon: {
+    marginBottom: 8,
+  },
+  message: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#475569',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  description: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+});
 
 export default EmptyState;

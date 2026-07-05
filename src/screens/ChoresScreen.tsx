@@ -1,42 +1,72 @@
+/*
+ * FILE: src/screens/ChoresScreen.tsx
+ * PURPOSE: Manages household chore assignments, day-of-week rotas, automated task rotation logic
+ *          among roommates, local push notifications reminders scheduling, and completion indicators.
+ * WHERE USED: Loaded as a main screen route option navigated from the Home/Dashboard or tabs.
+ */
+
+// Import React hooks for managing state parameters, side-effect triggers, elements references, and memoized callbacks
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+// Import layout layouts, inputs, switches, modals, and overlay touch areas
 import { 
   View, Text, FlatList, TextInput, TouchableOpacity, 
   Alert, ScrollView, Switch, Modal, Pressable
 } from 'react-native';
+// Import Safe Area utilities
 import { SafeAreaView } from 'react-native-safe-area-context';
+// Import custom wheel time picker picker component
 import { TimeWheelPicker } from '../components/TimeWheelPicker';
+// Import icons
 import { MaterialIcons } from '@expo/vector-icons';
+// Import auth and database connection references
 import { auth, db } from '../firebaseConfig';
+// Import user display names contexts and synchronized clocks helpers
 import { useUser } from '../context/UserContext';
 import { getSyncedDate, getNextOccurrence } from '../utils/timeUtils';
 import { getCycleStartDate } from '../utils/retentionUtils';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { useHousehold } from '../context/HouseholdContext';
+// Import card layouts and screen headers
 import { Card } from '../components/Card';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import SlideModal from '../components/SlideModal';
 import SwipeableRow from '../components/SwipeableRow';
 import { ChoreSkeleton } from '../components/Skeleton';
+// Import Firestore commands to subscribe to collections, write documents, delete items, and track array unions
 import {
   collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp, arrayUnion, Timestamp, where
 } from 'firebase/firestore';
 import { logActivity } from '../utils/activityUtils';
 import { scheduleChoreReminder, cancelChoreReminder } from '../utils/notificationUtils';
 import { Chore } from '../types';
+
 type Props = { navigation: any; route?: any };
 
+/**
+ * ChoresScreen displays weekly progress bars, active checklists, and setup modals.
+ */
 export default function ChoresScreen({ route, navigation }: Props) {
+  // Grab household profile details
   const { householdId, householdData } = useHousehold();
   const { isDark } = useTheme();
+
+  // Design color system tokens mapping
   const bg      = isDark ? '#070913' : '#F5F7FF';
   const surface = isDark ? '#0E1324' : '#FFFFFF';
   const text    = isDark ? '#F1F5F9' : '#1E1B4B';
   const bord    = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)';
+
+  // Grab contexts references
   const { showToast } = useToast();
+  
+  // State hook managing list of chore items loaded from database
   const [chores, setChores] = useState<Chore[]>([]);
+  // Loading spinner state
   const [loading, setLoading] = useState(true);
+  
+  // Add Chore form input states
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [choreTitle, setChoreTitle] = useState('');
   const [assignedTo, setAssignedTo] = useState<string>(auth.currentUser?.uid || '');
@@ -44,15 +74,26 @@ export default function ChoresScreen({ route, navigation }: Props) {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showSplitOptions, setShowSplitOptions] = useState(false);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  
+  // Automated rotation switches and trackers
   const [isRotationEnabled, setIsRotationEnabled] = useState(false);
   const [rotationOrder, setRotationOrder] = useState<string[]>([]);
+  
+  // Grab global users and roommates details
   const { profile: userData } = useUser();
   const { members, getMemberName, memberProfiles } = useHousehold();
+  
+  // Editing state trackers
   const [editingChore, setEditingChore] = useState<Chore | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  
+  // Nudge limiters
   const [recentlyNudged, setRecentlyNudged] = useState<Set<string>>(new Set());
+
+  // Input ref to trigger keyboards autofocus
   const inputRef = useRef<TextInput>(null);
 
+  // Effect: Focus input name field when opening modal
   useEffect(() => {
     if (isModalVisible) {
       setTimeout(() => {
@@ -61,11 +102,14 @@ export default function ChoresScreen({ route, navigation }: Props) {
     }
   }, [isModalVisible]);
 
+  // Effect: Syncs list from Firestore chores subcollection, filtering items older than 3 months
   useEffect(() => {
     if (!householdId) return;
     const cycleStartDay = householdData?.billingCycleStartDay || 1;
     const now = getSyncedDate();
     const currentCycleStart = getCycleStartDate(now, cycleStartDay);
+    
+    // Filter window: hide anything older than the last 3 billing cycles
     const mainStartDate = new Date(currentCycleStart);
     mainStartDate.setMonth(mainStartDate.getMonth() - 2);
 
@@ -74,12 +118,14 @@ export default function ChoresScreen({ route, navigation }: Props) {
       where('createdAt', '>=', Timestamp.fromDate(mainStartDate)),
       orderBy('createdAt', 'desc')
     );
+
+    // Live subscription listener
     const unsub = onSnapshot(q, (snap) => {
       const fetchedChores = snap.docs.map(d => ({ id: d.id, ...d.data() } as Chore));
       setChores(fetchedChores);
       setLoading(false);
 
-      // Mark unread chores assigned to me as seen
+      // Seen status: mark chores assigned to me as read/seen in database
       const myUid = auth.currentUser?.uid;
       if (myUid) {
         const unseenChores = fetchedChores.filter(c => 
@@ -97,6 +143,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
     return unsub;
   }, [householdId, householdData?.billingCycleStartDay]);
 
+  // Action: Fills form fields when editing an existing chore
   const openEditModal = useCallback((chore: Chore) => {
     setEditingChore(chore);
     setChoreTitle(chore.title);
@@ -104,7 +151,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
     setIsRotationEnabled(chore.rotationEnabled || false);
     setRotationOrder(chore.rotationOrder || []);
     
-    // Robust parsing for "HH:MM AM/PM" or "HH:MM:SS"
+    // Parse time strings (e.g. "09:00 AM") to set clock date wheelpicker
     try {
       const timeMatch = chore.time.match(/(\d+):(\d+)(?::\d+)?\s*(AM|PM)?/i);
       if (timeMatch) {
@@ -118,7 +165,6 @@ export default function ChoresScreen({ route, navigation }: Props) {
         const d = new Date();
         d.setHours(hours, minutes, 0, 0);
         
-        // Final safety check
         if (isNaN(d.getTime())) throw new Error("Invalid time");
         setTime(d);
       } else {
@@ -132,6 +178,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
     setIsModalVisible(true);
   }, []);
 
+  // Action: Writes new chore document or updates existing database record
   const handleAddChore = async () => {
     if (!choreTitle.trim()) { Alert.alert('Error', 'Please enter a chore name.'); return; }
     if (!householdId) return;
@@ -153,11 +200,16 @@ export default function ChoresScreen({ route, navigation }: Props) {
       };
 
       if (editingChore) {
+        // Edit flow:
+        // A. Cancel existing local reminder alarm
         if (editingChore.notificationId) {
           await cancelChoreReminder(editingChore.notificationId);
         }
+        
+        // B. Re-schedule reminder alarm and write changes to database
         const nextTarget = getNextOccurrence(editingChore.day, formattedTime);
         const notifId = await scheduleChoreReminder(choreTitle.trim(), nextTarget);
+        
         await updateDoc(doc(db, 'households', householdId, 'chores', editingChore.id), {
           ...baseChoreData,
           targetDate: Timestamp.fromDate(nextTarget),
@@ -165,6 +217,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         });
         showToast('Chore Updated', 'success');
       } else {
+        // Insertion flow:
         const fullChoreData = {
           ...baseChoreData,
           done: false,
@@ -174,6 +227,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
           seenBy: [auth.currentUser?.uid],
         };
 
+        // Create individual documents for each selected weekday schedule
         if (selectedDays.length > 0) {
           await Promise.all(selectedDays.map(async (day) => {
             const nextTarget = getNextOccurrence(day, formattedTime);
@@ -186,10 +240,13 @@ export default function ChoresScreen({ route, navigation }: Props) {
             });
           }));
           logActivity(householdId, 'chore_add', `${choreTitle.trim()} (${selectedDays.join(', ')})`, currentUserName);
+        } else {
+          // If no days were selected, default to today's weekday assignment
           const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
           const today = daysOfWeek[getSyncedDate().getDay()];
           const nextTarget = getNextOccurrence(today, formattedTime);
           const notifId = await scheduleChoreReminder(choreTitle.trim(), nextTarget);
+          
           await addDoc(collection(db, 'households', householdId, 'chores'), {
             ...fullChoreData,
             day: today,
@@ -201,6 +258,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         showToast('Chore Added', 'success');
       }
 
+      // Reset form parameters
       setChoreTitle(''); setAssignedTo(auth.currentUser?.uid || ''); setSelectedDays([]);
       setIsRotationEnabled(false); setRotationOrder([]); setEditingChore(null);
       setIsModalVisible(false);
@@ -210,15 +268,20 @@ export default function ChoresScreen({ route, navigation }: Props) {
     }
   };
 
+  // Action: Toggles checkbox status and processes rotation queue shifts
   const handleToggleDone = useCallback(async (chore: Chore) => {
     if (!householdId) return;
     try {
       const isMarkingDone = !chore.done;
       
       if (isMarkingDone) {
+        // Completion flow:
+        // A. Cancel phone reminder alerts
         if (chore.notificationId) {
           await cancelChoreReminder(chore.notificationId);
         }
+        
+        // B. Mark done in Firestore
         await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
           done: true,
           notificationId: null,
@@ -226,11 +289,13 @@ export default function ChoresScreen({ route, navigation }: Props) {
         showToast('Chore finished! 🎉', 'success');
         logActivity(householdId, 'chore_done', chore.title);
 
+        // C. If task rotation queue is enabled, generate next week's pending chore assigned to the next teammate
         if (chore.rotationEnabled && chore.rotationOrder && chore.rotationOrder.length > 0) {
           const nextIndex = ((chore.currentRotationIndex || 0) + 1) % chore.rotationOrder.length;
           const nextAssignee = chore.rotationOrder[nextIndex];
           
           const baseDate = chore.targetDate ? chore.targetDate.toDate() : getSyncedDate();
+          // Add 7 days to next target date
           const nextTargetDate = new Date(baseDate.getTime() + 7 * 24 * 60 * 60 * 1000);
           const nextNotifId = await scheduleChoreReminder(chore.title, nextTargetDate);
 
@@ -254,6 +319,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
           logActivity(householdId, 'chore_rotate', chore.title, undefined, 0, nextAssignee);
         }
       } else {
+        // Reopen flow:
         const nextOccurrence = getNextOccurrence(chore.day, chore.time);
         const notifId = await scheduleChoreReminder(chore.title, nextOccurrence);
         await updateDoc(doc(db, 'households', householdId, 'chores', chore.id), {
@@ -269,12 +335,13 @@ export default function ChoresScreen({ route, navigation }: Props) {
     }
   }, [householdId, showToast, getMemberName]);
 
+  // Action: Records warning nudge activity logs to alert the roommate
   const handleReminder = useCallback(async (chore: Chore) => {
     if (!householdId) return;
     try {
       logActivity(householdId, 'chore_reminder', chore.title, undefined, 0, chore.assignedToUid);
       
-      // Visual feedback state
+      // Temporarily toggle nudge button state to show success tick
       setRecentlyNudged(prev => new Set(prev).add(chore.id));
       setTimeout(() => {
         setRecentlyNudged(prev => {
@@ -290,6 +357,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
     }
   }, [householdId, showToast]);
 
+  // Action: Deletes chore document and cancels scheduled local alarms
   const handleDelete = useCallback(async (choreId: string) => {
     if (!householdId) return;
     Alert.alert('Delete Chore', 'Remove this chore?', [
@@ -309,9 +377,11 @@ export default function ChoresScreen({ route, navigation }: Props) {
     ]);
   }, [householdId, chores, showToast]);
 
+  // Split items arrays by pending/completed status
   const pending = chores.filter(c => !c.done);
   const done = chores.filter(c => c.done);
 
+  // List Item Row Renderer
   const renderChore = useCallback(({ item }: { item: Chore }) => {
     const isDone = item.done;
     const isExpanded = expandedId === item.id;
@@ -342,7 +412,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {/* Left Priority Indicator */}
+            {/* Red left priority stripe for pending tasks */}
             {!isDone && (
               <View style={{ 
                 position: 'absolute', 
@@ -356,11 +426,11 @@ export default function ChoresScreen({ route, navigation }: Props) {
               }} />
             )}
 
-            {/* Status Circle */}
+            {/* Checkmark Status Circle */}
             <TouchableOpacity 
               activeOpacity={0.7}
               onPress={(e) => {
-                e.stopPropagation();
+                e.stopPropagation(); // Avoid triggering expand detail triggers when checking circles
                 handleToggleDone(item);
               }}
               style={{ 
@@ -380,7 +450,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
               {isDone && <MaterialIcons name="check" size={18} color="white" />}
             </TouchableOpacity>
             
-            {/* Chore Info */}
+            {/* Title and details pills */}
             <View style={{ flex: 1 }}>
               <Text 
                 numberOfLines={1}
@@ -396,7 +466,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
               </Text>
               
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                {/* Assignee Pill */}
+                {/* Assignee display pill */}
                 <View style={{ 
                   backgroundColor: isDark ? 'rgba(79, 70, 229, 0.15)' : '#EEF2FF', 
                   paddingHorizontal: 10, 
@@ -408,7 +478,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                   </Text>
                 </View>
 
-                {/* Time Pill */}
+                {/* Clock time pill */}
                 <View style={{ 
                   backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6', 
                   paddingHorizontal: 10, 
@@ -420,7 +490,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                   </Text>
                 </View>
 
-                {/* Day Pill */}
+                {/* Deadline day pill */}
                 {!!item.day && (
                   <View style={{ 
                     backgroundColor: isDone 
@@ -446,6 +516,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
               </View>
             </View>
 
+            {/* Expand arrow */}
             <MaterialIcons 
               name={isExpanded ? "keyboard-arrow-up" : "keyboard-arrow-down"} 
               size={20} 
@@ -453,7 +524,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
             />
           </View>
 
-          {/* Expanded Details */}
+          {/* Expanded details container */}
           {isExpanded && (
             <View style={{ 
               marginTop: 16, 
@@ -471,6 +542,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                 
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   {!isDone && (
+                    // Warn nudge trigger button
                     <TouchableOpacity
                       onPress={(e) => { e.stopPropagation(); handleReminder(item); }}
                       style={{ 
@@ -525,6 +597,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         onRightPress={() => setIsModalVisible(true)} 
       />
 
+      {/* Aggregate Counts cards */}
       <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 24, marginBottom: 16 }}>
         <View style={{ 
           flex: 1, 
@@ -579,7 +652,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         </View>
       </View>
 
-      {/* Weekly Progress Card */}
+      {/* Weekly Progress bar Card */}
       <View style={{ paddingHorizontal: 24, marginBottom: 24 }}>
         <View style={{ 
           backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF', 
@@ -620,6 +693,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         </View>
       </View>
 
+      {/* Main FlatList of chores */}
       {loading ? (
         <View className="px-6">
           {[1, 2, 3, 4, 5].map((i) => <ChoreSkeleton key={i} />)}
@@ -658,6 +732,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         />
       )}
 
+      {/* ADD / EDIT CHORE SLIDE MODAL */}
       <SlideModal
         visible={isModalVisible}
         onClose={() => { setIsModalVisible(false); setEditingChore(null); setChoreTitle(''); }}
@@ -667,6 +742,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         <View className="pt-1 pb-1">
           {!showSplitOptions ? (
             <View>
+              {/* Description field */}
               <View className="border-b border-border/60 pb-1.5 mb-4">
                 <Text className="text-textMuted text-[9px] font-bold uppercase tracking-widest mb-1">What needs to be done?</Text>
                 <TextInput 
@@ -679,6 +755,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                 />
               </View>
 
+              {/* Day selection row */}
               <View className="mb-4">
                 <Text className="text-textMuted text-xs font-bold mb-2">Select Days</Text>
                 <View className="flex-row justify-between">
@@ -703,6 +780,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                 </View>
               </View>
 
+              {/* Time display trigger */}
               <View className="border-b border-border/60 pb-1.5 mb-4 flex-row justify-between items-center">
                 <Text className="text-textMuted text-xs font-bold w-16">Time</Text>
                 <TouchableOpacity 
@@ -716,8 +794,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                 </TouchableOpacity>
               </View>
 
-
-
+              {/* Automated rotation switch */}
               <View className="flex-row items-center justify-between mb-4 bg-surfaceRaised p-3 rounded-2xl border border-border/50">
                 <View className="flex-1">
                   <Text className="text-textMain font-bold text-sm">Automated Rotation</Text>
@@ -737,6 +814,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                 />
               </View>
 
+              {/* Assignee / Rotation list trigger */}
               <TouchableOpacity 
                 onPress={() => setShowSplitOptions(true)}
                 className="bg-secondary/30 rounded-xl py-2.5 px-4 items-center flex-row border border-border/50 mb-4"
@@ -751,6 +829,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
                 <MaterialIcons name="chevron-right" size={18} color="#9CA3AF" />
               </TouchableOpacity>
 
+              {/* Submit / Cancel actions triggers */}
               <View style={{ paddingBottom: 40 }} className="flex-row justify-between mt-2">
                 <TouchableOpacity 
                   className="flex-1 bg-background py-2.5 rounded-xl items-center mr-3 border border-border/40"
@@ -768,6 +847,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
 
             </View>
           ) : (
+            // Select assignee / rotation list view
             <View>
               <View className="flex-row items-center justify-between mb-4">
                 <View>
@@ -797,7 +877,6 @@ export default function ChoresScreen({ route, navigation }: Props) {
                           if (isInRotation) {
                             const newOrder = rotationOrder.filter(id => id !== uid);
                             setRotationOrder(newOrder);
-                            // If we removed the current assignee, pick the next available or first
                             if (isPrimaryAssignee) setAssignedTo(newOrder[0] || '');
                           } else {
                             const newOrder = [...rotationOrder, uid];
@@ -833,6 +912,7 @@ export default function ChoresScreen({ route, navigation }: Props) {
         </View>
       </SlideModal>
 
+      {/* WHEEL TIME PICKER MODAL CONTAINER */}
       <Modal
         visible={showTimePicker}
         transparent

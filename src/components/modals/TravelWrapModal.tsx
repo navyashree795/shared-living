@@ -1,4 +1,14 @@
+/*
+ * FILE: src/components/modals/TravelWrapModal.tsx
+ * PURPOSE: Interactive slide modal generating a shareable summary card for ended trips.
+ *          Plots milestones along a 3D perspective curved road SVG map, supports screenshot
+ *          capture sharing, and lets users toggle up to 10 itinerary stops.
+ * WHERE USED: Dashboard screen Travel wrap-up button.
+ */
+
+// Import React hooks for managing state parameters, viewport layout dimensions, refs, and mounts
 import React, { useState, useEffect, useRef } from 'react';
+// Import layout components, style sheets, text blocks, image nodes, touch triggers, scrolls, and alerts
 import {
   StyleSheet,
   View,
@@ -10,13 +20,21 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+// Import SVG elements for high-performance vector graphics rendering
 import Svg, { Circle, Path, Polygon, Defs, LinearGradient, Stop as SvgStop } from 'react-native-svg';
+// Import linear gradients library
 import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
+// Import vector icons
 import { MaterialIcons } from '@expo/vector-icons';
+// Import native sharing library
 import * as Sharing from 'expo-sharing';
+// Import screenshot capture library
 import { captureRef } from 'react-native-view-shot';
+// Import sliding slide modal template wrapper
 import SlideModal from '../SlideModal';
+// Import custom types schemas
 import { ItineraryItem } from '../../types';
+// Import dark theme contexts
 import { useTheme } from '../../context/ThemeContext';
 
 export interface Traveler {
@@ -52,13 +70,14 @@ export interface TripData {
   totalStops: number;
 }
 
+// Get device viewport sizes to fit cards dynamically
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_MAX_WIDTH = 440;
 const CARD_WIDTH = Math.min(SCREEN_WIDTH - 40, CARD_MAX_WIDTH);
 const PANEL_W = CARD_WIDTH - 40;
 const PANEL_H = 300;
 
-// Default dummy dataset matching the structure of your dynamic data layer
+// Dummy dataset used for testing/layout presentation fallback
 const DEFAULT_TRIP_DATA: TripData = {
   tripName: "Karnataka Adventure",
   mainTraveler: { initials: "SJ", name: "Sarah J.", city: "Bangalore", photoUrl: null },
@@ -91,12 +110,18 @@ interface TravelWrapCardProps {
   onClose?: () => void;
 }
 
+/**
+ * TravelWrapCard compiles the final card container that gets screenshotted.
+ */
 export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({ 
   data = DEFAULT_TRIP_DATA,
   householdId = "",
   onClose
 }) => {
+  // Reference targeting the card layout node to pass to view shot screenshot captures
   const cardRef = useRef<View>(null);
+  
+  // Track layout dimensions to offset milestones labels
   const [panelWidth, setPanelWidth] = useState(270);
   const [panelHeight, setPanelHeight] = useState(240);
   
@@ -110,6 +135,7 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
   const btnSecondaryBorder = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)";
   const btnSecondaryText = isDark ? "#ffffff" : "#475569";
   
+  // Capture screenshot of cardRef container and launch system sharing panel
   const handleShare = async () => {
     try {
       if (!cardRef.current) return;
@@ -135,7 +161,7 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
     }
   };
 
-  // --- Sub-Component Builders ---
+  // Stack of horizontal profile circle overlays representing crew members
   const renderCrewStack = () => {
     const visibleCrew = data.crew.slice(0, data.maxVisibleCrew);
     const extra = data.crew.length - data.maxVisibleCrew;
@@ -166,6 +192,7 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
     );
   };
 
+  // Circular duration percentage gauge
   const renderDurationGauge = () => {
     const pct = Math.min(data.durationDays / 14, 1);
     const radius = 27;
@@ -199,12 +226,13 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
     );
   };
 
+  // Renders the 3D perspective road path using dynamic SVG equations
   const renderRoadPanel = () => {
     const roadTop = 145;
     const roadBot = 300;
     const n = data.stops.length;
 
-    // Mathematical calculations parsing the HTML's custom vector road layout geometry
+    // Mathematical formula calculating horizontal sway offsets based on height coords
     const getRoadPoint = (y: number) => {
       const t = (300 - y) / (300 - 145);
       const sway = Math.sin(t * Math.PI * 3.2);
@@ -219,6 +247,7 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
     const centerPoints: { x: number; y: number }[] = [];
     const steps = 40;
 
+    // Loop steps to calculate coordinate markers along the curve
     for (let i = 0; i <= steps; i++) {
       const y = roadBot - (i / steps) * (roadBot - roadTop);
       const { x, width } = getRoadPoint(y);
@@ -227,10 +256,12 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
       centerPoints.push({ x, y });
     }
 
+    // Join calculated coordinates to create asphalt surface vector path
     const roadSurfacePath = `M ` + leftPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ') + 
                          ` L ` + [...rightPoints].reverse().map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ') + ` Z`;
     const centerDashesPath = `M ` + centerPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ');
 
+    // Calculate node coordinates for milestone markers mapping
     const nodePositions = data.stops.map((stop: Stop, i: number) => {
       const t = i / Math.max(n - 1, 1);
       // Keep nodes within safe y-bounds (155 to 282) so they don't clip at top/bottom edges
@@ -260,40 +291,40 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
             </LinearGradient>
           </Defs>
 
-          {/* Sky Background */}
+          {/* Sky Vector Gradient */}
           <Path d="M 0 0 H 400 V 300 H 0 Z" fill="url(#skyGradient)" />
 
-          {/* Mountains shifted up so the valley base is at Y=140 */}
+          {/* Mountains background polygons */}
           <Path d="M -20 140 L 60 50 L 130 140 Z" fill="#0284c7" opacity={0.2} />
           <Path d="M 80 140 L 180 30 L 280 140 Z" fill="#0284c7" opacity={0.18} />
           <Path d="M 220 140 L 310 40 L 410 140 Z" fill="#0284c7" opacity={0.22} />
           <Path d="M 300 140 L 370 70 L 440 140 Z" fill="#0369a1" opacity={0.25} />
           
-          {/* Valley ground filling Y=140 to Y=300 (Daylight green grass) */}
+          {/* Valley green grass grass ground */}
           <Path d="M -20 140 L 420 140 L 420 300 L -20 300 Z" fill="#15803d" />
           
-          {/* Forest floor/Hills contours (Daylight greens) */}
+          {/* Valley terrain contours */}
           <Path d="M -20 200 Q 100 130, 210 160 T 420 180 L 420 300 L -20 300 Z" fill="#22c55e" opacity={0.55} />
           <Path d="M -20 230 Q 100 180, 200 200 T 420 240 L 420 300 L -20 300 Z" fill="#4ade80" opacity={0.75} />
           <Path d="M -20 265 Q 120 235, 220 250 T 420 265 L 420 300 L -20 300 Z" fill="#166534" opacity="0.9" />
           
-          {/* Pines (Daylight dark green shadows) */}
+          {/* Pines trees polygons left */}
           <Polygon points="28,255 22,268 34,268" fill="#14532d" />
           <Polygon points="28,260 20,275 36,275" fill="#166534" />
           <Polygon points="46,260 41,271 51,271" fill="#14532d" />
           
-          {/* Pines right */}
+          {/* Pines trees polygons right */}
           <Polygon points="340,258 334,271 346,271" fill="#14532d" />
           <Polygon points="340,263 332,278 348,278" fill="#166534" />
           <Polygon points="358,262 352,274 364,274" fill="#14532d" />
 
-          {/* Main Curved Asphalt Surface */}
+          {/* Asphalt Road Vector Path */}
           <Path d={roadSurfacePath} fill="#475569" />
           
-          {/* Dashboard Dotted Center Line Tracking */}
+          {/* Dashboard Dotted center line */}
           <Path d={centerDashesPath} stroke="rgba(255,255,255,0.85)" strokeWidth="1.5" strokeDasharray="6,8" fill="none" />
 
-          {/* Perspective Map Stop Coordinates */}
+          {/* Milestone circular checkpoint nodes */}
           {nodePositions.map((node: { x: number; y: number; r: number; stop: Stop }, idx: number) => (
             <React.Fragment key={idx}>
               <Circle 
@@ -312,7 +343,7 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
           ))}
         </Svg>
 
-        {/* Dynamic Alternating Badge Text Elements */}
+        {/* Milestone floating text badge labels */}
         {nodePositions.map((node: { x: number; y: number; r: number; stop: Stop; physicalY: number }, i: number) => {
           const isLeft = i % 2 !== 0;
           const badgeStyle = isLeft 
@@ -328,6 +359,7 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
           );
         })}
 
+        {/* Remainder footnote showing count of hidden stops */}
         {data.totalStops - n > 0 && (
           <View style={styles.moreFootnote}>
             <Text style={styles.moreFootnoteText}>
@@ -341,7 +373,7 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
 
   return (
     <View style={[styles.scrollContainer, { backgroundColor: bgTheme }]}>
-      {/* Card with gradient background — ref captures only this for sharing */}
+      {/* Captured card component container */}
       <View ref={cardRef} style={styles.wrapCard}>
         <ExpoLinearGradient
           colors={['#F5F7FF', '#FFFFFF']}
@@ -350,10 +382,9 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
           style={StyleSheet.absoluteFill}
         />
         
-        {/* Header Branding Structure */}
+        {/* Header brand details */}
         <View style={styles.cardHeader}>
           <View style={styles.brandContainer}>
-            {/* Transparent icon — shows house graphic clearly on any background */}
             <Image
               source={require("../../../assets/adaptive-icon-modified.png")}
               style={{ width: 64, height: 64, marginRight: -2 }}
@@ -373,12 +404,11 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Main Traveler Core Profile Frame */}
+        {/* Profile Avatar stack and duration info ring */}
         <View style={styles.profileRow}>
           {renderCrewStack()}
 
           <View style={styles.mainTraveler}>
-            {/* Gradient avatar ring — Instagram story feel */}
             <ExpoLinearGradient
               colors={['#6366f1', '#06b6d4']}
               start={{ x: 0, y: 0 }}
@@ -402,12 +432,11 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
           {renderDurationGauge()}
         </View>
 
-        {/* 3D Curved Perspective Map Rendering */}
+        {/* Curved Perspective Map SVG panel */}
         {renderRoadPanel()}
 
-        {/* Metrics/Stats Footer Container */}
+        {/* Trip summaries stats footer */}
         <View style={styles.cardFooter}>
-          {/* Gradient divider line */}
           <ExpoLinearGradient
             colors={['#6366f1', '#06b6d4', 'transparent']}
             start={{ x: 0, y: 0 }}
@@ -417,7 +446,6 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
           <View style={styles.footerTopRow}>
             <View>
               <Text style={styles.tripTitle} numberOfLines={1}>{data.tripName}</Text>
-              {/* Indigo underline accent */}
               <View style={{ width: 36, height: 2, borderRadius: 1, backgroundColor: '#6366f1', marginTop: 3 }} />
             </View>
             <View style={styles.statsContainer}>
@@ -433,9 +461,8 @@ export const TravelWrapCard: React.FC<TravelWrapCardProps> = ({
         </View>
       </View>
 
-      {/* Action Navigation Interface Links */}
+      {/* Sharing controls action drawer */}
       <View style={styles.actionWrapper}>
-        {/* Gradient share CTA */}
         <TouchableOpacity style={styles.btnPrimaryWrapper} onPress={handleShare} activeOpacity={0.85}>
           <ExpoLinearGradient
             colors={['#6366f1', '#06b6d4']}
@@ -464,6 +491,9 @@ interface TravelWrapModalProps {
   itinerary: ItineraryItem[];
 }
 
+/**
+ * TravelWrapModal triggers modal sheet layers compiling and mapping trip summaries.
+ */
 export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
   visible,
   onClose,
@@ -482,7 +512,7 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
   const emptyBg = isDark ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)";
   const rowBgChecked = isDark ? "rgba(99, 102, 241, 0.08)" : "rgba(99, 102, 241, 0.04)";
 
-  // 1. Filter approved itinerary items and sort chronologically
+  // Filter and sort itinerary events chronologically
   const approvedItinerary = itinerary
     .filter((item) => item.approved)
     .sort((a, b) => {
@@ -493,13 +523,14 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
+  // Default to selecting the first 5 itinerary checkpoints to populate initial map curves
   useEffect(() => {
     if (visible && approvedItinerary.length > 0) {
-      // Default to checking the first 5 items to show a winding road-trip trail representation
       setSelectedIds(approvedItinerary.slice(0, 5).map((item) => item.id));
     }
   }, [visible]);
 
+  // Toggle checklist selection items keeping counts strictly between [1, 10]
   const handleToggleMilestone = (id: string) => {
     if (selectedIds.includes(id)) {
       if (selectedIds.length <= 1) {
@@ -520,6 +551,7 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
     selectedIds.includes(item.id)
   );
 
+  // Helper parsing date strings formats cleanly
   const parseDateString = (str: string) => {
     if (!str) return null;
     const cleanStr = str.trim();
@@ -538,6 +570,7 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
     return isNaN(d.getTime()) ? null : d;
   };
 
+  // Calculate dynamic duration difference in days between start and end trip bounds
   let durationDays = 8;
   if (householdData?.tripDetails?.startDate && householdData?.tripDetails?.endDate) {
     const start = parseDateString(householdData.tripDetails.startDate);
@@ -563,6 +596,7 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
     }
   }
 
+  // Extract initials and username strings for crew avatar nodes
   const allMembers = householdData?.members || [];
   const currentUserProfile = memberProfiles[currentUserId] || { username: "Traveler" };
   const crewProfiles = allMembers
@@ -593,11 +627,13 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
     return name;
   };
 
+  // Compile final distance covered metrics values
   const distanceInput = householdData?.tripDetails?.distanceTraveled;
   const distanceCoveredText = distanceInput
     ? `${parseFloat(distanceInput).toLocaleString()} km`
     : `${(selectedMilestones.length * 45).toLocaleString()} km`;
 
+  // Map category keywords to custom emojis representing milestone categories
   const getActivityEmoji = (activityName: string) => {
     const name = activityName.toLowerCase();
     if (name.includes("mountain") || name.includes("hill") || name.includes("trek") || name.includes("peak") || name.includes("climb") || name.includes("mullayanagiri")) {
@@ -621,6 +657,7 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
     return "📍";
   };
 
+  // Compile final array mapping milestones properties to stops schemas
   const stops = selectedMilestones.map((item, idx) => ({
     emoji: getActivityEmoji(item.activity),
     name: item.activity,
@@ -630,6 +667,7 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
     isEnd: idx === selectedMilestones.length - 1,
   }));
 
+  // Compile final aggregated data structure payload
   const tripData: TripData = {
     tripName: householdData?.tripDetails?.destination || householdData?.name || "My Trip",
     mainTraveler: {
@@ -654,7 +692,7 @@ export const TravelWrapModal: React.FC<TravelWrapModalProps> = ({
       <View style={{ flex: 1, backgroundColor: bgTheme, paddingBottom: 24 }}>
         <TravelWrapCard data={tripData} householdId={householdData?.id || ""} onClose={onClose} />
 
-        {/* Milestone customization checklist */}
+        {/* Milestone checklist customization details container */}
         <View style={styles.interactiveArea}>
           <Text style={[styles.selectorTitle, { color: textMain }]}>
             Customize Card Milestones

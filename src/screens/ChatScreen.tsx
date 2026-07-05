@@ -1,50 +1,84 @@
+/*
+ * FILE: src/screens/ChatScreen.tsx
+ * PURPOSE: Group chat room for members of the household. It supports live message syncing,
+ *          debounced batch reading indicators updates, and remote push alerts via Expo services.
+ * WHERE USED: Loaded as the second tab option within MainTabs (App.tsx).
+ */
+
+// Import React hooks for managing state parameters, side-effect triggers, and elements refs
 import React, { useState, useEffect, useRef } from 'react';
+// Import essential layout components, lists, inputs, spinners, alerts, and animations
 import { 
   View, Text, FlatList, TextInput, TouchableOpacity, 
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Animated
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert
 } from 'react-native';
+// Import safe area insets to adjust custom headers and input boxes positioning
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+// Import icon libraries
 import { Ionicons } from '@expo/vector-icons';
+// Import linear gradients for user message speech bubbles styling
 import { LinearGradient } from 'expo-linear-gradient';
+// Import database and auth references
 import { auth, db } from '../firebaseConfig';
+// Import User and Household context hooks
 import { useUser } from '../context/UserContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useTheme } from '../context/ThemeContext';
+// Import custom avatar component
 import { Avatar } from '../components/Avatar';
+// Import push notification dispatcher
 import { sendRemotePushNotification } from '../utils/notificationUtils';
+// Import Firestore commands to listen to collections, append messages, update arrays, and run batches
 import {
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, limit, doc, arrayUnion, writeBatch
 } from 'firebase/firestore';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList, Message } from '../types';
+// Import message type schemas
+import { Message } from '../types';
 
 type Props = { navigation: any; route?: any };
 
+/**
+ * ChatScreen component containing live chat lists and emoji drawers.
+ */
 export default function ChatScreen({ route, navigation }: Props) {
+  // Grab notch details
   const insets = useSafeAreaInsets();
   
-  // Decoupled KeyboardAvoidingView configuration for ChatScreen.
-  // This allows tuning Android & iOS keyboard behaviors independently for the chat screen without affecting other screens.
+  // Custom KeyboardAvoiding behaviors isolated specifically to the chat window
   const behavior = 'padding';
   const keyboardVerticalOffset = Platform.OS === 'ios' ? insets.top + 66 : 0;
 
+  // Retrieve household metadata from context
   const { householdId, members, memberProfiles } = useHousehold();
   const hid = householdId ?? '';
+  
+  // Grab active theme mode
   const { isDark } = useTheme();
   const bg     = isDark ? '#070913' : '#F5F7FF';
-  const chatBg = isDark ? '#070913' : '#F5F7FF';
+  
+  // State hook managing list of message items
   const [messages, setMessages] = useState<Message[]>([]);
+  // State hook storing the current typed draft message
   const [inputText, setInputText] = useState('');
+  // Loading spinner trigger state
   const [loading, setLoading] = useState(true);
+  // Toggle flag showing if the quick emoji keyboard drawer is visible
   const [showEmojis, setShowEmojis] = useState(false);
+  
+  // Grab active user profile data
   const { profile: userData } = useUser();
   const { householdData } = useHousehold();
+  
+  // Ref referencing the scroll list to trigger scrolls to the bottom
   const flatListRef = useRef<FlatList>(null);
+  // Ref flag indicating if the chat has finished loading its initial batch
   const isFirstLoad = useRef(true);
 
+  // Effect: Connects Firestore live sync query targeting the household's messages subcollection
   useEffect(() => {
     if (!householdId) return;
 
+    // Fetch latest 50 messages ordered by creation date descending
     const q = query(
       collection(db, 'households', hid, 'messages'),
       orderBy('createdAt', 'desc'),
@@ -53,13 +87,7 @@ export default function ChatScreen({ route, navigation }: Props) {
 
     const unsub = onSnapshot(q, 
       (snap) => {
-        // Detect new messages for notification
-        snap.docChanges().forEach((change) => {
-          if (change.type === "added" && !isFirstLoad.current && !snap.metadata.hasPendingWrites) {
-             // Notification logic removed
-          }
-        });
-
+        // Map Firestore doc snapshots array to Message list items
         const fetchedMessages = snap.docs
           .map(d => ({ id: d.id, ...d.data() } as Message));
           
@@ -77,17 +105,19 @@ export default function ChatScreen({ route, navigation }: Props) {
     return unsub;
   }, [householdId, navigation, insets.top]);
 
-  // Decoupled & debounced effect to mark incoming messages as read without blocking onSnapshot thread
+  // Effect: Debounces marking incoming unread messages as read to optimize database writes
   useEffect(() => {
     const currentUid = auth.currentUser?.uid;
     if (!currentUid || messages.length === 0 || !householdId) return;
 
+    // Filter incoming messages that were not sent by me and don't contain my UID in the readBy list
     const unreadMsgs = messages.filter(msg => 
       msg.senderId !== currentUid && (!msg.readBy || !msg.readBy.includes(currentUid))
     );
 
     if (unreadMsgs.length === 0) return;
 
+    // Wait 500ms before dispatching updates. Prevents database write conflicts if many messages arrive.
     const timer = setTimeout(() => {
       const batch = writeBatch(db);
       unreadMsgs.forEach(msg => {
@@ -101,6 +131,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     return () => clearTimeout(timer);
   }, [messages, hid, householdId]);
 
+  // Action: Appends message to database and fires push notifications to roommates
   const handleSend = async () => {
     const user = auth.currentUser;
     if (!user) {
@@ -110,9 +141,11 @@ export default function ChatScreen({ route, navigation }: Props) {
 
     if (!inputText.trim()) return;
     const text = inputText.trim();
+    // Clear field immediately to keep UI highly responsive
     setInputText('');
 
     try {
+      // 1. Write message to Firestore subcollection
       await addDoc(collection(db, 'households', hid, 'messages'), {
         text,
         senderId: user.uid,
@@ -121,8 +154,10 @@ export default function ChatScreen({ route, navigation }: Props) {
         createdAt: serverTimestamp(),
       });
 
+      // 2. Dispatch push notification alerts asynchronously
       try {
         const otherMembers = members.filter(uid => uid !== user.uid);
+        // Grab push tokens for all roommates
         const tokens = otherMembers
           .map(uid => memberProfiles[uid]?.pushToken)
           .filter(Boolean) as string[];
@@ -139,6 +174,7 @@ export default function ChatScreen({ route, navigation }: Props) {
         console.error('Error sending push notifications for chat message:', e);
       }
 
+      // Scroll to bottom of list
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     } catch (e) {
       console.error("Message Send Error:", e);
@@ -146,18 +182,24 @@ export default function ChatScreen({ route, navigation }: Props) {
     }
   };
 
+  // Component Renderer: Renders individual message blocks
   const renderMessage = ({ item, index }: { item: Message, index: number }) => {
     const isMe = item.senderId === auth.currentUser?.uid;
     const isSystem = item.senderId === 'system';
+    
+    // Check previous message to group consecutive speech bubbles
     const previousMessage = index < messages.length - 1 ? messages[index + 1] : null;
     const showSenderName = !isMe && !isSystem && (!previousMessage || previousMessage.senderId !== item.senderId);
 
+    // Message is read by others if readBy list size is greater than 1
     const isReadByOthers = item.readBy && item.readBy.length > 1;
 
+    // Format display time
     const timeString = item.createdAt 
       ? new Date(item.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+    // Conditional checker: Displays date header divider when crossing day boundaries
     const showDateHeader = () => {
       const currentMsgDate = item.createdAt ? new Date(item.createdAt.seconds * 1000) : new Date();
       const nextMsg = index < messages.length - 1 ? messages[index + 1] : null;
@@ -166,6 +208,7 @@ export default function ChatScreen({ route, navigation }: Props) {
       return currentMsgDate.toDateString() !== nextMsgDate.toDateString();
     };
 
+    // Helper formatting date titles
     const formatDateHeader = (date: Date) => {
       const now = new Date();
       if (date.toDateString() === now.toDateString()) return 'Today';
@@ -178,6 +221,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     const nextMessageFromSameSender = index > 0 && messages[index - 1].senderId === item.senderId;
     const showAvatar = !isMe && !isSystem && (!previousMessage || previousMessage.senderId !== item.senderId);
 
+    // Render system system audit messages differently
     if (isSystem) {
       return (
         <View>
@@ -199,6 +243,7 @@ export default function ChatScreen({ route, navigation }: Props) {
       );
     }
 
+    // Inner text and checkmark status content blocks
     const bubbleContent = (
       <View>
         {showSenderName && (
@@ -214,12 +259,14 @@ export default function ChatScreen({ route, navigation }: Props) {
             {timeString}
           </Text>
           {isMe && (
+            // Blue double checkmark if read by roommates, muted if pending
             <Ionicons name="checkmark-done" size={14} color={isReadByOthers ? "#38BDF8" : "rgba(255,255,255,0.5)"} />
           )}
         </View>
       </View>
     );
 
+    // Dynamic border radiuses based on sender to build speech bubbles bubbles
     const bubbleStyle: any = {
       maxWidth: '78%',
       borderRadius: 22,
@@ -236,6 +283,7 @@ export default function ChatScreen({ route, navigation }: Props) {
 
     return (
       <View>
+        {/* Render Day Header if boundary crossed */}
         {showDateHeader() && (
           <View style={{ alignItems: 'center', marginVertical: 18 }}>
             <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(99, 102, 241, 0.06)', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(99, 102, 241, 0.04)' }}>
@@ -255,10 +303,12 @@ export default function ChatScreen({ route, navigation }: Props) {
                 style={{ marginRight: 8, marginBottom: 2 }} 
               />
             ) : (
+              // Empty spacer to align consecutive bubble clusters if avatar is hidden
               <View style={{ width: 34, marginRight: 8 }} />
             )
           )}
           {isMe ? (
+            // Blue gradient bubbles for my own messages
             <LinearGradient
               colors={['#6366F1', '#4F46E5']}
               start={{ x: 0, y: 0 }}
@@ -268,6 +318,7 @@ export default function ChatScreen({ route, navigation }: Props) {
               {bubbleContent}
             </LinearGradient>
           ) : (
+            // Solid dark/white bubbles for roommates messages
             <View 
               style={[
                 bubbleStyle,
@@ -288,7 +339,7 @@ export default function ChatScreen({ route, navigation }: Props) {
 
   return (
     <View style={{ flex: 1, backgroundColor: bg }}>
-      {/* Header */}
+      {/* Top Header Section */}
       <View 
         style={{ 
           backgroundColor: isDark ? '#0E1324' : '#FFFFFF', 
@@ -307,6 +358,7 @@ export default function ChatScreen({ route, navigation }: Props) {
           elevation: 4
         }}
       >
+        {/* Back button */}
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
           activeOpacity={0.8}
@@ -315,6 +367,7 @@ export default function ChatScreen({ route, navigation }: Props) {
           <Ionicons name="arrow-back" size={20} color={isDark ? '#F1F5F9' : '#1E1B4B'} />
         </TouchableOpacity>
 
+        {/* Room description info */}
         <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: '#6366F120', alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: '#6366F130' }}>
           <Ionicons name="chatbubbles" size={20} color="#6366F1" />
         </View>
@@ -348,18 +401,18 @@ export default function ChatScreen({ route, navigation }: Props) {
               data={messages}
               keyExtractor={item => item.id}
               renderItem={renderMessage}
-              inverted
+              inverted // Inverts list to position newer items at the bottom scroll anchor
               contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, paddingTop: 16 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"
               decelerationRate="fast"
               scrollEventThrottle={16}
-              maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+              maintainVisibleContentPosition={{ minIndexForVisible: 0 }} // Prevents list jumping during rendering
             />
           )}
 
-          {/* Quick Emoji Bar */}
+          {/* Quick Emoji Bar selection */}
           {showEmojis && (
             <View style={{ backgroundColor: isDark ? '#0E1324' : '#FFFFFF', borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)', paddingVertical: 12 }}>
               <FlatList
@@ -415,6 +468,7 @@ export default function ChatScreen({ route, navigation }: Props) {
               elevation: 6
             }}
           >
+            {/* Toggle emoji bar button */}
             <TouchableOpacity 
               onPress={() => setShowEmojis(!showEmojis)}
               activeOpacity={0.8}
@@ -443,6 +497,7 @@ export default function ChatScreen({ route, navigation }: Props) {
               onFocus={() => setShowEmojis(false)}
             />
 
+            {/* Send button */}
             <TouchableOpacity 
               onPress={handleSend}
               disabled={!inputText.trim()}
@@ -466,4 +521,3 @@ export default function ChatScreen({ route, navigation }: Props) {
     </View>
   );
 }
-

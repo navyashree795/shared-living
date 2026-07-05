@@ -1,11 +1,25 @@
+/*
+ * FILE: src/components/GroceryItemRow.tsx
+ * PURPOSE: Row component for grocery checklist items. Contains checkbox spring bounces,
+ *          scratch-off text strikethrough animations, expandable options drawers, and quick
+ *          split ledger prompts.
+ * WHERE USED: Loaded inside FlatList row rendering inside GroceryScreen.
+ */
+
+// Import React hooks for managing state parameters, viewport layout dimensions, refs, and mounts
 import React, { useState, useEffect, useRef } from 'react';
+// Import layout components, texts, touch triggers, animated values, and native systems
 import {
   View, Text, TouchableOpacity, Animated, LayoutAnimation, Platform, UIManager
 } from 'react-native';
+// Import vector icons
 import { MaterialIcons } from '@expo/vector-icons';
+// Import custom types schemas
 import { GroceryItem } from '../types';
+// Import swipeable row drawer wrapper component
 import SwipeableRow from './SwipeableRow';
 
+// Enable experimental layout animations on Android devices to handle smooth height transitions
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -18,6 +32,7 @@ export interface Category {
   color: string;
 }
 
+// Global category details mapping icons and custom badge styles
 export const CATEGORIES: Category[] = [
   { id: 'produce', name: 'Fresh Produce', icon: 'eco', bg: '#059669', color: '#FFFFFF' },
   { id: 'dairy', name: 'Dairy & Chilled', icon: 'coffee', bg: '#0284C7', color: '#FFFFFF' },
@@ -45,22 +60,29 @@ export default function GroceryItemRow({
   onLogExpense,
   isDark
 }: GroceryItemRowProps) {
+  // Option drawer expanded toggler state parameter
   const [expanded, setExpanded] = useState(false);
   
-  // Animation refs
+  // ─── CHECKBOX & CHECK STRIKE ANIMATION DEFINITIONS ────────────────────────
+  // Animation scale driver for checkbox click triggers
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  // Width percentage mapping for strikethrough scratch-off animations
   const scratchWidthAnim = useRef(new Animated.Value(item.done ? 1 : 0)).current;
+  // Row opacity level animation driver
   const opacityAnim = useRef(new Animated.Value(item.done ? 0.65 : 1)).current;
+  // Tracker mapping last completed value to avoid recursive springs loops
   const lastDone = useRef(item.done);
 
+  // Trigger scratch strike and opacity fades when checked status changes
   useEffect(() => {
-    // Scratch and opacity animations
     Animated.parallel([
+      // Animate the text strikethrough line width percentage from 0 to 100%
       Animated.timing(scratchWidthAnim, {
         toValue: item.done ? 1 : 0,
         duration: 250,
         useNativeDriver: false,
       }),
+      // Animate row opacity levels
       Animated.timing(opacityAnim, {
         toValue: item.done ? 0.65 : 1,
         duration: 250,
@@ -68,18 +90,22 @@ export default function GroceryItemRow({
       })
     ]).start();
 
-    // Checkbox spring bounce on transition
+    // Trigger checkbox bounce sequence only on value toggles
     if (item.done !== lastDone.current) {
       lastDone.current = item.done;
       scaleAnim.setValue(1);
       Animated.sequence([
+        // Step 1: Shrink the bubble down to 75% scale quickly
         Animated.timing(scaleAnim, { toValue: 0.75, duration: 80, useNativeDriver: true }),
+        // Step 2: Spring pop the scale outward to 120%
         Animated.spring(scaleAnim, { toValue: 1.2, friction: 3, tension: 40, useNativeDriver: true }),
+        // Step 3: Calm the bubble back down to standard 100% size
         Animated.timing(scaleAnim, { toValue: 1, duration: 80, useNativeDriver: true }),
       ]).start();
     }
   }, [item.done]);
 
+  // Handle standard checkbox clicking gesture updates
   const handleCheckboxPress = () => {
     scaleAnim.setValue(1);
     Animated.sequence([
@@ -90,14 +116,17 @@ export default function GroceryItemRow({
     onToggle(item);
   };
 
+  // Toggle item action drawer with smooth presets layout transitions
   const toggleExpanded = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpanded(!expanded);
   };
 
+  // Match items category code to details object
   const category = CATEGORIES.find(c => c.id === item.category) || CATEGORIES[CATEGORIES.length - 1];
 
   return (
+    // Wrap row inside swipeable drawer actions components
     <SwipeableRow
       onDelete={() => onDelete(item.id)}
       onComplete={!item.done ? () => onToggle(item) : undefined}
@@ -105,6 +134,7 @@ export default function GroceryItemRow({
     >
       <Animated.View
         style={{
+          // Dim background if item is checked
           backgroundColor: item.done
             ? (isDark ? 'rgba(22, 27, 51, 0.4)' : '#F8FAFC')
             : (isDark ? '#161B33' : '#FFFFFF'),
@@ -124,7 +154,7 @@ export default function GroceryItemRow({
         }}
       >
         <View className="flex-row items-center">
-          {/* Animated Check Circle */}
+          {/* Check Circle Checkbox */}
           <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
             <TouchableOpacity className="mr-3" onPress={handleCheckboxPress}>
               <MaterialIcons
@@ -135,7 +165,7 @@ export default function GroceryItemRow({
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Category Icon */}
+          {/* Category Icon Bubble */}
           <View
             style={{
               backgroundColor: item.done
@@ -155,10 +185,9 @@ export default function GroceryItemRow({
             />
           </View>
 
-          {/* Details */}
+          {/* Item details and scratch-off line animations */}
           <View className="flex-1">
             <View className="flex-row items-baseline">
-              {/* Name wrapper for animated scratch line */}
               <View style={{ alignSelf: 'flex-start', position: 'relative' }}>
                 <Text
                   style={{
@@ -171,7 +200,8 @@ export default function GroceryItemRow({
                 >
                   {item.name}
                 </Text>
-                {/* Scratch-off Line Animation */}
+                
+                {/* Strike-out line container */}
                 <Animated.View
                   style={{
                     position: 'absolute',
@@ -186,6 +216,7 @@ export default function GroceryItemRow({
                   }}
                 />
               </View>
+              {/* Optional Quantity metadata field */}
               {item.qty ? (
                 <Text
                   style={{ color: item.done ? (isDark ? '#475569' : '#94A3B8') : '#6366F1' }}
@@ -207,7 +238,7 @@ export default function GroceryItemRow({
             </View>
           </View>
 
-          {/* Options Menu Toggle */}
+          {/* Expand Options Menu Button */}
           <TouchableOpacity onPress={toggleExpanded} className="p-2 ml-1 bg-surface/50 rounded-full">
             <MaterialIcons
               name={expanded ? "close" : "more-horiz"}
@@ -217,7 +248,7 @@ export default function GroceryItemRow({
           </TouchableOpacity>
         </View>
 
-        {/* Expandable Options Drawer */}
+        {/* Expandable Options Drawer Layout */}
         {expanded && (
           <View
             style={{
@@ -230,6 +261,7 @@ export default function GroceryItemRow({
               gap: 8
             }}
           >
+            {/* Mark Bought/Put back toggle */}
             {item.done ? (
               <TouchableOpacity
                 onPress={() => { toggleExpanded(); onToggle(item); }}
@@ -256,6 +288,7 @@ export default function GroceryItemRow({
               </TouchableOpacity>
             )}
 
+            {/* Log to expenses trigger */}
             {item.done && !item.expenseLogged && (
               <TouchableOpacity
                 onPress={() => { toggleExpanded(); onLogExpense(item); }}
@@ -270,6 +303,7 @@ export default function GroceryItemRow({
               </TouchableOpacity>
             )}
 
+            {/* Edit details */}
             <TouchableOpacity
               onPress={() => { toggleExpanded(); onEdit(item); }}
               className="flex-row items-center px-3 py-2 rounded-xl border"
@@ -282,6 +316,7 @@ export default function GroceryItemRow({
               <Text className="text-[11px] font-bold ml-1.5 text-[#D97706]">Edit Details</Text>
             </TouchableOpacity>
 
+            {/* Delete row */}
             <TouchableOpacity
               onPress={() => { toggleExpanded(); onDelete(item.id); }}
               className="flex-row items-center px-3 py-2 rounded-xl border"
@@ -296,7 +331,7 @@ export default function GroceryItemRow({
           </View>
         )}
 
-        {/* Regular Action Panel (Inline Option) if not expanded */}
+        {/* Inline log to expenses quick trigger (shown when item is checked out and has a price assigned) */}
         {!expanded && item.done && item.price > 0 && !item.expenseLogged && (
           <View className="mt-3 pt-3 border-t border-border/50 flex-row items-center justify-between">
             <Text className="text-xs text-textMuted font-medium pr-4 flex-1">
@@ -312,6 +347,7 @@ export default function GroceryItemRow({
           </View>
         )}
 
+        {/* Status logged notification badge */}
         {!expanded && item.done && item.expenseLogged && (
           <View className="mt-3 pt-3 border-t border-border/50 flex-row items-center">
             <MaterialIcons name="verified" size={14} color="#10B981" />

@@ -1,13 +1,27 @@
+/*
+ * FILE: src/components/modals/QuickSettleModal.tsx
+ * PURPOSE: Settle-up payment logger modal enabling users to record peer-to-peer repayments,
+ *          select payees, enter amounts, and trigger alert updates.
+ * WHERE USED: Dashboard screen quick shortcuts tray drawer.
+ */
+
+// Import React hooks for managing state parameters, input refs, and mount handlers
 import React, { useState, useRef, useEffect } from "react";
+// Import UI layout components, scroll boxes, input fields, buttons, and alerts
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from "react-native";
+// Import Firestore commands to write document updates and handle server timestamps
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+// Import Firebase auth and database connections
 import { auth, db } from "../../firebaseConfig";
+// Import contexts managing user data, households, notifications, and active dark themes
 import { useUser } from "../../context/UserContext";
 import { useHousehold } from "../../context/HouseholdContext";
 import { useToast } from "../../context/ToastContext";
 import { useTheme } from "../../context/ThemeContext";
+// Import helper utilities
 import { logActivity } from "../../utils/activityUtils";
 import { sendRemotePushNotification } from "../../utils/notificationUtils";
+// Import slide modal template wrapper
 import SlideModal from "../SlideModal";
 
 interface QuickSettleModalProps {
@@ -15,17 +29,24 @@ interface QuickSettleModalProps {
   onClose: () => void;
 }
 
+/**
+ * QuickSettleModal logs payment transactions between roommates.
+ */
 export const QuickSettleModal = React.memo(({ visible, onClose }: QuickSettleModalProps) => {
+  // Grab household details, members list, member name getter, and member profiles from context
   const { householdId, members, getMemberName, memberProfiles } = useHousehold();
   const { profile: userData } = useUser();
   const { showToast } = useToast();
   const { isDark } = useTheme();
 
+  // Local form inputs states
   const [settleAmount, setSettleAmount] = useState("");
   const [settleWithUid, setSettleWithUid] = useState<string | null>(null);
 
+  // Input ref to trigger keyboard autofocus
   const amountInputRef = useRef<TextInput>(null);
 
+  // Reset local states when modal mounts/opens
   useEffect(() => {
     if (visible) {
       setSettleAmount("");
@@ -33,6 +54,7 @@ export const QuickSettleModal = React.memo(({ visible, onClose }: QuickSettleMod
     }
   }, [visible]);
 
+  // Action: Validates fields and logs payment documents
   const handleSave = async () => {
     const parsedAmount = parseFloat(settleAmount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -53,6 +75,7 @@ export const QuickSettleModal = React.memo(({ visible, onClose }: QuickSettleMod
       : auth.currentUser?.email?.split("@")[0] || "Member";
 
     try {
+      // Add document to expenses subcollection with type payment
       await addDoc(collection(db, "households", householdId, "expenses"), {
         type: "payment",
         amount: parsedAmount,
@@ -70,7 +93,7 @@ export const QuickSettleModal = React.memo(({ visible, onClose }: QuickSettleMod
       );
       showToast("Payment recorded successfully", "success");
 
-      // Remote push notification to receiver
+      // Send push alerts to the payment recipient
       try {
         const receiverToken = memberProfiles[settleWithUid]?.pushToken;
         if (receiverToken) {
@@ -104,11 +127,14 @@ export const QuickSettleModal = React.memo(({ visible, onClose }: QuickSettleMod
   const textMuted = isDark ? "#94A3B8" : "#64748B";
   const primary = isDark ? "#818CF8" : "#4F46E5";
 
+  // Filter out the current user to display only target payees
   const otherMembers = members.filter((uid) => uid !== auth.currentUser?.uid);
 
   return (
     <SlideModal visible={visible} onClose={onClose} title="Settle Up">
       <View style={{ gap: 20 }}>
+        
+        {/* Roommate selector section */}
         <View>
           <Text style={{ color: textMuted, fontSize: 10, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12, marginLeft: 4 }}>
             Pay Someone
@@ -127,6 +153,7 @@ export const QuickSettleModal = React.memo(({ visible, onClose }: QuickSettleMod
                     key={uid}
                     onPress={() => {
                       setSettleWithUid(uid);
+                      // Move focus to amount input after short selection delay to pop keyboard
                       setTimeout(() => amountInputRef.current?.focus(), 150);
                     }}
                     style={{
@@ -143,6 +170,7 @@ export const QuickSettleModal = React.memo(({ visible, onClose }: QuickSettleMod
                       borderColor: isSelected ? primary : "transparent",
                     }}
                   >
+                    {/* Avatar circle bubble */}
                     <View
                       style={{
                         width: 52,
@@ -170,6 +198,7 @@ export const QuickSettleModal = React.memo(({ visible, onClose }: QuickSettleMod
           )}
         </View>
 
+        {/* Amount Repaid input section */}
         <View>
           <Text style={{ color: textMuted, fontSize: 10, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, marginLeft: 4 }}>
             Amount Paid
@@ -188,6 +217,7 @@ export const QuickSettleModal = React.memo(({ visible, onClose }: QuickSettleMod
           </View>
         </View>
 
+        {/* Save button trigger */}
         <TouchableOpacity
           onPress={handleSave}
           disabled={!settleWithUid}

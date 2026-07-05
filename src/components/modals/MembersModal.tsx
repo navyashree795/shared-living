@@ -1,22 +1,46 @@
+/*
+ * FILE: src/components/modals/MembersModal.tsx
+ * PURPOSE: Roommate/member details display and administration modal. Prompts invitation share keys,
+ *          lists geofenced status updates, and handles owner removal tools.
+ * WHERE USED: Dashboard screen member icons click trigger.
+ */
+
+// Import React module reference
 import React from "react";
+// Import layout components, texts, button touch triggers, sharing API, and alert notifications
 import { View, Text, TouchableOpacity, Share, Alert } from "react-native";
+// Import vector icons
 import { MaterialIcons } from "@expo/vector-icons";
+// Import clipboard copying library
 import * as Clipboard from "expo-clipboard";
+// Import slide modal template wrapper
 import SlideModal from "../SlideModal";
+// Import circular user avatar component
 import { Avatar } from "../Avatar";
+// Import utility function generating active invitation tokens
 import { createInvitation } from "../../utils/invitationApi";
 
+// Prop declarations mapping component params
 interface MembersModalProps {
+  // Modal visibility trigger flag
   visible: boolean;
+  // Callback invoked on close
   onClose: () => void;
+  // Active household parameters dictionary
   householdData: any;
+  // Roommates details profiles dictionary
   memberProfiles: Record<string, any>;
+  // Current user unique identifier key
   currentUserId: string;
+  // Flag indicating if current user is the owner of the house/trip
   isOwner: boolean;
+  // Callback kicking roommate from household documents subcollection
   handleRemoveMember: (uid: string) => void;
+  // Call to launch toast popup alerts
   showToast: (msg: string, type?: "success" | "error" | "info") => void;
 }
 
+// Render MembersModal memoized to optimize re-renders
 export const MembersModal = React.memo(({
   visible,
   onClose,
@@ -27,6 +51,7 @@ export const MembersModal = React.memo(({
   handleRemoveMember,
   showToast,
 }: MembersModalProps) => {
+  // Share link generator generating unique tokens
   const handleShareInvite = async () => {
     try {
       if (!householdData?.id) return;
@@ -43,15 +68,19 @@ export const MembersModal = React.memo(({
   };
 
   return (
+    // Wrap roommate lists inside global slide modal
     <SlideModal visible={visible} onClose={onClose} title="House Team">
+      {/* Invite Code header box */}
       <View className="bg-indigo-600 rounded-[32px] p-6 mb-6 shadow-lg shadow-indigo-200">
         <Text className="text-white/70 text-[10px] font-bold uppercase tracking-[2px] mb-2">
           Invite Code
         </Text>
         <View className="flex-row justify-between items-center bg-white/10 p-4 rounded-2xl border border-white/20">
+          {/* Main invite code value */}
           <Text className="text-white text-2xl font-black tracking-[4px]">
             {householdData?.inviteCode}
           </Text>
+          {/* Copy-to-clipboard trigger button */}
           <TouchableOpacity
             onPress={async () => {
               await Clipboard.setStringAsync(householdData?.inviteCode || "");
@@ -62,6 +91,7 @@ export const MembersModal = React.memo(({
             <MaterialIcons name="content-copy" size={20} color="white" />
           </TouchableOpacity>
         </View>
+        {/* Share link button */}
         <TouchableOpacity
           onPress={handleShareInvite}
           className="flex-row items-center justify-center bg-white/20 py-3 rounded-2xl border border-white/20 mt-4"
@@ -75,12 +105,14 @@ export const MembersModal = React.memo(({
         Current Members
       </Text>
       
+      {/* Members list mapping details and presence toggles */}
       <View className="gap-3 mb-6">
         {Object.entries(memberProfiles).map(([uid, member]: [string, any]) => (
           <View
             key={uid}
             className="flex-row items-center gap-4 bg-surfaceRaised p-4 rounded-3xl border border-border/50"
           >
+            {/* Circular profile avatar wrapper */}
             <Avatar
               name={member.username || "Member"}
               size={48}
@@ -93,6 +125,7 @@ export const MembersModal = React.memo(({
                 borderColor: "#E2E8F0",
               }}
             />
+            {/* Username and identity label info fields */}
             <View className="flex-1">
               <Text className="text-textMain font-black">
                 {member.username || "Unknown Member"}
@@ -102,7 +135,7 @@ export const MembersModal = React.memo(({
               </Text>
             </View>
             
-            {/* Automated Status indicator */}
+            {/* geofenced At Home presence status dot indicator */}
             {(() => {
               const status = member.status || "home";
               const isHome = status === "home";
@@ -116,6 +149,7 @@ export const MembersModal = React.memo(({
               );
             })()}
 
+            {/* Kick member button (visible only to household owner) */}
             {isOwner && uid !== currentUserId && (
               <TouchableOpacity
                 onPress={() => handleRemoveMember(uid)}
@@ -131,4 +165,5 @@ export const MembersModal = React.memo(({
   );
 });
 
+// Assign display name for DevTools tracing
 MembersModal.displayName = "MembersModal";

@@ -1,30 +1,58 @@
-import React from 'react';
-import { View, TouchableOpacity, ViewProps, TouchableOpacityProps } from 'react-native';
-import { useTheme } from '../context/ThemeContext';
+/*
+ * FILE: src/components/Card.tsx
+ * PURPOSE: Custom card container wrapping children with consistent margins, shadows, and click listeners.
+ * WHERE USED: Dashboard screen sections widgets wrappers.
+ */
 
-interface CardProps extends ViewProps {
-  onPress?: () => void;
+// Import React components references
+import React from 'react';
+// Import layout components, touch buttons, and style wrappers
+import { View, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
+
+interface CardProps {
+  // Nested inner children components
   children: React.ReactNode;
+  // Optional container style overrides
+  style?: ViewStyle;
+  // Optional click handler function
+  onPress?: () => void;
 }
 
-export const Card: React.FC<CardProps> = ({ children, onPress, style, ...props }) => {
-  const Container = onPress ? TouchableOpacity : View;
-  const containerProps = onPress ? { activeOpacity: 0.7, onPress } as TouchableOpacityProps : {};
-  const { isDark } = useTheme();
+// Render Card wrapper
+export const Card: React.FC<CardProps> = ({ children, style, onPress }) => {
+  // If card is clickable, render inside touch button; otherwise, render inside plain view
+  if (onPress) {
+    return (
+      <TouchableOpacity 
+        style={[styles.card, style]} 
+        onPress={onPress} 
+        activeOpacity={0.8}
+      >
+        {children}
+      </TouchableOpacity>
+    );
+  }
 
   return (
-    <Container 
-      {...containerProps}
-      className={`rounded-[28px] p-5 mb-4 border shadow-sm ${props.className || ''}`}
-      style={[
-        {
-          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.85)',
-          borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)',
-        },
-        style
-      ]}
-    >
+    <View style={[styles.card, style]}>
       {children}
-    </Container>
+    </View>
   );
 };
+
+// --- Strict StyleSheet Properties Layout ---
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.08)',
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 2,
+    marginBottom: 16,
+  },
+});

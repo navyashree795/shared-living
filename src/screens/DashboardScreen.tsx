@@ -1,4 +1,14 @@
+/*
+ * FILE: src/screens/DashboardScreen.tsx
+ * PURPOSE: Root hub of the application. It dynamically switches layout widgets based on household type 
+ *          (Standard Roommates vs. Travel Trips), coordinates foreground GPS geofencing status updates,
+ *          handles unread chime animations, manages announcements boards, and triggers quick forms modals.
+ * WHERE USED: Mounted as a tab screen option inside MainTabs (App.tsx).
+ */
+
+// Import React hooks for states, inputs focus, memoizations, and callbacks caching
 import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
+// Import layout components, touch listeners, scrolls, clipboard copies, web linkings, and indicators
 import {
   View,
   Text,
@@ -8,14 +18,19 @@ import {
   Linking,
   Alert,
   TextInput,
-  ScrollView,
 } from "react-native";
+// Import Expo audio library to play custom notification alerts
 import { createAudioPlayer } from "expo-audio";
+// Import notch layout safe constraints
 import { SafeAreaView } from "react-native-safe-area-context";
+// Import icon libraries
 import { MaterialIcons } from "@expo/vector-icons";
+// Import styling gradients
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
+// Import AsyncStorage to cache contexts details for foreground location helpers
 import AsyncStorage from "@react-native-async-storage/async-storage";
+// Import Firestore commands to subscribe to collections, commit writes, query dates, and manage subdocuments
 import {
   doc,
   updateDoc,
@@ -31,23 +46,23 @@ import {
   orderBy,
   writeBatch,
 } from "firebase/firestore";
+// Import helper utilities
 import { scheduleChoreReminder, cancelChoreReminder, syncItineraryReminders } from "../utils/notificationUtils";
-import { logActivity, getActivityConfig } from "../utils/activityUtils";
+import { logActivity } from "../utils/activityUtils";
 import { db, auth } from "../firebaseConfig";
 import { useUser } from "../context/UserContext";
 import { useHousehold } from "../context/HouseholdContext";
 import { useToast } from "../context/ToastContext";
 import { useTheme } from "../context/ThemeContext";
+// Import components
 import { Avatar } from "../components/Avatar";
-import { Activity } from "../types";
 import { getSyncedDate } from "../utils/timeUtils";
-
-// Custom hooks and modular components
 import { useDashboardData } from "../hooks/useDashboardData";
 import { HeroGreeting } from "../components/dashboard/HeroGreeting";
 import { InfoCardsDeck } from "../components/dashboard/InfoCardsDeck";
 import { QuickActions } from "../components/dashboard/QuickActions";
 import SlideModal from "../components/SlideModal";
+// Import specialized overlay modals
 import { MembersModal } from "../components/modals/MembersModal";
 import { NotificationsModal } from "../components/modals/NotificationsModal";
 import { InfoEditModal } from "../components/modals/InfoEditModal";
@@ -61,19 +76,30 @@ import { QuickBuyModal } from "../components/modals/QuickBuyModal";
 import { QuickSettleModal } from "../components/modals/QuickSettleModal";
 import { QuickExpenseModal } from "../components/modals/QuickExpenseModal";
 import { QuickChoreModal } from "../components/modals/QuickChoreModal";
+// Import Location libraries for geofencing home range presence status
 import * as Location from "expo-location";
 import { isInsideHomeRadius } from "../utils/locationUtils";
 
 type Props = { navigation: any; route?: any };
 
+/**
+ * DashboardScreen displays greetings decks, summary metrics, sticky boards, and trip checklists.
+ */
 export default function DashboardScreen({ navigation }: Props) {
+  // Grab household details from context
   const { householdId, setHouseholdId } = useHousehold();
   const hid = householdId ?? "";
+  
+  // Grab active theme mode
   const { isDark } = useTheme();
+  
+  // Grab toast contexts
   const { showToast } = useToast();
+  // Grab user accounts and profile info
   const { user, profile: userData } = useUser();
   const { householdData, memberProfiles, getMemberName, members } = useHousehold();
 
+  // Modals visibility toggles states
   const [isMembersModalVisible, setIsMembersModalVisible] = useState(false);
   const [isInfoModalVisible, setIsInfoModalVisible] = useState(false);
   const [isNotificationsModalVisible, setIsNotificationsModalVisible] = useState(false);
@@ -83,31 +109,38 @@ export default function DashboardScreen({ navigation }: Props) {
   const [isPackingModalVisible, setIsPackingModalVisible] = useState(false);
   const [isTravelWrapModalVisible, setIsTravelWrapModalVisible] = useState(false);
 
+  // Quick triggers modals visibility states
   const [isQuickBuyVisible, setIsQuickBuyVisible] = useState(false);
   const [isQuickSettleVisible, setIsQuickSettleVisible] = useState(false);
   const [isQuickExpenseVisible, setIsQuickExpenseVisible] = useState(false);
   const [isQuickChoreVisible, setIsQuickChoreVisible] = useState(false);
 
+  // Shared sticky note announcement state
   const [stickyNote, setStickyNote] = useState<{ text: string; updatedBy: string; updatedAt: any; expiresAt?: any; expiryType?: string } | null>(null);
   const [isStickyModalVisible, setIsStickyModalVisible] = useState(false);
   const [stickyText, setStickyText] = useState("");
   const [stickyExpiry, setStickyExpiry] = useState<"never" | "12h" | "24h" | "3d">("never");
 
+  // Edit states variables
   const infoModalTab = "all";
   const [isEditMode, setIsEditMode] = useState(false);
+  // Track array list of info field ids that are clicked to visible format
   const [revealedFields, setRevealedFields] = useState<string[]>([]);
 
+  // Toggle visible status of wifi details and other encrypted strings
   const toggleFieldVisibility = useCallback((id: string) => {
     setRevealedFields((prev) =>
       prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
     );
   }, []);
 
+  // Set animation value to ring the bell icon
   const bellAnim = useRef(new Animated.Value(1)).current;
 
-  // Sound and animation notification trigger callback
+  // Callback playing notification audio file and running bell scaling animation sequence
   const handleNewUnreadActivity = useCallback(() => {
     try {
+      // Play a short chime tone
       const beep = createAudioPlayer({
         uri: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3",
       });
@@ -116,6 +149,7 @@ export default function DashboardScreen({ navigation }: Props) {
       console.warn("Could not play notification beep", e);
     }
 
+    // Run bell spring scaling sequence
     Animated.sequence([
       Animated.timing(bellAnim, {
         toValue: 1.4,
@@ -130,7 +164,7 @@ export default function DashboardScreen({ navigation }: Props) {
     ]).start();
   }, [bellAnim]);
 
-  // Aggregate Firestore data-listeners and timer background checks
+  // Aggregate Firestore collections data-listeners hook
   const {
     activities,
     chores,
@@ -150,7 +184,7 @@ export default function DashboardScreen({ navigation }: Props) {
     onNewUnreadActivity: handleNewUnreadActivity,
   });
 
-  // User chores completed/total calculations for today
+  // Memo: Computes total number of chores assigned to current user that are due today
   const { userChoresDoneToday, userChoresTotalToday } = useMemo(() => {
     if (!user?.uid || chores.length === 0) return { userChoresDoneToday: 0, userChoresTotalToday: 0 };
     const now = getSyncedDate();
@@ -159,6 +193,7 @@ export default function DashboardScreen({ navigation }: Props) {
     const myTodayChores = chores.filter((c) => {
       if (c.assignedToUid !== user.uid) return false;
       if (c.targetDate) {
+        // Compare target date timestamp bounds
         const target = typeof c.targetDate.toDate === "function" ? c.targetDate.toDate() : new Date(c.targetDate);
         const targetDateOnly = new Date(target.getFullYear(), target.getMonth(), target.getDate());
         const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -174,12 +209,12 @@ export default function DashboardScreen({ navigation }: Props) {
     };
   }, [chores, user?.uid]);
 
-  // Pending groceries count calculation
+  // Memo: Counts active unchecked grocery items
   const pendingGroceriesCount = useMemo(() => {
     return groceries.filter((g) => !g.done).length;
   }, [groceries]);
 
-  // Check if there is an active (unexpired) sticky note
+  // Memo: Checks if sticky note exists and has not reached its expiration timestamp
   const isStickyActive = useMemo(() => {
     if (!stickyNote?.text) return false;
     if (!stickyNote.expiresAt) return true;
@@ -193,7 +228,7 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [stickyNote]);
 
-  // Calculate Net Balancing Standings (positive = roommates owe user, negative = user owes roommates)
+  // Memo: Calculate Net Balancing Standing (positive = user is owed, negative = user owes roommate)
   const netBalance = useMemo(() => {
     if (!user?.uid || !members || members.length === 0) return 0;
     const peerBalances: Record<string, number> = {};
@@ -208,8 +243,7 @@ export default function DashboardScreen({ navigation }: Props) {
           exp.splitAmong.forEach((splitUid: string) => {
             if (splitUid !== exp.paidByUid) {
               if (splitUid === user.uid)
-                peerBalances[exp.paidByUid] =
-                  (peerBalances[exp.paidByUid] || 0) + share;
+                peerBalances[exp.paidByUid] = (peerBalances[exp.paidByUid] || 0) + share;
               else if (exp.paidByUid === user.uid)
                 peerBalances[splitUid] = (peerBalances[splitUid] || 0) - share;
             }
@@ -222,19 +256,18 @@ export default function DashboardScreen({ navigation }: Props) {
         exp.toReceivedUid
       ) {
         if (exp.fromPaidUid === user.uid)
-          peerBalances[exp.toReceivedUid] =
-            (peerBalances[exp.toReceivedUid] || 0) - exp.amount;
+          peerBalances[exp.toReceivedUid] = (peerBalances[exp.toReceivedUid] || 0) - exp.amount;
         else if (exp.toReceivedUid === user.uid)
-          peerBalances[exp.fromPaidUid] =
-            (peerBalances[exp.fromPaidUid] || 0) + exp.amount;
+          peerBalances[exp.fromPaidUid] = (peerBalances[exp.fromPaidUid] || 0) + exp.amount;
       }
     });
 
     const sum = Object.values(peerBalances).reduce((acc, val) => acc + val, 0);
+    // Inverse sign to align with visual indicator direction (negative total means user owes peers overall)
     return -sum;
   }, [expenses, members, user?.uid]);
 
-  // Retrieve next active chore today
+  // Memo: Filters and sorts active chores to determine what task is next due today
   const nextChore = useMemo(() => {
     if (chores.length === 0) return null;
     const now = getSyncedDate();
@@ -251,6 +284,7 @@ export default function DashboardScreen({ navigation }: Props) {
       return c.day?.includes(currentDay);
     });
 
+    // Helper parsing "HH:MM AM/PM" to numeric minutes for sorting
     const parseTime = (timeStr: string) => {
       try {
         const timeMatch = timeStr.match(/(\d+):(\d+)(?::\d+)?\s*(AM|PM)?/i);
@@ -272,10 +306,11 @@ export default function DashboardScreen({ navigation }: Props) {
 
     const myChore = todayChores.find((c) => c.assignedToUid === user?.uid);
     const roommateChore = todayChores.find((c) => c.assignedToUid !== user?.uid);
+    // Prioritize user's chore, fall back to roommate's chore
     return myChore || roommateChore || null;
   }, [chores, user?.uid]);
 
-  // Callback to mark chore as completed directly from the Greeting Card
+  // Action: Callback to mark a chore complete from the dashboard Greeting Card
   const handleQuickChoreDone = useCallback(async (chore: any) => {
     if (!householdId) return;
     try {
@@ -289,7 +324,7 @@ export default function DashboardScreen({ navigation }: Props) {
       showToast("Chore completed! 🎉", "success");
       logActivity(householdId, "chore_done", chore.title);
 
-      // Rotation logic if enabled
+      // Rotation logic shifts assignment
       if (chore.rotationEnabled && chore.rotationOrder && chore.rotationOrder.length > 0) {
         const nextIndex = ((chore.currentRotationIndex || 0) + 1) % chore.rotationOrder.length;
         const nextAssignee = chore.rotationOrder[nextIndex];
@@ -321,9 +356,9 @@ export default function DashboardScreen({ navigation }: Props) {
       console.error("Quick Chore Done Error:", error);
       showToast("Could not complete chore", "error");
     }
-  }, [householdId, showToast, getMemberName]);
+  }, [householdId, showToast, getMemberName, user?.uid]);
 
-  // Callback to nudge a roommate directly from the Greeting Card
+  // Action: Nudge roommate directly from dashboard Greeting Card
   const handleQuickNudge = useCallback(async (chore: any) => {
     if (!householdId) return;
     try {
@@ -335,12 +370,13 @@ export default function DashboardScreen({ navigation }: Props) {
   }, [householdId, showToast]);
 
   const isOwner = householdData?.createdBy === user?.uid;
-
   const isTravel = householdData?.type === "travel";
 
+  // States caching lists for Travel trip modes
   const [packingList, setPackingList] = useState<PackingItem[]>([]);
   const [itinerary, setItinerary] = useState<ItineraryItem[]>([]);
 
+  // Effect: Syncs packing checklist items in Travel mode
   useEffect(() => {
     if (!hid || !isTravel) return;
     const q = query(collection(db, "households", hid, "packing_list"), orderBy("createdAt", "desc"));
@@ -350,12 +386,13 @@ export default function DashboardScreen({ navigation }: Props) {
     return unsub;
   }, [hid, isTravel]);
 
+  // Effect: Syncs collaborative itinerary timeline items in Travel mode
   useEffect(() => {
     if (!hid || !isTravel) return;
     const q = collection(db, "households", hid, "itinerary");
     const unsub = onSnapshot(q, (snap) => {
       const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ItineraryItem));
-      // Sort in-memory to avoid needing a Firestore composite index
+      // Sort timeline in-memory to prevent needing to build index paths in Firebase
       items.sort((a, b) => {
         const dateComp = (a.date || "").localeCompare(b.date || "");
         if (dateComp !== 0) return dateComp;
@@ -369,11 +406,13 @@ export default function DashboardScreen({ navigation }: Props) {
     return unsub;
   }, [hid, isTravel]);
 
+  // Action: Saves edited trip parameters and recalibrates expiration dates matching retention rules
   const handleSaveTripDetails = useCallback(async (updates: any) => {
     if (!hid) return;
     try {
       const fieldsToUpdate: any = { tripDetails: updates };
       
+      // Calculate dynamic expiration date based on the trip's end date and retention policy
       try {
         if (householdData?.type === 'travel' && householdData?.retentionPolicy && updates.endDate) {
           const dateMatch = updates.endDate.trim().match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/);
@@ -402,6 +441,7 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [hid, householdData, showToast]);
 
+  // Action: Adds a packing item to subcollection in Travel mode
   const handleAddItemPacking = useCallback(async (name: string) => {
     if (!hid) return;
     try {
@@ -416,6 +456,7 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [hid, showToast]);
 
+  // Action: Toggles checkbox status on a packing item
   const handleToggleItemPacking = useCallback(async (id: string, done: boolean) => {
     if (!hid) return;
     try {
@@ -425,6 +466,7 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [hid]);
 
+  // Action: Deletes packing item from subcollection
   const handleDeleteItemPacking = useCallback(async (id: string) => {
     if (!hid) return;
     try {
@@ -435,6 +477,7 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [hid, showToast]);
 
+  // Action: Adds an event item to itinerary timeline
   const handleAddItineraryItem = useCallback(async (item: any) => {
     if (!hid) return;
     try {
@@ -449,6 +492,7 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [hid, user?.uid, showToast]);
 
+  // Action: Approves a proposed itinerary event (only accessible by trip creator)
   const handleApproveItineraryItem = useCallback(async (id: string) => {
     if (!hid) return;
     try {
@@ -459,6 +503,7 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [hid, showToast]);
 
+  // Action: Deletes event item from itinerary timeline
   const handleDeleteItineraryItem = useCallback(async (id: string) => {
     if (!hid) return;
     try {
@@ -469,6 +514,7 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [hid, showToast]);
 
+  // Action: Removes member from the household
   const handleRemoveMember = useCallback(async (memberUid: string) => {
     const profile = memberProfiles[memberUid];
     const name = profile?.username ? `${profile.username}` : profile?.email || "this member";
@@ -497,6 +543,7 @@ export default function DashboardScreen({ navigation }: Props) {
     );
   }, [hid, memberProfiles, showToast]);
 
+  // Action: Updates name/info fields on the household document
   const handleUpdateInfo = useCallback(async (updates: any) => {
     if (!householdId) return;
     if (!isOwner) {
@@ -515,6 +562,7 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [householdId, hid, isOwner, showToast]);
 
+  // Action: Permanently deletes the household document and removes association for all members
   const handleDeleteHousehold = useCallback(async () => {
     if (!householdId) return;
     if (!isOwner) {
@@ -535,7 +583,7 @@ export default function DashboardScreen({ navigation }: Props) {
               const memberUids = householdData?.members || [];
               const batch = writeBatch(db);
               
-              // 1. Clear householdId for all members
+              // 1. Clear householdId reference for all members
               memberUids.forEach((uid: string) => {
                 batch.update(doc(db, "users", uid), {
                   householdId: null
@@ -547,11 +595,10 @@ export default function DashboardScreen({ navigation }: Props) {
               
               await batch.commit();
 
-              // Close the modal
               setIsInfoModalVisible(false);
               setIsEditMode(false);
               
-              // 3. Update local state
+              // 3. Reset local selection state
               setHouseholdId(null);
               showToast("Household permanently deleted", "success");
             } catch (e: any) {
@@ -564,9 +611,7 @@ export default function DashboardScreen({ navigation }: Props) {
     );
   }, [householdId, householdData, isOwner, setHouseholdId, showToast]);
 
-
-
-  // Sticky Board listener
+  // Effect: Syncs sticky notice board announcements from Firestore
   useEffect(() => {
     if (!hid) return;
     const docRef = doc(db, "households", hid, "announcements", "sticky");
@@ -586,6 +631,7 @@ export default function DashboardScreen({ navigation }: Props) {
     return unsub;
   }, [hid]);
 
+  // Helper formatting sticky update timestamp
   const formatStickyTime = useCallback((timestamp: any) => {
     if (!timestamp) return "";
     try {
@@ -596,12 +642,14 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, []);
 
+  // Action: Updates sticky notice board contents and sets auto-expiry times
   const handleSaveStickyNote = useCallback(async () => {
     if (!hid) return;
     try {
       let expiresAt: Timestamp | null = null;
       const textVal = stickyText.trim();
       
+      // Calculate expiry date if a limit is chosen
       if (textVal && stickyExpiry !== "never") {
         const msToAdd = 
           stickyExpiry === "12h" ? 12 * 60 * 60 * 1000 :
@@ -627,20 +675,21 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [hid, stickyText, stickyExpiry, userData?.username, showToast]);
 
-  // 1. Persist user info to AsyncStorage for background context access
+  // Effect: Persist user context reference details into AsyncStorage for background tasks to read
   useEffect(() => {
     if (user?.uid) {
       AsyncStorage.setItem("user_uid", user.uid).catch(err => console.warn("AsyncStorage save user_uid failed:", err));
     }
   }, [user?.uid]);
 
+  // Effect: Cache home location coords into AsyncStorage
   useEffect(() => {
     if (householdData?.info?.homeLocation) {
       AsyncStorage.setItem("home_location", JSON.stringify(householdData.info.homeLocation)).catch(err => console.warn("AsyncStorage save home_location failed:", err));
     }
   }, [householdData?.info?.homeLocation]);
 
-  // 2. Foreground Location Tracking and Geofencing Setup
+  // Effect: Setup Foreground Location Tracking loop to geofence status checks
   useEffect(() => {
     if (!user?.uid || !householdId || !householdData || householdData.type === 'travel') return;
 
@@ -664,12 +713,13 @@ export default function DashboardScreen({ navigation }: Props) {
               accuracy: Location.Accuracy.Balanced,
             });
 
+            // Geofence check against home coords with 100 meters radius tolerance
             const isInside = isInsideHomeRadius(
               loc.coords.latitude,
               loc.coords.longitude,
               householdData.info.homeLocation.latitude,
               householdData.info.homeLocation.longitude,
-              100 // 100 meters radius
+              100 
             );
 
             const nextStatus = isInside ? "home" : "out";
@@ -678,6 +728,7 @@ export default function DashboardScreen({ navigation }: Props) {
               (nextStatus === "home" && currentStatus === "out") ||
               (nextStatus === "out" && currentStatus === "home");
 
+            // Update user status if presence has crossed geofence boundary
             if (shouldUpdate) {
               const userDocRef = doc(db, "users", user.uid);
               await updateDoc(userDocRef, { status: nextStatus });
@@ -687,10 +738,10 @@ export default function DashboardScreen({ navigation }: Props) {
           }
         };
 
-        // Check immediately when app opens / screen mounts
+        // Run immediately when dashboard loads
         await checkGeofence();
 
-        // Check periodically in the foreground every 45 seconds
+        // Run check periodically in the foreground every 45 seconds
         locationInterval = setInterval(checkGeofence, 45000);
       } catch (e) {
         console.warn("Failed to configure location tracking:", e);
@@ -704,8 +755,7 @@ export default function DashboardScreen({ navigation }: Props) {
     };
   }, [user?.uid, householdId, householdData, userData?.status]);
 
-
-
+  // Action: Links to native dialer layout to make a call
   const handlePhoneCall = useCallback(async (phone: string) => {
     if (!phone) return;
     const url = `tel:${phone.replace(/\s+/g, "")}`;
@@ -723,6 +773,7 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [showToast]);
 
+  // Action: Open web links inside external browser
   const handleOpenLink = useCallback(async (link: string) => {
     if (!link) return;
     let formatted = link.trim();
@@ -743,6 +794,7 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   }, [showToast]);
 
+  // Navigation handlers
   const handleNav = useCallback((screenName: "Grocery" | "Expenses" | "Chores" | "Chat") => {
     navigation.navigate(screenName);
   }, [navigation]);
@@ -751,6 +803,7 @@ export default function DashboardScreen({ navigation }: Props) {
     navigation.navigate("HouseholdSelection");
   }, [navigation]);
 
+  // Memoize greeting text string based on current clock hour
   const greeting = useMemo(() => {
     const hours = getSyncedDate().getHours();
     if (hours < 12) return "Good Morning";
@@ -758,6 +811,7 @@ export default function DashboardScreen({ navigation }: Props) {
     return "Good Evening";
   }, []);
 
+  // Memoize info field contents fallback list
   const detailsList = useMemo(() => {
     return householdData?.info?.details && householdData.info.details.length > 0
       ? householdData.info.details
@@ -796,6 +850,7 @@ export default function DashboardScreen({ navigation }: Props) {
         ];
   }, [householdData?.info]);
 
+  // Color tokens mapping
   const bgColors = isDark
     ? (["#070913", "#070913"] as const)
     : (["#ECEEFF", "#ECEEFF"] as const);
@@ -804,11 +859,9 @@ export default function DashboardScreen({ navigation }: Props) {
   const glassBorder = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(99, 102, 241, 0.1)";
   const glassBg = isDark ? "rgba(255, 255, 255, 0.05)" : "#FFFFFF";
 
-
-
   return (
     <LinearGradient colors={bgColors} style={{ flex: 1 }}>
-      {/* Background decorative blobs */}
+      {/* Decorative blurred background blobs */}
       <View
         style={{
           position: "absolute",
@@ -833,7 +886,7 @@ export default function DashboardScreen({ navigation }: Props) {
       />
 
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
-        {/* Header */}
+        {/* Hub Header Bar */}
         <View
           style={{
             paddingHorizontal: 20,
@@ -845,6 +898,7 @@ export default function DashboardScreen({ navigation }: Props) {
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            {/* Avatar block leading to Profile */}
             <TouchableOpacity
               onPress={() => navigation.navigate("Profile")}
               style={{
@@ -867,6 +921,7 @@ export default function DashboardScreen({ navigation }: Props) {
               />
             </TouchableOpacity>
             
+            {/* Household Switcher dropdown anchor */}
             <TouchableOpacity
               onPress={() => setIsHouseholdSwitcherVisible(true)}
               activeOpacity={0.7}
@@ -886,7 +941,9 @@ export default function DashboardScreen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
 
+          {/* Action buttons tray */}
           <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+            {/* Pin note button */}
             <TouchableOpacity
               onPress={() => {
                 setStickyText(stickyNote?.text || "");
@@ -904,6 +961,7 @@ export default function DashboardScreen({ navigation }: Props) {
               <MaterialIcons name="push-pin" size={20} color={isDark ? "#A78BFA" : "#4F46E5"} style={{ transform: [{ rotate: "45deg" }] }} />
             </TouchableOpacity>
 
+            {/* Roommates button */}
             <TouchableOpacity
               onPress={() => setIsMembersModalVisible(true)}
               style={{
@@ -918,10 +976,12 @@ export default function DashboardScreen({ navigation }: Props) {
               <MaterialIcons name="people" size={22} color={isDark ? "#A78BFA" : "#4F46E5"} />
             </TouchableOpacity>
 
+            {/* Bell notification alerts button with unread counter */}
             <TouchableOpacity
               onPress={async () => {
                 setIsNotificationsModalVisible(true);
                 if (user?.uid) {
+                  // Reset unread count indicators and record timestamp checks
                   const relevantNew = activities.filter(
                     (a) => a.userId !== user.uid && (!a.targetUid || a.targetUid === user.uid)
                   );
@@ -978,7 +1038,7 @@ export default function DashboardScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {/* Unified FlatList layout representing root view */}
+        {/* Dashboard FlatList Layout Container */}
         <FlatList
           data={[]}
           renderItem={() => null}
@@ -986,7 +1046,7 @@ export default function DashboardScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <View>
-              {/* Welcome Hero */}
+              {/* Hero Greeting and status balances summary */}
               <HeroGreeting
                 greeting={greeting}
                 username={userData?.username || "Roommate"}
@@ -1000,7 +1060,7 @@ export default function DashboardScreen({ navigation }: Props) {
                 isTravel={isTravel}
               />
 
-              {/* Quick Actions Tray */}
+              {/* Quick action buttons tray drawer */}
               <QuickActions
                 onQuickBuy={() => setIsQuickBuyVisible(true)}
                 onSettleUp={() => setIsQuickSettleVisible(true)}
@@ -1011,10 +1071,10 @@ export default function DashboardScreen({ navigation }: Props) {
               />
 
               {isTravel ? (
-                /* Travel Dashboard Widgets */
+                /* ─── TRAVEL TRIP MODE WIDGETS ──────────────────────────────── */
                 <View style={{ paddingHorizontal: 20, gap: 16, marginBottom: 20 }}>
                   
-                  {/* 1. Trip Details Summary Card */}
+                  {/* Trip Summary Card */}
                   <View
                     style={{
                       backgroundColor: glassBg,
@@ -1049,6 +1109,7 @@ export default function DashboardScreen({ navigation }: Props) {
                       📅 {householdData?.tripDetails?.startDate || "TBD"} to {householdData?.tripDetails?.endDate || "TBD"}
                     </Text>
 
+                    {/* Accommodation details summary */}
                     {householdData?.tripDetails?.hotelName && (
                       <View style={{ gap: 6, borderTopWidth: 1, borderTopColor: glassBorder, paddingTop: 12 }}>
                         <Text style={{ fontSize: 13, fontWeight: "700", color: textMain }}>
@@ -1072,6 +1133,7 @@ export default function DashboardScreen({ navigation }: Props) {
                       </View>
                     )}
 
+                    {/* Trip Wrap slide modal trigger */}
                     <TouchableOpacity
                       onPress={() => setIsTravelWrapModalVisible(true)}
                       style={{
@@ -1092,7 +1154,7 @@ export default function DashboardScreen({ navigation }: Props) {
                     </TouchableOpacity>
                   </View>
 
-                  {/* 2. Collaborative Itinerary Timeline */}
+                  {/* Collaborative Itinerary Timeline widget */}
                   <View
                     style={{
                       backgroundColor: glassBg,
@@ -1117,7 +1179,7 @@ export default function DashboardScreen({ navigation }: Props) {
                       </TouchableOpacity>
                     </View>
 
-                    {/* Proposed Activities needing Creator approval */}
+                    {/* Proposed activities approval notifications (only visible to owner) */}
                     {isOwner && itinerary.filter(item => !item.approved).length > 0 && (
                       <View style={{ marginBottom: 14, backgroundColor: isDark ? "rgba(245,158,11,0.06)" : "#FEF8E7", borderRadius: 16, padding: 12, borderLeftWidth: 3, borderLeftColor: "#F59E0B" }}>
                         <Text style={{ fontSize: 10, fontWeight: "900", color: "#F59E0B", textTransform: "uppercase", marginBottom: 6 }}>
@@ -1146,7 +1208,7 @@ export default function DashboardScreen({ navigation }: Props) {
                       </View>
                     )}
 
-                    {/* Approved timeline items */}
+                    {/* Approved activities timelines */}
                     {itinerary.filter(item => item.approved).length === 0 ? (
                       <Text style={{ fontSize: 12, color: textMuted, fontStyle: "italic", textAlign: "center", marginVertical: 10 }}>
                         No approved itinerary activities yet. Propose one!
@@ -1155,7 +1217,7 @@ export default function DashboardScreen({ navigation }: Props) {
                       <View style={{ gap: 12 }}>
                         {itinerary.filter(item => item.approved).map((item, index, arr) => (
                           <View key={item.id} style={{ flexDirection: "row", gap: 12 }}>
-                            {/* Vertical Line Connector */}
+                            {/* Vertical timeline divider line */}
                             <View style={{ alignItems: "center" }}>
                               <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#EC4899", marginTop: 4 }} />
                               {index < arr.length - 1 && (
@@ -1188,7 +1250,7 @@ export default function DashboardScreen({ navigation }: Props) {
                     )}
                   </View>
 
-                  {/* 3. Packing Checklist widget */}
+                  {/* Packing checklist widget */}
                   <View
                     style={{
                       backgroundColor: glassBg,
@@ -1255,8 +1317,9 @@ export default function DashboardScreen({ navigation }: Props) {
 
                 </View>
               ) : (
+                /* ─── STANDARD ROOMMATE MODE WIDGETS ────────────────────────── */
                 <>
-                  {/* Shared Sticky Notice Board */}
+                  {/* Shared Sticky Notice board card */}
                   {isStickyActive ? (
                     <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
                       <TouchableOpacity
@@ -1307,7 +1370,7 @@ export default function DashboardScreen({ navigation }: Props) {
                     </View>
                   ) : null}
 
-                  {/* Daily Briefing Panel */}
+                  {/* Daily Briefing action items timeline */}
                   <View style={{ paddingHorizontal: 20, marginBottom: 20, marginTop: 10 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                       <Text style={{ color: textMuted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1.5 }}>
@@ -1347,7 +1410,7 @@ export default function DashboardScreen({ navigation }: Props) {
                         >
                           <MaterialIcons name="done-all" size={20} color="#10B981" />
                         </View>
-                        <View>
+                        <View style={{ flex: 1 }}>
                           <Text style={{ fontSize: 14, fontWeight: "800", color: textMain }}>
                             All Caught Up!
                           </Text>
@@ -1406,14 +1469,12 @@ export default function DashboardScreen({ navigation }: Props) {
                   </View>
                 </>
               )}
-
-
             </View>
           }
           ListFooterComponent={
             !isTravel ? (
               <View style={{ marginTop: 10 }}>
-                {/* Household Details Section Header */}
+                {/* Household Info Deck Title */}
                 <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                     <Text style={{ color: textMuted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1.5 }}>
@@ -1442,7 +1503,7 @@ export default function DashboardScreen({ navigation }: Props) {
                   </View>
                 </View>
 
-                {/* Horizontally scrolling list of fields */}
+                {/* Horizontal Deck listing custom Wifi/Landlord fields */}
                 <InfoCardsDeck
                   detailsList={detailsList}
                   isDark={isDark}
@@ -1457,8 +1518,9 @@ export default function DashboardScreen({ navigation }: Props) {
           }
         />
 
-        {/* Modals */}
+        {/* ─── OVERLAY MODALS REGISTERS ──────────────────────────────────────── */}
 
+        {/* Quick actions overlays */}
         <QuickBuyModal
           visible={isQuickBuyVisible}
           onClose={() => setIsQuickBuyVisible(false)}
@@ -1479,6 +1541,7 @@ export default function DashboardScreen({ navigation }: Props) {
           onClose={() => setIsQuickChoreVisible(false)}
         />
 
+        {/* Roommates Profiles and Leaves Actions list */}
         <MembersModal
           visible={isMembersModalVisible}
           onClose={() => setIsMembersModalVisible(false)}
@@ -1490,6 +1553,7 @@ export default function DashboardScreen({ navigation }: Props) {
           showToast={showToast}
         />
 
+        {/* Activity Logs feed list */}
         <NotificationsModal
           visible={isNotificationsModalVisible}
           onClose={() => setIsNotificationsModalVisible(false)}
@@ -1500,6 +1564,7 @@ export default function DashboardScreen({ navigation }: Props) {
           isDark={isDark}
         />
 
+        {/* Info detail and deleting options setup */}
         <InfoEditModal
           visible={isInfoModalVisible}
           onClose={() => {
@@ -1513,6 +1578,7 @@ export default function DashboardScreen({ navigation }: Props) {
           infoModalTab={infoModalTab}
         />
 
+        {/* Swaps household scopes */}
         <HouseholdSwitcherModal
           visible={isHouseholdSwitcherVisible}
           onClose={() => setIsHouseholdSwitcherVisible(false)}
@@ -1523,6 +1589,7 @@ export default function DashboardScreen({ navigation }: Props) {
           isDark={isDark}
         />
 
+        {/* Edit trip summaries parameters */}
         <TripDetailsEditModal
           visible={isTripDetailsModalVisible}
           onClose={() => setIsTripDetailsModalVisible(false)}
@@ -1530,6 +1597,7 @@ export default function DashboardScreen({ navigation }: Props) {
           onSave={handleSaveTripDetails}
         />
 
+        {/* Add timeline trip item */}
         <ItineraryEditModal
           visible={isItineraryModalVisible}
           onClose={() => setIsItineraryModalVisible(false)}
@@ -1537,6 +1605,7 @@ export default function DashboardScreen({ navigation }: Props) {
           onAdd={handleAddItineraryItem}
         />
 
+        {/* Manage checklist columns */}
         <PackingEditModal
           visible={isPackingModalVisible}
           onClose={() => setIsPackingModalVisible(false)}
@@ -1546,6 +1615,7 @@ export default function DashboardScreen({ navigation }: Props) {
           onDeleteItem={handleDeleteItemPacking}
         />
 
+        {/* Travel Trip wrap presentation */}
         <TravelWrapModal
           visible={isTravelWrapModalVisible}
           onClose={() => setIsTravelWrapModalVisible(false)}
@@ -1555,13 +1625,14 @@ export default function DashboardScreen({ navigation }: Props) {
           itinerary={itinerary}
         />
 
-        {/* Sticky Note Edit Modal */}
+        {/* Sticky Notice board custom configurations */}
         <SlideModal
           visible={isStickyModalVisible}
           onClose={() => setIsStickyModalVisible(false)}
           title="Edit Sticky Board"
         >
           <View className="gap-4 pb-2 pt-2">
+            {/* Input announcement */}
             <View>
               <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">
                 Announcement Text
@@ -1582,6 +1653,7 @@ export default function DashboardScreen({ navigation }: Props) {
               </Text>
             </View>
 
+            {/* Expiry selection settings */}
             <View className="mb-2">
               <Text className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">
                 Auto-Expiry Duration
@@ -1612,6 +1684,8 @@ export default function DashboardScreen({ navigation }: Props) {
                 })}
               </View>
             </View>
+
+            {/* Save trigger button */}
             <TouchableOpacity
               onPress={handleSaveStickyNote}
               className="bg-warning py-3.5 rounded-xl items-center"

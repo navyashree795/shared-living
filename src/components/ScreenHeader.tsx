@@ -1,11 +1,31 @@
+/*
+ * FILE: src/components/ScreenHeader.tsx
+ * PURPOSE: Standardized header navbar rendering back arrows, main titles, and customizable
+ *          right action slots. Supports legacy navigation props for backward compatibility.
+ * WHERE USED: Screen layouts (Grocery, Chores, Expense, Chat screens) to align header elements consistently.
+ */
+
+// Import React components references
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+// Import layout components, texts, touch buttons, and style variables
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+// Import safe area notch padding hook
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+// Import vector icons
 import { MaterialIcons } from '@expo/vector-icons';
+// Import theme hook
 import { useTheme } from '../context/ThemeContext';
 
 interface ScreenHeaderProps {
-  navigation: any;
+  // Main title string
   title: string;
+  // Optional back navigation callback
+  onBackPress?: () => void;
+  // Optional component to render in the right action slot
+  rightAction?: React.ReactNode;
+  
+  // Legacy / fallback props for backward compatibility:
+  navigation?: any;
   hideBack?: boolean;
   rightIcon?: keyof typeof MaterialIcons.glyphMap;
   rightIconColor?: string;
@@ -15,88 +35,137 @@ interface ScreenHeaderProps {
   children?: React.ReactNode;
 }
 
-const ScreenHeader: React.FC<ScreenHeaderProps> = ({ 
-  navigation, 
+// Render ScreenHeader component
+export const ScreenHeader: React.FC<ScreenHeaderProps> = ({ 
   title, 
+  onBackPress, 
+  rightAction,
+  navigation,
   hideBack = false,
-  rightIcon, 
+  rightIcon,
   rightIconColor,
   rightIconBg,
   rightIconBorder,
-  onRightPress, 
-  children 
+  onRightPress,
+  children
 }) => {
+  // Retrieve safe area notch height inset
+  const insets = useSafeAreaInsets();
+  // Access global dark theme context
   const { isDark } = useTheme();
-  const text = isDark ? '#E2E8F0' : '#0F172A';
-  const muted = isDark ? '#818CF8' : '#64748B';
-  const bord = isDark ? 'rgba(129, 140, 248, 0.15)' : 'rgba(99, 102, 241, 0.08)';
-  const surfaceBg = isDark ? 'rgba(129, 140, 248, 0.1)' : 'rgba(255, 255, 255, 0.85)';
+
+  // Theme color styling variables mapping
+  const textColor = isDark ? '#F1F5F9' : '#1A1D3B';
+  const borderBottomColor = isDark ? 'rgba(255, 255, 255, 0.05)' : '#EEF2FF';
+
+  // Handle back button click triggers (uses custom callback or falls back to navigation goBack)
+  const handleBack = () => {
+    if (onBackPress) {
+      onBackPress();
+    } else if (navigation) {
+      navigation.goBack();
+    }
+  };
+
+  // Determine if back button should be drawn
+  const shouldShowBack = !hideBack && (!!onBackPress || !!navigation);
 
   return (
-    <View style={{ 
-      flexDirection: 'row', 
-      alignItems: 'center', 
-      paddingHorizontal: 24, 
-      paddingTop: 20,
-      paddingBottom: 24,
-      justifyContent: 'space-between' 
-    }}>
-      {/* Back Button */}
-      <View style={{ width: 44 }}>
-        {!hideBack && (
+    // Outer view adding top safe areas
+    <View 
+      style={[
+        styles.headerContainer, 
+        { 
+          paddingTop: Math.max(insets.top, 16),
+          borderBottomColor: borderBottomColor
+        }
+      ]}
+    >
+      {/* 1. Left Action Container (renders back arrow if enabled) */}
+      <View style={styles.leftContainer}>
+        {shouldShowBack && (
           <TouchableOpacity 
-            onPress={() => navigation.goBack()}
-            style={{ 
-              width: 44, 
-              height: 44, 
-              borderRadius: 14, 
-              backgroundColor: isDark ? '#111425' : '#F1F5F9', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              borderWidth: 1, 
-              borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' 
-            }}
+            style={styles.backButton} 
+            onPress={handleBack}
+            activeOpacity={0.7}
           >
-            <MaterialIcons name="chevron-left" size={24} color={text} />
+            <MaterialIcons name="chevron-left" size={28} color={textColor} />
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Centered Title */}
-      <Text style={{ 
-        flex: 1,
-        textAlign: 'center',
-        color: text, 
-        fontSize: 19, 
-        fontWeight: '800', 
-        letterSpacing: -0.2 
-      }}>{title}</Text>
+      {/* 2. Middle Title Label Container */}
+      <View style={styles.titleContainer}>
+        <Text style={[styles.headerTitle, { color: textColor }]} numberOfLines={1}>
+          {title}
+        </Text>
+      </View>
 
-      {/* Right Action */}
-      <View style={{ width: 44, alignItems: 'flex-end' }}>
-        {rightIcon ? (
-          <TouchableOpacity 
+      {/* 3. Right Action Slot Container (renders rightAction component or legacy rightIcon button) */}
+      <View style={styles.rightContainer}>
+        {rightAction ? (
+          rightAction
+        ) : rightIcon ? (
+          <TouchableOpacity
             onPress={onRightPress}
             style={{
-              width: 44, 
-              height: 44, 
+              width: 40,
+              height: 40,
               borderRadius: 14,
-              backgroundColor: isDark ? '#818CF8' : '#6366F1',
-              alignItems: 'center', 
+              backgroundColor: rightIconBg || (isDark ? '#818CF8' : '#6366F1'),
+              alignItems: 'center',
               justifyContent: 'center',
-              shadowColor: isDark ? '#818CF8' : '#6366F1',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 4
+              borderWidth: rightIconBorder ? 1 : 0,
+              borderColor: rightIconBorder || 'transparent',
             }}
           >
-            <MaterialIcons name="add" size={24} color="#FFFFFF" />
+            <MaterialIcons name={rightIcon} size={22} color={rightIconColor || "#FFFFFF"} />
           </TouchableOpacity>
-        ) : children}
+        ) : children ? (
+          children
+        ) : (
+          <View style={{ width: 40 }} />
+        )}
       </View>
     </View>
   );
 };
+
+// --- Strict StyleSheet Properties Layout ---
+const styles = StyleSheet.create({
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1.5,
+    backgroundColor: 'transparent',
+  },
+  leftContainer: {
+    width: 48,
+    alignItems: 'flex-start',
+  },
+  titleContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  rightContainer: {
+    width: 48,
+    alignItems: 'flex-end',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+});
 
 export default ScreenHeader;

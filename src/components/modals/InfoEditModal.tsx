@@ -1,14 +1,33 @@
+/*
+ * FILE: src/components/modals/InfoEditModal.tsx
+ * PURPOSE: Comprehensive modal enabling users to manage household information, custom fields
+ *          (such as Wi-Fi details, landlord contact), and home geofence pins on MapViews.
+ * WHERE USED: Dashboard screen household settings drawer trigger.
+ */
+
+// Import React hooks for state, effect handling, layout refs, and memoization optimization
 import React, { useState, useEffect, useRef, memo } from "react";
+// Import UI layout grids, labels, text inputs, touch triggers, modal sheets, and linking libraries
 import { View, Text, TextInput, TouchableOpacity, Modal, Linking } from "react-native";
+// Import vector icons
 import { MaterialIcons } from "@expo/vector-icons";
+// Import clipboard copying library
 import * as Clipboard from "expo-clipboard";
+// Import map layouts and coordinate pins markers
 import MapView, { Marker } from "react-native-maps";
+// Import foreground locations fetchers
 import * as Location from "expo-location";
+// Import sliding slide modal template wrapper
 import SlideModal from "../SlideModal";
+// Import reusable clock wheel time selector
 import { TimeWheelPicker } from "../TimeWheelPicker";
+// Import synced clock details
 import { getSyncedDate } from "../../utils/timeUtils";
+// Import dark theme selectors
 import { useTheme } from "../../context/ThemeContext";
+// Import toast popup hooks
 import { useToast } from "../../context/ToastContext";
+// Import Firebase auth client SDK links
 import { auth } from "../../firebaseConfig";
 
 interface InfoEditModalProps {
@@ -21,6 +40,9 @@ interface InfoEditModalProps {
   infoModalTab: "all" | "landlord" | "wifi" | "trash";
 }
 
+/**
+ * HouseholdInfoModalContent renders the fields list and map sections.
+ */
 export const HouseholdInfoModalContent = memo(({
   tab,
   isEdit,
@@ -32,12 +54,19 @@ export const HouseholdInfoModalContent = memo(({
 }: any) => {
   const { isDark } = useTheme();
   const { showToast } = useToast();
+  
+  // Local state managing household display label
   const [name, setName] = useState(householdName || "");
+  
+  // Local state managing pinned map latitude/longitude coordinates
   const [homeLocation, setHomeLocation] = useState<{ latitude: number; longitude: number } | null>(
     data?.homeLocation || null
   );
+  
+  // Map reference to trigger camera anims
   const mapRef = useRef<MapView | null>(null);
 
+  // Effect: Animate MapView focus center when coordinate pins change
   useEffect(() => {
     if (homeLocation && mapRef.current) {
       mapRef.current.animateToRegion({
@@ -49,6 +78,7 @@ export const HouseholdInfoModalContent = memo(({
     }
   }, [homeLocation]);
 
+  // Effect: Request device locations if map is loaded but has no set pinned coordinates
   useEffect(() => {
     if (!homeLocation && isEdit && isOwner) {
       (async () => {
@@ -69,6 +99,8 @@ export const HouseholdInfoModalContent = memo(({
       })();
     }
   }, [isEdit, isOwner]);
+
+  // Local state mapping dynamic custom information fields
   const [fields, setFields] = useState<any[]>(() => {
     if (data?.details && data.details.length > 0) return data.details;
     const initial = [];
@@ -110,15 +142,18 @@ export const HouseholdInfoModalContent = memo(({
   const [activeTimePickerId, setActiveTimePickerId] = useState<string | null>(null);
   const [revealedFields, setRevealedFields] = useState<string[]>([]);
 
+  // Toggle visibility status on password fields
   const toggleFieldVisibility = (id: string) => {
     setRevealedFields((prev) =>
       prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
     );
   };
 
+  // Compile final updates map and run save callback triggers
   const handleSave = () => {
     const updates: any = { details: fields, homeLocation };
 
+    // Search fields array to extract legacy fields properties
     const wifiF = fields.find(
       (f) =>
         f.id === "wifi_net" ||
@@ -148,6 +183,7 @@ export const HouseholdInfoModalContent = memo(({
     onSave({ name: name.trim() || "My Household", info: updates });
   };
 
+  // Add new blank custom parameter item line
   const handleAddField = () => {
     setFields((prev) => [
       ...prev,
@@ -161,22 +197,26 @@ export const HouseholdInfoModalContent = memo(({
     ]);
   };
 
+  // Delete custom field item
   const handleDeleteField = (id: string) => {
     setFields((prev) => prev.filter((f) => f.id !== id));
   };
 
+  // Update dynamic values/labels on input change
   const handleUpdateField = (id: string, updates: any) => {
     setFields((prev) =>
       prev.map((f) => (f.id === id ? { ...f, ...updates } : f))
     );
   };
 
+  // Copy details string to clipboard
   const copyToClipboard = async (text: string) => {
     if (!text) return;
     await Clipboard.setStringAsync(text);
     showToast("Copied to clipboard", "success");
   };
 
+  // Trigger system phone dialer link
   const handlePhoneCall = async (phone: string) => {
     if (!phone) return;
     const url = `tel:${phone.replace(/\s+/g, "")}`;
@@ -194,6 +234,7 @@ export const HouseholdInfoModalContent = memo(({
     }
   };
 
+  // Trigger web browser URL link
   const handleOpenLink = async (link: string) => {
     if (!link) return;
     let formatted = link.trim();
@@ -216,12 +257,13 @@ export const HouseholdInfoModalContent = memo(({
 
   const textMain = isDark ? "#F1F5F9" : "#1E1B4B";
 
+  // RENDER EDIT VIEW MODE
   if (isEdit) {
     return (
       <>
         <View style={{ marginBottom: 16 }}>
           <View style={{ gap: 16, paddingBottom: 24 }}>
-            {/* Household Name */}
+            {/* Household Name input */}
             <View
               style={{
                 backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
@@ -260,6 +302,7 @@ export const HouseholdInfoModalContent = memo(({
               />
             </View>
 
+            {/* Home geofencing map setup (Visible only to owners) */}
             {isOwner && (
               <View
                 style={{
@@ -316,7 +359,7 @@ export const HouseholdInfoModalContent = memo(({
               </View>
             )}
 
-            {/* Dynamic Fields List */}
+            {/* Custom fields configuration wrapper */}
             <Text
               style={{
                 fontSize: 11,
@@ -343,7 +386,7 @@ export const HouseholdInfoModalContent = memo(({
                   gap: 10,
                 }}
               >
-                {/* Inputs Row */}
+                {/* Custom fields input rows */}
                 <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
                   <TextInput
                     style={{
@@ -361,6 +404,8 @@ export const HouseholdInfoModalContent = memo(({
                     value={field.label}
                     onChangeText={(v) => handleUpdateField(field.id, { label: v })}
                   />
+                  
+                  {/* If time field type, open sub-modal selector; otherwise render text boxes */}
                   {field.type === "time" ? (
                     <TouchableOpacity
                       onPress={() => setActiveTimePickerId(field.id)}
@@ -407,6 +452,8 @@ export const HouseholdInfoModalContent = memo(({
                       onChangeText={(v) => handleUpdateField(field.id, { value: v })}
                     />
                   )}
+                  
+                  {/* Delete field block */}
                   <TouchableOpacity
                     onPress={() => handleDeleteField(field.id)}
                     style={{
@@ -419,7 +466,7 @@ export const HouseholdInfoModalContent = memo(({
                   </TouchableOpacity>
                 </View>
 
-                {/* Type Selection pills */}
+                {/* Custom fields types configuration filters pills */}
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                   {[
                     { type: "text", label: "Text", icon: "description" },
@@ -476,7 +523,7 @@ export const HouseholdInfoModalContent = memo(({
                   ))}
                 </View>
 
-                {/* Nested TimePicker Modal */}
+                {/* Sub-modal popup selectors containing TimeWheelPicker */}
                 {activeTimePickerId === field.id && (
                   <Modal visible={activeTimePickerId === field.id} transparent animationType="fade">
                     <TouchableOpacity
@@ -524,7 +571,7 @@ export const HouseholdInfoModalContent = memo(({
               </View>
             ))}
 
-            {/* Add Field Button */}
+            {/* Add Custom Field Button */}
             <TouchableOpacity
               onPress={handleAddField}
               style={{
@@ -559,6 +606,7 @@ export const HouseholdInfoModalContent = memo(({
           </View>
         </View>
 
+        {/* Save and delete triggers */}
         <TouchableOpacity
           onPress={handleSave}
           className="bg-indigo-600 rounded-2xl py-4 items-center shadow-lg shadow-indigo-300 mb-4"
@@ -592,6 +640,7 @@ export const HouseholdInfoModalContent = memo(({
     );
   }
 
+  // RENDER STATIC INFO DISPLAY VIEW MODE
   return (
     <>
       <View style={{ marginBottom: 16 }}>
@@ -604,11 +653,11 @@ export const HouseholdInfoModalContent = memo(({
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                  backgroundColor: isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.02)",
                   padding: 12,
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.02)",
+                  borderColor: isDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.02)",
                 }}
               >
                 <View
@@ -653,6 +702,7 @@ export const HouseholdInfoModalContent = memo(({
                         color: textMain,
                       }}
                     >
+                      {/* Hide password characters unless explicitly clicked */}
                       {field.type === "password" && field.value
                         ? revealedFields.includes(field.id)
                           ? field.value
@@ -662,7 +712,7 @@ export const HouseholdInfoModalContent = memo(({
                   </View>
                 </View>
 
-                {/* Actions Based on Type */}
+                {/* Custom Action triggers matching categories */}
                 <View style={{ flexDirection: "row", gap: 6 }}>
                   {field.type === "password" && field.value ? (
                     <>
